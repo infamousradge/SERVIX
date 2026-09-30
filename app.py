@@ -199,17 +199,22 @@ class Servix(tk.Tk):
         tk.Label(bar,text='Service ID:',bg='#164F7C',fg='white',font=('Segoe UI',8)).pack(side='left',padx=(12,6))
         tk.Label(bar,text='AUTO ON SAVE',bg='#FFF8B8',fg=TEXT,font=('Segoe UI',8,'bold'),padx=14,pady=3).pack(side='left')
         tk.Label(bar,text='New Service Request',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',8)).pack(side='right',padx=16)
-        form=self.card(self.content); form.pack(fill='x',padx=10,pady=(6,8)); form.grid_columnconfigure((0,1,2),weight=1)
+        workspace=tk.Frame(self.content,bg=BG); workspace.pack(fill='both',expand=True,padx=10,pady=(6,8))
+        form=self.card(workspace); form.pack(fill='x'); form.grid_columnconfigure((0,1,2),weight=1)
+        section=tk.Frame(form,bg='#F7FAFD',highlightthickness=1,highlightbackground='#B8D8F3'); section.grid(row=0,column=0,columnspan=3,sticky='ew',padx=8,pady=(8,2))
+        for i,title in enumerate(('1. Client Information','2. Equipment Information','3. Service Details','4. Calibration Details')):
+            section.grid_columnconfigure(i,weight=1)
+            tk.Label(section,text=title,bg='#F7FAFD',fg=BLUE,font=('Segoe UI',8,'bold'),anchor='w').grid(row=0,column=i,sticky='ew',padx=10,pady=7)
 
-        client=self.form_field(form,'Client',0,0,[],required=True)
-        equip=self.form_field(form,'SERVIX Equipment ID',0,1,[],required=True)
-        reason=self.form_field(form,'Reason for Service',0,2,['Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up','Performance Verification','Software/Firmware Update','Accessory Replacement','Part Replacement','Customer Requested Service','Other'],required=True)
-        warranty=self.form_field(form,'Under Warranty?',2,0,['Yes','No'],required=True)
-        amc=self.form_field(form,'Under AMC?',2,1,['Yes','No'],required=True)
-        engineer=self.form_field(form,'Assigned Engineer (important)',2,2,None)
-        priority=self.form_field(form,'Priority',4,0,['Normal','Urgent','Critical']); priority.set('Normal')
-        source=self.form_field(form,'Request Source (optional)',4,1,['Phone','Email','WhatsApp','Walk-in','Other'])
-        status=self.form_field(form,'Status',4,2,['New','Assigned','Received']); status.set('New')
+        client=self.form_field(form,'Client / Search Client',2,0,[],required=True)
+        equip=self.form_field(form,'Equipment / Serial / Make / Model',2,1,[],required=True)
+        reason=self.form_field(form,'Reason for Service',2,2,['Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up','Performance Verification','Software/Firmware Update','Accessory Replacement','Part Replacement','Customer Requested Service','Other'],required=True)
+        warranty=self.form_field(form,'Under Warranty?',4,0,['Yes','No'],required=True)
+        amc=self.form_field(form,'Under AMC?',4,1,['Yes','No'],required=True)
+        engineer=self.form_field(form,'Assigned Engineer (important)',4,2,None)
+        priority=self.form_field(form,'Priority',6,0,['Normal','Urgent','Critical']); priority.set('Normal')
+        source=self.form_field(form,'Request Source (optional)',6,1,['Phone','Email','WhatsApp','Walk-in','Other'])
+        status=self.form_field(form,'Status',6,2,['New','Assigned','Received']); status.set('New')
 
         cmap={}; emap={}
         def refresh_lists(select_client_id=None,select_equipment_id=None):
