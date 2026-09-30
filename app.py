@@ -106,7 +106,14 @@ class Servix(tk.Tk):
         rh=tk.Frame(recent,bg=CARD); rh.pack(fill='x',padx=10,pady=(7,3)); tk.Label(rh,text='Recent / Open Service Calls',font=('Segoe UI',9,'bold'),bg=CARD,fg=TEXT).pack(side='left'); tk.Button(rh,text='View All',command=self.show_services,bg=CARD,fg=BLUE,bd=0,font=('Segoe UI',7,'underline')).pack(side='right')
         self.service_tree(recent,5)
         alerts=self.card(lower); alerts.pack(side='left',fill='both',padx=(4,4)); tk.Label(alerts,text='Alerts & Reminders',font=('Segoe UI',9,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=12,pady=(8,5))
-        alert_rows=[('●',RED,f"{self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')")} service calls overdue"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')")} calibrations due within 30 days"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')")} warranties expiring this month"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')")} AMC expiring in 60 days"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')")} invoices pending payment"),('△',RED,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''")} equipment with missing serial numbers")]
+        alert_rows=[
+            ('●',RED,str(self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"))+' service calls overdue'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"))+' calibrations due within 30 days'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"))+' warranties expiring this month'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"))+' AMC expiring in 60 days'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"))+' invoices pending payment'),
+            ('△',RED,str(self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''"))+' equipment with missing serial numbers')
+        ]
         for icon,color,msg in alert_rows:
             r=tk.Frame(alerts,bg=CARD); r.pack(fill='x',padx=12,pady=4); tk.Label(r,text=icon,bg=CARD,fg=color,font=('Segoe UI',9,'bold')).pack(side='left'); tk.Label(r,text=msg,bg=CARD,fg=TEXT,font=('Segoe UI',7)).pack(side='left',padx=7)
 
