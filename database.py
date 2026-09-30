@@ -64,6 +64,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sequences(entity TEXT PRIMARY KEY, next_number INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS commercial_discussions(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, discussion_date TEXT NOT NULL, person TEXT, contact TEXT, method TEXT, amount REAL DEFAULT 0, approved TEXT, notes TEXT, user TEXT);
         CREATE TABLE IF NOT EXISTS payments(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, payment_date TEXT NOT NULL, amount REAL NOT NULL DEFAULT 0, mode TEXT, reference TEXT, notes TEXT, user TEXT);
+        CREATE TABLE IF NOT EXISTS inventory_items(id INTEGER PRIMARY KEY, code TEXT UNIQUE, part_name TEXT NOT NULL, part_number TEXT, category TEXT, unit TEXT DEFAULT 'Nos', reorder_level REAL NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, notes TEXT, created TEXT, modified TEXT);
+        CREATE TABLE IF NOT EXISTS inventory_movements(id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL, movement_date TEXT NOT NULL, movement_type TEXT NOT NULL, qty REAL NOT NULL, service_id INTEGER, reference TEXT, notes TEXT, username TEXT);
         CREATE TABLE IF NOT EXISTS engineers(id INTEGER PRIMARY KEY, code TEXT UNIQUE, name TEXT NOT NULL, mobile TEXT, email TEXT, specialization TEXT, active INTEGER NOT NULL DEFAULT 1, notes TEXT, created TEXT, modified TEXT);
         CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY, event_date TEXT NOT NULL, username TEXT, entity_type TEXT NOT NULL, entity_id TEXT, action TEXT NOT NULL, details TEXT);
         CREATE TABLE IF NOT EXISTS backup_history(id INTEGER PRIMARY KEY, backup_date TEXT NOT NULL, filename TEXT NOT NULL, status TEXT NOT NULL, notes TEXT);
