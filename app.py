@@ -473,7 +473,9 @@ class Servix(tk.Tk):
         tk.Label(bar,text='Service Request - New / Edit',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
         tk.Label(bar,text='Service ID:',bg='#164F7C',fg='white',font=('Segoe UI',8)).pack(side='left',padx=(12,6))
         tk.Label(bar,text='AUTO ON SAVE',bg='#FFF8B8',fg=TEXT,font=('Segoe UI',8,'bold'),padx=14,pady=3).pack(side='left')
-        tk.Label(bar,text='New Service Request',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',8)).pack(side='right',padx=16)
+        tk.Button(bar,text='Cancel',command=self.show_services,bg='#6B7280',fg='white',bd=0,padx=13,pady=4).pack(side='right',padx=(4,10),pady=5)
+        save_header=tk.Button(bar,text='Save',bg=GREEN,fg='white',bd=0,padx=16,pady=4)
+        save_header.pack(side='right',padx=4,pady=5)
         workspace=tk.Frame(self.content,bg=BG); workspace.pack(fill='both',expand=True,padx=10,pady=(6,8))
         form=self.card(workspace); form.pack(fill='x'); form.grid_columnconfigure((0,1,2),weight=1)
         section=tk.Frame(form,bg='#F7FAFD',highlightthickness=1,highlightbackground='#B8D8F3'); section.grid(row=0,column=0,columnspan=3,sticky='ew',padx=8,pady=(8,2))
@@ -617,7 +619,9 @@ class Servix(tk.Tk):
             audit(self.current_user['username'],'service',sc,'CREATE','Service call created')
             if engineer.get().strip(): audit(self.current_user['username'],'service',sc,'ENGINEER_ASSIGN',f"Assigned to {engineer.get().strip()}")
             messagebox.showinfo('Service created',f'{sc} created successfully.'); self.show_service_detail(sc)
-        tk.Button(actions,text='Create Service ID',command=save,bg=BLUE,fg='white',font=('Segoe UI',10,'bold'),bd=0,padx=22,pady=11).pack(side='right')
+        save_header.configure(command=save)
+        tk.Button(actions,text='Save / Create Service ID',command=save,bg=GREEN,fg='white',font=('Segoe UI',9,'bold'),bd=0,padx=22,pady=9).pack(side='right')
+        tk.Button(actions,text='Cancel',command=self.show_services,bg='#6B7280',fg='white',font=('Segoe UI',9),bd=0,padx=18,pady=9).pack(side='right',padx=6)
 
     def show_service_detail(self,code):
         self.clear()
@@ -627,7 +631,8 @@ class Servix(tk.Tk):
         tk.Label(bar,text='Service Request - New / Edit',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
         tk.Label(bar,text='Service ID:',bg='#164F7C',fg='white',font=('Segoe UI',8)).pack(side='left',padx=(0,6))
         tk.Label(bar,text=code,bg='#FFF8B8',fg=TEXT,font=('Segoe UI',9,'bold'),padx=18,pady=3).pack(side='left')
-        tk.Label(bar,text=f"{r['client']}  •  {r['equipment']}  •  {r['make']} {r['model']}",bg='#164F7C',fg='#DCECF8',font=('Segoe UI',8)).pack(side='right',padx=16)
+        tk.Button(bar,text='Back',command=self.show_services,bg='#6B7280',fg='white',bd=0,padx=13,pady=4).pack(side='right',padx=(4,10),pady=5)
+        tk.Label(bar,text=f"{r['client']}  •  {r['equipment']}  •  {r['make']} {r['model']}",bg='#164F7C',fg='#DCECF8',font=('Segoe UI',8)).pack(side='right',padx=8)
         tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=10,pady=(6,10))
         ov=tk.Frame(tabs,bg=CARD); tech=tk.Frame(tabs,bg=CARD); parts_tab=tk.Frame(tabs,bg=CARD); cal_tab=tk.Frame(tabs,bg=CARD); att_tab=tk.Frame(tabs,bg=CARD); comm=tk.Frame(tabs,bg=CARD); location_tab=tk.Frame(tabs,bg=CARD); hist=tk.Frame(tabs,bg=CARD)
         tabs.add(ov,text=' 1. Client & Equipment ')
@@ -685,7 +690,7 @@ class Servix(tk.Tk):
         complaint=tk.Text(service_box,height=4,font=('Segoe UI',8),wrap='word'); complaint.grid(row=8,column=1,sticky='ew',padx=(0,10),pady=4); complaint.insert('1.0',r['complaint']); complaint.configure(state='disabled')
         with connect() as con: cal_head=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
         if r['reason']=='Calibration':
-            cal_rows=[('Received Date',cal_head['received_date'] if cal_head else ''),('Performed Date',cal_head['calibration_date'] if cal_head else ''),('Result',cal_head['result'] if cal_head else 'Pending'),('Certificate No.',cal_head['certificate_no'] if cal_head else ''),('Certificate Date',cal_head['certificate_date'] if cal_head else ''),('Next Due',cal_head['next_due'] if cal_head else ''),('Performed By',cal_head['performed_by'] if cal_head else '')]
+            cal_rows=[('Received Date',cal_head['received_date'] if cal_head else ''),('Performed Date',cal_head['calibration_date'] if cal_head else ''),('Result',cal_head['result'] if cal_head else 'Pending'),('Certificate No.',cal_head['certificate_no'] if cal_head else ''),('Certificate Date',cal_head['certificate_date'] if cal_head else ''),('Next Due',cal_head['next_due'] if cal_head else ''),('Performed By',cal_head['performed_by'] if cal_head else ''),('Standards / Reference',cal_head['standards_reference'] if cal_head else '')]
             for rr,(lab,val) in enumerate(cal_rows): readonly_row(cal_summary,lab,val,rr)
             tk.Button(cal_summary,text='Open Calibration Details',command=lambda:tabs.select(cal_tab),bg='#EAF4FF',fg=BLUE,bd=0,padx=8,pady=5).grid(row=8,column=0,columnspan=2,sticky='ew',padx=8,pady=8)
         else:
@@ -860,7 +865,7 @@ class Servix(tk.Tk):
         refresh_parts()
 
         # Calibration fields only matter when the service reason is Calibration.
-        cal_tab.grid_columnconfigure((0,1),weight=1)
+        cal_tab.grid_columnconfigure((0,1,2),weight=1)
         cal_received=self.form_field(cal_tab,'Received Date',0,0); cal_date=self.form_field(cal_tab,'Performed Date',0,1); cal_result=self.form_field(cal_tab,'Result',0,2,['Pass','Fail'])
         cert=self.form_field(cal_tab,'Certificate No.',2,0); cert_date=self.form_field(cal_tab,'Certificate Date',2,1); next_due=self.form_field(cal_tab,'Next Due Date',2,2)
         performed_by=self.form_field(cal_tab,'Performed By',4,0); standards=self.form_field(cal_tab,'Standards / Reference',4,1); cal_remarks=self.form_field(cal_tab,'Remarks',4,2)
