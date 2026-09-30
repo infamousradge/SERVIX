@@ -195,8 +195,65 @@ class Servix(tk.Tk):
         load()
 
     def show_parts_inventory(self):
-        metrics=[('Parts Entries',self.q1('SELECT COUNT(*) FROM parts'),BLUE,'Service usage'),('Chargeable Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='Chargeable'"),ORANGE,'Billable'),('FOC Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='FOC'"),GREEN,'No charge'),('Services With Parts',self.q1("SELECT COUNT(DISTINCT service_id) FROM parts"),BLUE,'Recorded jobs')]
-        self._register_screen('Parts / Inventory','Parts Used Across Service Work',metrics,('Service ID','Client','Equipment','Part / Description','Qty','Billing'),(110,190,110,260,70,100),"""SELECT s.code,c.name,e.code,p.description,p.qty,p.chargeable FROM parts p JOIN services s ON s.id=p.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY p.id DESC""",'Search service / client / equipment / part',0,self.show_service_detail)
+        self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text='Parts / Inventory',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text='Parts Master / Stock Ledger / Service Usage',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
+        stock_sql="SELECT COALESCE(SUM(CASE WHEN movement_type IN ('Opening','Receipt','Adjustment +','Return') THEN qty ELSE -qty END),0) FROM inventory_movements"
+        for x in [('Part Masters',self.q1('SELECT COUNT(*) FROM inventory_items WHERE active=1'),BLUE,'Active items'),('Stock On Hand',self.q1(stock_sql),GREEN,'All units'),('Service Part Entries',self.q1('SELECT COUNT(*) FROM parts'),ORANGE,'Historical usage'),('Low Stock',self.q1("""SELECT COUNT(*) FROM inventory_items i WHERE active=1 AND (SELECT COALESCE(SUM(CASE WHEN m.movement_type IN ('Opening','Receipt','Adjustment +','Return') THEN m.qty ELSE -m.qty END),0) FROM inventory_movements m WHERE m.item_id=i.id)<=i.reorder_level"""),RED,'At/below reorder level')]: self.metric(m,*x)
+        bar=self.card(body); bar.pack(fill='x',pady=(0,6)); q=tk.StringVar(); ttk.Entry(bar,textvariable=q,width=28).pack(side='left',padx=10,pady=7)
+        cols=('Code','Part Name','Part No.','Category','Unit','Stock','Reorder','Status'); card=self.card(body); card.pack(fill='both',expand=True); tr=ttk.Treeview(card,columns=cols,show='headings')
+        for c,w in zip(cols,(90,230,130,140,70,80,80,90)): tr.heading(c,text=c); tr.column(c,width=w,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            tr.delete(*tr.get_children()); term=q.get().strip().lower()
+            with connect() as con: rows=con.execute("""SELECT i.*,COALESCE(SUM(CASE WHEN m.movement_type IN ('Opening','Receipt','Adjustment +','Return') THEN m.qty ELSE -m.qty END),0) stock FROM inventory_items i LEFT JOIN inventory_movements m ON m.item_id=i.id GROUP BY i.id ORDER BY i.active DESC,i.part_name""").fetchall()
+            for r in rows:
+                vals=(r['code'],r['part_name'],r['part_number'],r['category'],r['unit'],r['stock'],r['reorder_level'],'Active' if r['active'] else 'Disabled')
+                if not term or term in ' '.join(str(v or '') for v in vals).lower():tr.insert('','end',iid=str(r['id']),values=vals)
+        q.trace_add('write',load)
+        def edit(uid=None):
+            row=None
+            if uid:
+                with connect() as con: row=con.execute('SELECT * FROM inventory_items WHERE id=?',(uid,)).fetchone()
+            d=tk.Toplevel(self); d.title('Part Master'); d.geometry('500x540'); d.configure(bg=CARD); d.transient(self); d.grab_set(); vals={}
+            for key,label in [('part_name','Part Name *'),('part_number','Part Number'),('category','Category'),('unit','Unit'),('reorder_level','Reorder Level'),('notes','Notes')]:
+                tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24,pady=(8,2)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=24)
+                if row:vals[key].insert(0,str(row[key] or ''))
+            if not row: vals['unit'].insert(0,'Nos'); vals['reorder_level'].insert(0,'0')
+            active=tk.BooleanVar(value=bool(row['active']) if row else True); tk.Checkbutton(d,text='Active part',variable=active,bg=CARD).pack(anchor='w',padx=20,pady=8)
+            def save():
+                name=vals['part_name'].get().strip()
+                if not name:return messagebox.showwarning('Required','Part Name is required.',parent=d)
+                try: reorder=float(vals['reorder_level'].get() or 0)
+                except ValueError:return messagebox.showwarning('Invalid','Reorder Level must be numeric.',parent=d)
+                ts=now()
+                with connect() as con:
+                    if row:con.execute('UPDATE inventory_items SET part_name=?,part_number=?,category=?,unit=?,reorder_level=?,active=?,notes=?,modified=? WHERE id=?',(name,vals['part_number'].get().strip(),vals['category'].get().strip(),vals['unit'].get().strip() or 'Nos',reorder,1 if active.get() else 0,vals['notes'].get().strip(),ts,uid))
+                    else:
+                        n=con.execute('SELECT COALESCE(MAX(id),0)+1 FROM inventory_items').fetchone()[0]; code=f"PRT-{n:05d}"
+                        con.execute('INSERT INTO inventory_items(code,part_name,part_number,category,unit,reorder_level,active,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(code,name,vals['part_number'].get().strip(),vals['category'].get().strip(),vals['unit'].get().strip() or 'Nos',reorder,1 if active.get() else 0,vals['notes'].get().strip(),ts,ts))
+                audit(self.current_user['username'],'inventory',name,'UPDATE' if row else 'CREATE','Part master saved'); d.destroy(); load()
+            tk.Button(d,text='Save Part',command=save,bg=BLUE,fg='white',bd=0,padx=16,pady=7).pack(pady=14)
+        def movement():
+            if not tr.selection():return messagebox.showwarning('Inventory','Select a part first.')
+            uid=int(tr.selection()[0]); name=tr.item(tr.selection()[0],'values')[1]
+            d=tk.Toplevel(self); d.title('Stock Movement'); d.geometry('440x370'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+            tk.Label(d,text=name,bg=CARD,fg=NAVY,font=('Segoe UI',12,'bold')).pack(pady=(18,10)); typ=ttk.Combobox(d,state='readonly',values=['Opening','Receipt','Issue','Return','Adjustment +','Adjustment -']); typ.set('Receipt'); typ.pack(fill='x',padx=28,pady=5)
+            qty=ttk.Entry(d); qty.pack(fill='x',padx=28,pady=5); qty.insert(0,'1'); ref=ttk.Entry(d); ref.pack(fill='x',padx=28,pady=5); ref.insert(0,'Reference / supplier / note')
+            def save():
+                try:v=float(qty.get())
+                except ValueError:return messagebox.showwarning('Invalid','Quantity must be numeric.',parent=d)
+                if v<=0:return messagebox.showwarning('Invalid','Quantity must be greater than zero.',parent=d)
+                with connect() as con:
+                    con.execute('INSERT INTO inventory_movements(item_id,movement_date,movement_type,qty,reference,notes,username) VALUES(?,?,?,?,?,?,?)',(uid,now(),typ.get(),v,ref.get().strip(),'Manual stock movement',self.current_user['username']))
+                audit(self.current_user['username'],'inventory',uid,'STOCK '+typ.get(),str(v)); d.destroy(); load()
+            tk.Button(d,text='Post Movement',command=save,bg=GREEN,fg='white',bd=0,padx=16,pady=7).pack(pady=18)
+        tk.Button(bar,text='+ New Part',command=lambda:edit(),bg=BLUE,fg='white',bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Button(bar,text='Edit Selected',command=lambda:edit(int(tr.selection()[0])) if tr.selection() else None,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Button(bar,text='Stock Movement',command=movement,bg=GREEN,fg='white',bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        load()
 
     def show_documents(self):
         metrics=[('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE,'Images and PDFs'),('Calibration Certificates',self.q1("SELECT COUNT(*) FROM calibration WHERE certificate_no!=''"),GREEN,'Certificate records'),('Services With Files',self.q1("SELECT COUNT(DISTINCT service_id) FROM attachments"),ORANGE,'Documented jobs'),('PDF Files',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(original_name) LIKE '%.pdf'"),BLUE,'Stored documents')]
