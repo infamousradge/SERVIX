@@ -485,7 +485,10 @@ class Servix(tk.Tk):
         engineer=self.form_field(form,'Assigned Engineer (important)',4,2,[])
         priority=self.form_field(form,'Priority',6,0,['Normal','Urgent','Critical']); priority.set('Normal')
         source=self.form_field(form,'Request Source (optional)',6,1,['Phone','Email','WhatsApp','Walk-in','Other'])
-        status=self.form_field(form,'Status',6,2,['New','Assigned','Received']); status.set('New')
+        complaint_date=self.form_field(form,'Complaint Received Date *',6,2); complaint_date.insert(0,today())
+        status=self.form_field(form,'Opening Status',8,0,['New','Assigned','Received']); status.set('New')
+        received_date=self.form_field(form,'Equipment Received Date',8,1)
+        received_condition=self.form_field(form,'Equipment Received Condition',8,2)
 
         info=tk.Frame(form,bg='#F7FAFD',highlightthickness=1,highlightbackground='#D6E6F3'); info.grid(row=7,column=0,columnspan=3,sticky='ew',padx=10,pady=(3,3))
         for i in range(3): info.grid_columnconfigure(i,weight=1)
@@ -586,7 +589,13 @@ class Servix(tk.Tk):
         actions=tk.Frame(self.content,bg=BG); actions.pack(fill='x',padx=10)
         def save():
             cid=cmap.get(client.get()); eid=emap.get(equip.get()); text=complaint.get('1.0','end').strip()
-            if not cid or not eid or not reason.get() or not warranty.get() or not amc.get() or not text:return messagebox.showwarning('Mandatory information','Complete Client, Equipment, Reason, Complaint, Warranty and AMC.')
+            if not cid or not eid or not reason.get() or not warranty.get() or not amc.get() or not text or not complaint_date.get().strip():return messagebox.showwarning('Mandatory information','Complete Client, Equipment, Complaint Received Date, Reason, Complaint, Warranty and AMC.')
+            try: datetime.datetime.strptime(complaint_date.get().strip(),'%Y-%m-%d')
+            except ValueError:return messagebox.showwarning('Complaint date','Complaint Received Date must be YYYY-MM-DD.')
+            if status.get()=='Received' and not received_date.get().strip():return messagebox.showwarning('Received date','Equipment Received Date is required when opening the Service as Received.')
+            if received_date.get().strip():
+                try: datetime.datetime.strptime(received_date.get().strip(),'%Y-%m-%d')
+                except ValueError:return messagebox.showwarning('Received date','Equipment Received Date must be YYYY-MM-DD.')
             with connect() as con:
                 owner=con.execute('SELECT client_id FROM equipment WHERE id=?',(eid,)).fetchone()
                 if not owner or owner[0]!=cid:return messagebox.showwarning('Equipment mismatch','Selected equipment does not belong to the selected client. Refresh the selection and try again.')
@@ -597,8 +606,9 @@ class Servix(tk.Tk):
                         prev=matches[0]; days=get_setting('repeat_complaint_days','60')
                         if not messagebox.askyesno('Repeat complaint warning',f"This equipment has a similar complaint within {days} days: {prev['code']} ({prev['opened']}).\n\nPrevious complaint: {prev['complaint']}\n\nCreate a new Service ID anyway?",parent=self):return
                 sc=next_code('SRV','services'); ts=now()
-                cur=con.execute('''INSERT INTO services(code,client_id,equipment_id,opened,request_source,reason,complaint,warranty,amc,engineer,priority,status,payment_status,modified)
-                                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(sc,cid,eid,ts,source.get(),reason.get(),text,warranty.get(),amc.get(),engineer.get().strip(),priority.get() or 'Normal',status.get() or 'New','Not Applicable',ts))
+                opened=complaint_date.get().strip()
+                cur=con.execute('''INSERT INTO services(code,client_id,equipment_id,opened,request_source,reason,complaint,warranty,amc,engineer,priority,status,received_date,received_condition,payment_status,modified)
+                                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(sc,cid,eid,opened,source.get(),reason.get(),text,warranty.get(),amc.get(),engineer.get().strip(),priority.get() or 'Normal',status.get() or 'New',received_date.get().strip(),received_condition.get().strip(),'Not Applicable',ts))
                 con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(cur.lastrowid,ts,'Service call created from office intake',self.current_user['username']))
             audit(self.current_user['username'],'service',sc,'CREATE','Service call created')
             if engineer.get().strip(): audit(self.current_user['username'],'service',sc,'ENGINEER_ASSIGN',f"Assigned to {engineer.get().strip()}")
