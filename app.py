@@ -772,7 +772,7 @@ class Servix(tk.Tk):
         def refresh_parts():
             ptr.delete(*ptr.get_children())
             with connect() as con:
-                for x in con.execute('SELECT part_no,description,qty,chargeable,amount,remarks FROM parts WHERE service_id=? ORDER BY id DESC',(r['id'],)): ptr.insert('','end',values=tuple(x))
+                for x in con.execute('SELECT id,part_no,description,qty,chargeable,amount,remarks FROM parts WHERE service_id=? ORDER BY id DESC',(r['id'],)): ptr.insert('','end',iid=str(x['id']),values=tuple(x)[1:])
         def save_part():
             item=invmap.get(partsel.get())
             if not item:return messagebox.showwarning('Required','Select an active Inventory Part.')
@@ -791,6 +791,31 @@ class Servix(tk.Tk):
             for x in pent.values():x.delete(0,'end')
             refresh_parts(); messagebox.showinfo('Part issued','Part recorded against the service and deducted from inventory.')
         tk.Button(pform,text='+ Issue Part',command=save_part,bg=BLUE,fg='white',bd=0,padx=14,pady=8).grid(row=1,column=5,padx=8)
+        def return_part():
+            sel=ptr.selection()
+            if not sel:return messagebox.showwarning('Select part','Select the issued part to return.')
+            part_id=int(sel[0])
+            with connect() as con:
+                p=con.execute('SELECT * FROM parts WHERE id=? AND service_id=?',(part_id,r['id'])).fetchone()
+                if not p:return messagebox.showwarning('Part','The selected service part no longer exists.')
+                issue=con.execute("""SELECT m.*,i.code,i.part_name,i.unit FROM inventory_movements m JOIN inventory_items i ON i.id=m.item_id
+                    WHERE m.service_id=? AND m.movement_type='Issue' AND m.notes=? ORDER BY m.id LIMIT 1""",(r['id'],f"Service part row {part_id}")).fetchone()
+                if not issue:return messagebox.showwarning('Legacy part','This part was not issued from Inventory and cannot be stock-returned automatically.')
+                already=con.execute("""SELECT COALESCE(SUM(qty),0) FROM inventory_movements
+                    WHERE service_id=? AND item_id=? AND movement_type='Return' AND reference=?""",(r['id'],issue['item_id'],f"{r['code']}/PART-{part_id}")).fetchone()[0]
+            remaining=float(p['qty'])-float(already or 0)
+            if remaining<=0:return messagebox.showinfo('Already returned','The full issued quantity has already been returned to inventory.')
+            qty=simpledialog.askfloat('Return Part',f"Return quantity for {issue['part_name']}\nMaximum: {remaining:g} {issue['unit']}",minvalue=0.000001,maxvalue=remaining,parent=self)
+            if qty is None:return
+            reason=simpledialog.askstring('Return reason','Reason for return / correction:',parent=self)
+            if not reason or not reason.strip():return messagebox.showwarning('Reason required','A return reason is required for the audit trail.')
+            if not messagebox.askyesno('Confirm Return',f"Return {qty:g} {issue['unit']} of {issue['part_name']} to inventory?\n\nThe original issue record will be preserved.",parent=self):return
+            with connect() as con:
+                con.execute('INSERT INTO inventory_movements(item_id,movement_date,movement_type,qty,service_id,reference,notes,username) VALUES(?,?,?,?,?,?,?,?)',(issue['item_id'],now(),'Return',qty,r['id'],f"{r['code']}/PART-{part_id}",reason.strip(),self.current_user['username']))
+            add_history(r['id'],f"Inventory returned: {issue['part_name']} x {qty:g}. Reason: {reason.strip()}",self.current_user['username'])
+            audit(self.current_user['username'],'service',r['code'],'PART_RETURN',f"{issue['code']} {issue['part_name']} x {qty:g}; {reason.strip()}")
+            messagebox.showinfo('Returned','Stock returned successfully. The original issue remains in service history.')
+        tk.Button(pform,text='Return Selected',command=return_part,bg='#6B7280',fg='white',bd=0,padx=12,pady=8).grid(row=1,column=6,padx=4)
         refresh_parts()
 
         # Calibration fields only matter when the service reason is Calibration.
