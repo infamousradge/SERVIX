@@ -12,7 +12,7 @@ NAVY='#071A3D'; NAVY2='#0C2B5B'; BLUE='#0876D1'; CYAN='#11B6D8'; GREEN='#48C774'
 class Servix(tk.Tk):
     def __init__(self):
         super().__init__(); init_db()
-        self.title('SERVIX — Service Management'); self.geometry('1480x900'); self.minsize(1180,720); self.configure(bg=BG)
+        self.title('HAC — Service Management System'); self.geometry('1536x960'); self.minsize(1280,760); self.configure(bg=BG)
         self.style=ttk.Style(self); self.style.theme_use('clam')
         self.style.configure('Treeview',font=('Segoe UI',10),rowheight=31,background='white',fieldbackground='white',borderwidth=0)
         self.style.configure('Treeview.Heading',font=('Segoe UI',10,'bold'),background='#EAF1F8',foreground=TEXT,padding=8)
@@ -24,20 +24,25 @@ class Servix(tk.Tk):
         self.page=None; self.build_shell(); self.show_dashboard()
 
     def build_shell(self):
-        self.sidebar=tk.Frame(self,bg=NAVY,width=235); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
-        brand=tk.Frame(self.sidebar,bg=NAVY,height=110); brand.pack(fill='x'); brand.pack_propagate(False)
-        tk.Label(brand,text='⚙',font=('Segoe UI Symbol',31),bg=NAVY,fg=CYAN).pack(side='left',padx=(18,7))
-        b=tk.Frame(brand,bg=NAVY); b.pack(side='left',pady=22); tk.Label(b,text='SERVIX',font=('Segoe UI',22,'bold'),bg=NAVY,fg='white').pack(anchor='w'); tk.Label(b,text='SERVICE MANAGEMENT',font=('Segoe UI',7),bg=NAVY,fg='#8EDFE8').pack(anchor='w')
+        self.sidebar=tk.Frame(self,bg='#063765',width=168); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
+        brand=tk.Frame(self.sidebar,bg='#073A69',height=62); brand.pack(fill='x'); brand.pack_propagate(False)
+        tk.Label(brand,text='HAC',font=('Segoe UI',25,'bold'),bg='#073A69',fg='white').pack(anchor='w',padx=20,pady=(5,0))
+        tk.Label(brand,text='SERVICE MANAGEMENT',font=('Segoe UI',6,'bold'),bg='#073A69',fg='#B9D9F4').pack(anchor='w',padx=21)
         self.nav={}
-        items=[('Dashboard','▦',self.show_dashboard),('Service Calls','☷',self.show_services),('New Service','＋',self.show_new_service),('Clients','♙',self.show_clients),('Equipment','⚙',self.show_equipment),('Warranty & AMC','◇',self.show_warranty),('Calibration','◎',self.show_calibration),('Commercial','₹',self.show_commercial),('Reports & Export','▥',self.show_reports),('Settings','⚙',self.show_settings)]
+        items=[('Dashboard','⌂',self.show_dashboard),('Service Calls','⌕',self.show_services),('Clients','♟',self.show_clients),('Equipment','▣',self.show_equipment),('Warranty & AMC','◆',self.show_warranty),('Engineers','♟',self.show_engineers),('Parts / Inventory','↕',self.show_parts_inventory),('Commercial & Payments','₹',self.show_commercial),('Documents','▧',self.show_documents),('Reports & Analytics','▥',self.show_reports),('Data Export / Import','⇄',self.show_reports),('Administration','⚙',self.show_settings)]
         for label,icon,cmd in items:
-            btn=tk.Button(self.sidebar,text=f'  {icon}   {label}',font=('Segoe UI',10),anchor='w',bd=0,relief='flat',bg=NAVY,fg='#DDE9F7',activebackground=NAVY2,activeforeground='white',cursor='hand2',command=lambda l=label,c=cmd:self.go(l,c)); btn.pack(fill='x',padx=10,pady=2,ipady=9); self.nav[label]=btn
-        tk.Label(self.sidebar,text='SERVIX V1 • LOCAL DATABASE',font=('Segoe UI',7),bg=NAVY,fg='#7790B0').pack(side='bottom',pady=16)
+            btn=tk.Button(self.sidebar,text=f'  {icon}   {label}',font=('Segoe UI',8),anchor='w',bd=0,relief='flat',bg='#063765',fg='white',activebackground='#0876D1',activeforeground='white',cursor='hand2',command=lambda l=label,c=cmd:self.go(l,c)); btn.pack(fill='x',pady=0,ipady=7); self.nav[label]=btn
         right=tk.Frame(self,bg=BG); right.pack(side='left',fill='both',expand=True)
-        top=tk.Frame(right,bg='white',height=70,highlightthickness=1,highlightbackground=BORDER); top.pack(fill='x'); top.pack_propagate(False)
-        self.search=tk.Entry(top,font=('Segoe UI',10),bd=0,bg='#F2F6FA',fg=TEXT,insertbackground=TEXT); self.search.insert(0,'Search Service ID, Client, Serial, SERVIX Equipment ID…'); self.search.pack(side='left',fill='x',expand=True,padx=24,pady=16,ipady=9); self.search.bind('<Return>',lambda e:self.global_search())
-        tk.Button(top,text='Search',command=self.global_search,bg=BLUE,fg='white',bd=0,font=('Segoe UI',9,'bold'),padx=18,pady=8).pack(side='left',padx=(0,14))
-        tk.Label(top,text='Office User',bg='white',fg=TEXT,font=('Segoe UI',9,'bold')).pack(side='right',padx=20)
+        top=tk.Frame(right,bg='#063765',height=53); top.pack(fill='x'); top.pack_propagate(False)
+        title=tk.Frame(top,bg='#063765'); title.pack(side='left',padx=(18,24),pady=5)
+        tk.Label(title,text='Service Management System',font=('Segoe UI',12,'bold'),bg='#063765',fg='white').pack(anchor='w')
+        tk.Label(title,text='Service   |   Calibration   |   Warranty   |   AMC',font=('Segoe UI',7),bg='#063765',fg='#D6E8F7').pack(anchor='w')
+        searchwrap=tk.Frame(top,bg='white'); searchwrap.pack(side='left',fill='x',expand=True,pady=10)
+        self.search=tk.Entry(searchwrap,font=('Segoe UI',9),bd=0,bg='white',fg=MUTED,insertbackground=TEXT); self.search.insert(0,'Search by Service ID, Client, Email, Mobile, Serial No., Equipment ID...'); self.search.pack(side='left',fill='x',expand=True,padx=12,ipady=5); self.search.bind('<Return>',lambda e:self.global_search())
+        tk.Button(searchwrap,text='⌕',command=self.global_search,bg='#EEF3F8',fg=NAVY,bd=0,font=('Segoe UI',11),padx=12).pack(side='right',fill='y')
+        user=tk.Frame(top,bg='#063765'); user.pack(side='right',padx=20)
+        tk.Label(user,text='●',bg='#063765',fg='#8BC8F5',font=('Segoe UI',16)).pack(side='left',padx=6)
+        uf=tk.Frame(user,bg='#063765'); uf.pack(side='left'); tk.Label(uf,text='Admin',bg='#063765',fg='white',font=('Segoe UI',8,'bold')).pack(anchor='w'); tk.Label(uf,text='Administrator',bg='#063765',fg='#D6E8F7',font=('Segoe UI',6)).pack(anchor='w')
         self.content=tk.Frame(right,bg=BG); self.content.pack(fill='both',expand=True)
 
     def go(self,label,cmd):
@@ -56,18 +61,54 @@ class Servix(tk.Tk):
     def q1(self,sql,args=()):
         with connect() as con:return con.execute(sql,args).fetchone()[0]
 
+    def show_engineers(self): self.simple_summary('Engineers','Engineer workload and service assignment',[('Active Services',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status NOT IN ('Closed','Cancelled')"),BLUE),('Unassigned',self.q1("SELECT COUNT(*) FROM services WHERE (engineer IS NULL OR engineer='') AND status NOT IN ('Closed','Cancelled')"),ORANGE)])
+    def show_parts_inventory(self): self.simple_summary('Parts / Inventory','Parts recorded across service work',[('Parts Entries',self.q1('SELECT COUNT(*) FROM parts'),BLUE),('Chargeable Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='Chargeable'"),ORANGE)])
+    def show_documents(self): self.simple_summary('Documents','Service images, PDFs and certificates',[('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE),('Calibration Certificates',self.q1("SELECT COUNT(*) FROM calibration WHERE certificate_no!=''"),GREEN)])
+
     def show_dashboard(self):
-        self.clear(); self.heading('Dashboard','Service operations at a glance',self.show_new_service,'+ New Service Call')
-        row=tk.Frame(self.content,bg=BG); row.pack(fill='x',padx=22)
-        self.metric(row,'Open Service Calls',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled')"),BLUE,'Active workload')
-        self.metric(row,'Awaiting Action',self.q1("SELECT COUNT(*) FROM services WHERE status IN ('Awaiting Customer','Awaiting Approval','Awaiting Parts')"),ORANGE,'Customer / approval / parts')
-        self.metric(row,'Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"),RED,'Commercial follow-up')
-        self.metric(row,'Calibration Due / Overdue',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due IS NOT NULL AND next_due!='' AND date(next_due)<=date('now','+30 day')"),GREEN,'Next 30 days + overdue')
-        lower=tk.Frame(self.content,bg=BG); lower.pack(fill='both',expand=True,padx=28,pady=18)
-        recent=self.card(lower); recent.pack(side='left',fill='both',expand=True,padx=(0,9)); tk.Label(recent,text='Recent Service Calls',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=18,pady=15); self.service_tree(recent,8)
-        side=self.card(lower); side.pack(side='left',fill='y',padx=(9,0)); tk.Label(side,text='Quick Assessment',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=18,pady=15)
-        for label,sql in [('Warranty Calls',"warranty='Yes'"),('AMC Calls',"amc='Yes'"),('Chargeable',"foc_chargeable='Chargeable'"),('FOC',"foc_chargeable='FOC'"),('Dispatched',"status='Dispatched'")]:
-            r=tk.Frame(side,bg=CARD); r.pack(fill='x',padx=18,pady=7); tk.Label(r,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',9)).pack(side='left'); tk.Label(r,text=str(self.q1('SELECT COUNT(*) FROM services WHERE '+sql)),bg=CARD,fg=TEXT,font=('Segoe UI',12,'bold')).pack(side='right')
+        self.clear()
+        kpi=tk.Frame(self.content,bg=BG); kpi.pack(fill='x',padx=10,pady=(10,7))
+        data=[
+            ('Open Calls',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled')"),'#83BCF4',''),
+            ('Overdue',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"),'#FF999B',''),
+            ('Awaiting Parts',self.q1("SELECT COUNT(*) FROM services WHERE status='Awaiting Parts'"),'#FFD65F',''),
+            ('Awaiting Customer',self.q1("SELECT COUNT(*) FROM services WHERE status='Awaiting Customer'"),'#B892EF',''),
+            ('Quotation Pending',self.q1("SELECT COUNT(*) FROM services WHERE quote_status='Pending Decision'"),'#58D1C9',''),
+            ('Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid','Invoice Raised','To Be Invoiced')"),'#FFAD73','₹ {:,.0f}'.format(self.q1("SELECT COALESCE(SUM(MAX(0,COALESCE(invoice_amount,0)-COALESCE(amount_received,0))),0) FROM services"))),
+            ('Calibration Due',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"),'#CBD4DE','(30 days)'),
+            ('AMC Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"),'#A9E8B1','(60 days)')]
+        for title,val,color,sub in data:
+            card=tk.Frame(kpi,bg=color,highlightthickness=1,highlightbackground='#D5DFE9'); card.pack(side='left',fill='both',expand=True,padx=4)
+            tk.Label(card,text=str(val),bg=color,fg='#071426',font=('Segoe UI',17,'bold')).pack(pady=(8,0))
+            tk.Label(card,text=title,bg=color,fg='#071426',font=('Segoe UI',8,'bold')).pack()
+            tk.Label(card,text=sub or ' ',bg=color,fg='#071426',font=('Segoe UI',7,'bold')).pack(pady=(0,7))
+
+        analytics=tk.Frame(self.content,bg=BG); analytics.pack(fill='x',padx=10,pady=(0,7))
+        def panel(parent,title):
+            f=self.card(parent); f.pack(side='left',fill='both',expand=True,padx=4); tk.Label(f,text=title,bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=10,pady=(7,3)); return f
+        p1=panel(analytics,'Service Calls by Month'); p2=panel(analytics,'Service Type (Current Year)'); p3=panel(analytics,'FOC vs Chargeable'); p4=panel(analytics,'Payment Status (Chargeable)'); p5=panel(analytics,'Top 5 Customers (Service Calls)')
+        months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; canvas=tk.Canvas(p1,height=105,bg='white',highlightthickness=0); canvas.pack(fill='x',padx=8,pady=3)
+        with connect() as con: monthly={int(r[0]):r[1] for r in con.execute("SELECT CAST(strftime('%m',opened) AS INTEGER),COUNT(*) FROM services WHERE strftime('%Y',opened)=strftime('%Y','now') GROUP BY 1")}
+        mx=max([1]+list(monthly.values()))
+        for i,m in enumerate(months):
+            x=10+i*22; h=55*monthly.get(i+1,0)/mx; canvas.create_rectangle(x,75-h,x+12,75,fill='#4B9BE8',outline=''); canvas.create_text(x+6,88,text=m,font=('Segoe UI',6),fill=MUTED)
+        def statlines(parent,rows):
+            for label,val,color in rows:
+                r=tk.Frame(parent,bg=CARD); r.pack(fill='x',padx=10,pady=3); tk.Label(r,text='■',fg=color,bg=CARD,font=('Segoe UI',8)).pack(side='left'); tk.Label(r,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',7)).pack(side='left',padx=4); tk.Label(r,text=str(val),bg=CARD,fg=TEXT,font=('Segoe UI',7,'bold')).pack(side='right')
+        statlines(p2,[('Breakdown',self.q1("SELECT COUNT(*) FROM services WHERE reason='Breakdown / Complaint'"),'#FF4545'),('Calibration',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration'"),BLUE),('Preventive PM',self.q1("SELECT COUNT(*) FROM services WHERE reason LIKE '%Preventive%'"),GREEN),('Others',self.q1("SELECT COUNT(*) FROM services WHERE reason NOT IN ('Breakdown / Complaint','Calibration','Preventive Maintenance')"),ORANGE)])
+        statlines(p3,[('Chargeable',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='Chargeable'"),BLUE),('FOC / Warranty / AMC',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='FOC' OR warranty='Yes' OR amc='Yes'"),GREEN)])
+        statlines(p4,[('Paid',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Paid'"),GREEN),('Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"),ORANGE),('Not Invoiced',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Not Applicable','To Be Invoiced')"),'#8B9BAD')])
+        with connect() as con: tops=con.execute("SELECT c.name,COUNT(*) n FROM services s JOIN clients c ON c.id=s.client_id GROUP BY c.id ORDER BY n DESC LIMIT 5").fetchall()
+        statlines(p5,[(r['name'],r['n'],BLUE) for r in tops] or [('No service data yet',0,BLUE)])
+
+        lower=tk.Frame(self.content,bg=BG); lower.pack(fill='both',expand=True,padx=10,pady=(0,8))
+        recent=self.card(lower); recent.pack(side='left',fill='both',expand=True,padx=(4,4))
+        rh=tk.Frame(recent,bg=CARD); rh.pack(fill='x',padx=10,pady=(7,3)); tk.Label(rh,text='Recent / Open Service Calls',font=('Segoe UI',9,'bold'),bg=CARD,fg=TEXT).pack(side='left'); tk.Button(rh,text='View All',command=self.show_services,bg=CARD,fg=BLUE,bd=0,font=('Segoe UI',7,'underline')).pack(side='right')
+        self.service_tree(recent,5)
+        alerts=self.card(lower); alerts.pack(side='left',fill='both',padx=(4,4)); tk.Label(alerts,text='Alerts & Reminders',font=('Segoe UI',9,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=12,pady=(8,5))
+        alert_rows=[('●',RED,f"{self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')")} service calls overdue"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')")} calibrations due within 30 days"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')")} warranties expiring this month"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')")} AMC expiring in 60 days"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')")} invoices pending payment"),('△',RED,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''")} equipment with missing serial numbers")]
+        for icon,color,msg in alert_rows:
+            r=tk.Frame(alerts,bg=CARD); r.pack(fill='x',padx=12,pady=4); tk.Label(r,text=icon,bg=CARD,fg=color,font=('Segoe UI',9,'bold')).pack(side='left'); tk.Label(r,text=msg,bg=CARD,fg=TEXT,font=('Segoe UI',7)).pack(side='left',padx=7)
 
     def service_tree(self,parent,limit=None,where='',args=()):
         wrap=tk.Frame(parent,bg=CARD); wrap.pack(fill='both',expand=True,padx=14,pady=(0,14)); cols=('Service ID','Opened','Client','SERVIX Equipment','Reason','Engineer','Status','Payment'); tree=ttk.Treeview(wrap,columns=cols,show='headings');
