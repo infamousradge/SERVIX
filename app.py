@@ -472,10 +472,13 @@ class Servix(tk.Tk):
         tk.Button(cal_tab,text='Save Calibration',command=save_cal,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=1,sticky='e',padx=10,pady=15)
         if r['reason']!='Calibration': tk.Label(cal_tab,text='This service is not marked as Calibration. These fields are optional.',bg=CARD,fg=MUTED).grid(row=7,column=0,columnspan=2,pady=8)
 
-        # Images are resized/compressed. PDFs remain lossless/readable.
-        acols=('Document','Type','Original','Stored','Saved'); atr=ttk.Treeview(att_tab,columns=acols,show='headings')
+        # Compact document cards aligned to the approved Service Request design.
+        tk.Label(att_tab,text='Photos / Documents',bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=10,pady=(10,3))
+        cards=tk.Frame(att_tab,bg=CARD); cards.pack(fill='x',padx=8,pady=(2,5))
+        details=tk.Frame(att_tab,bg=CARD); details.pack(fill='both',expand=True,padx=8,pady=(0,6))
+        acols=('Document','Type','Original','Stored','Saved'); atr=ttk.Treeview(details,columns=acols,show='headings',height=7)
         for ac in acols: atr.heading(ac,text=ac)
-        atr.pack(fill='both',expand=True,padx=12,pady=(12,6))
+        atr.pack(fill='both',expand=True)
         def human(n):
             n=float(n or 0)
             for unit in ('B','KB','MB','GB'):
@@ -483,16 +486,24 @@ class Servix(tk.Tk):
                 n/=1024
             return f'{n:.1f} TB'
         def refresh_att():
+            for w in cards.winfo_children(): w.destroy()
             for x in atr.get_children(): atr.delete(x)
-            with connect() as con:
-                for x in con.execute('SELECT original_name,kind,original_size,stored_size,created FROM attachments WHERE service_id=? ORDER BY id DESC',(r['id'],)): atr.insert('','end',values=(x['original_name'],x['kind'],human(x['original_size']),human(x['stored_size']),x['created']))
+            with connect() as con: docs=con.execute('SELECT original_name,kind,original_size,stored_size,created FROM attachments WHERE service_id=? ORDER BY id DESC',(r['id'],)).fetchall()
+            for i,x in enumerate(docs[:4]):
+                tile=tk.Frame(cards,bg='#F8FBFE',width=112,height=88,highlightthickness=1,highlightbackground='#C8DDF0'); tile.pack(side='left',padx=3); tile.pack_propagate(False)
+                icon='PDF' if str(x['kind']).lower()=='pdf' or str(x['original_name']).lower().endswith('.pdf') else 'PHOTO'
+                tk.Label(tile,text=icon,bg='#EAF4FF',fg=RED if icon=='PDF' else BLUE,font=('Segoe UI',8,'bold')).pack(fill='x',pady=(8,4))
+                tk.Label(tile,text=x['original_name'],bg='#F8FBFE',fg=TEXT,font=('Segoe UI',7),wraplength=100,justify='center').pack(padx=4)
+            add=tk.Button(cards,text='+\nAdd Files',command=attach if 'attach' in locals() else lambda:None,bg='white',fg=BLUE,bd=1,relief='solid',font=('Segoe UI',8,'bold'),width=10,height=4); add.pack(side='left',padx=3)
+            for x in docs: atr.insert('','end',values=(x['original_name'],x['kind'],human(x['original_size']),human(x['stored_size']),x['created']))
         def attach():
             path=filedialog.askopenfilename(filetypes=[('Images / PDF','*.jpg *.jpeg *.png *.webp *.pdf'),('All files','*.*')])
             if not path:return
             try: meta=store_attachment(path,code)
             except Exception as ex:return messagebox.showerror('Attachment',str(ex))
             add_attachment(r['id'],meta); add_history(r['id'],f"Attachment added: {meta['original_name']}"); refresh_att()
-        tk.Button(att_tab,text='+ Attach Image / PDF',command=attach,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=12,pady=(0,12)); refresh_att()
+        tk.Button(att_tab,text='+ Add Image / PDF',command=attach,bg=BLUE,fg='white',bd=0,padx=14,pady=6).pack(anchor='e',padx=8,pady=(0,8))
+        refresh_att()
 
         comm.grid_columnconfigure((0,1,2),weight=1)
         foc=self.form_field(comm,'Billing Decision',0,0,['','FOC','Chargeable']); foc.set(r['foc_chargeable'] or '')
