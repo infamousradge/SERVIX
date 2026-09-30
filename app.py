@@ -256,8 +256,62 @@ class Servix(tk.Tk):
         load()
 
     def show_documents(self):
-        metrics=[('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE,'Images and PDFs'),('Calibration Certificates',self.q1("SELECT COUNT(*) FROM calibration WHERE certificate_no!=''"),GREEN,'Certificate records'),('Services With Files',self.q1("SELECT COUNT(DISTINCT service_id) FROM attachments"),ORANGE,'Documented jobs'),('PDF Files',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(original_name) LIKE '%.pdf'"),BLUE,'Stored documents')]
-        self._register_screen('Documents','Service Images / PDFs / Certificates',metrics,('Service ID','Client','Equipment','File Name','Type','Added'),(110,190,110,300,90,150),"""SELECT s.code,c.name,e.code,a.original_name,CASE WHEN lower(a.original_name) LIKE '%.pdf' THEN 'PDF' ELSE 'Image' END,a.created FROM attachments a JOIN services s ON s.id=a.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY a.id DESC""",'Search service / client / equipment / filename',0,self.show_service_detail)
+        self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text='Documents',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text='Service Documents / Photos / Certificates',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
+        for x in [('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE,'Images and PDFs'),('PDF Files',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(original_name) LIKE '%.pdf'"),RED,'Stored PDFs'),('Photos',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(original_name) NOT LIKE '%.pdf'"),GREEN,'Stored images'),('Services With Files',self.q1('SELECT COUNT(DISTINCT service_id) FROM attachments'),ORANGE,'Documented jobs')]: self.metric(m,*x)
+        bar=self.card(body); bar.pack(fill='x',pady=(0,6)); q=tk.StringVar(); ttk.Entry(bar,textvariable=q,width=30).pack(side='left',padx=10,pady=7)
+        kind=ttk.Combobox(bar,state='readonly',values=['All','PDF','Image'],width=12); kind.set('All'); kind.pack(side='left',padx=4)
+        card=self.card(body); card.pack(fill='both',expand=True); cols=('Service ID','Client','Equipment','File Name','Type','Size KB','Added'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        for c,w in zip(cols,(110,190,110,300,80,80,150)):tr.heading(c,text=c);tr.column(c,width=w,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            tr.delete(*tr.get_children()); term=q.get().strip().lower(); k=kind.get()
+            with connect() as con: rows=con.execute("""SELECT a.id,s.code service_code,c.name,e.code equipment,a.original_name,a.stored_path,a.kind,a.stored_size,a.created
+              FROM attachments a JOIN services s ON s.id=a.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY a.id DESC""").fetchall()
+            for r in rows:
+                typ='PDF' if (r['original_name'] or '').lower().endswith('.pdf') else 'Image'
+                vals=(r['service_code'],r['name'],r['equipment'],r['original_name'],typ,round((r['stored_size'] or 0)/1024,1),r['created'])
+                if k!='All' and typ!=k:continue
+                if not term or term in ' '.join(str(v or '') for v in vals).lower():tr.insert('','end',iid=str(r['id']),values=vals)
+        q.trace_add('write',load); kind.bind('<<ComboboxSelected>>',load)
+        def selected_row():
+            if not tr.selection(): messagebox.showwarning('Documents','Select a document first.'); return None
+            with connect() as con:return con.execute('SELECT * FROM attachments WHERE id=?',(int(tr.selection()[0]),)).fetchone()
+        def open_file():
+            r=selected_row()
+            if not r:return
+            p=Path(r['stored_path'])
+            if not p.is_absolute():p=DATA_ROOT/p
+            if not p.exists():return messagebox.showerror('Document missing','The stored file could not be found:\n'+str(p))
+            try: os.startfile(str(p))
+            except Exception as ex:messagebox.showerror('Open Document',str(ex))
+        def folder():
+            r=selected_row()
+            if not r:return
+            p=Path(r['stored_path']); p=p if p.is_absolute() else DATA_ROOT/p
+            if not p.exists():return messagebox.showerror('Document missing','The stored file could not be found.')
+            try: os.startfile(str(p.parent))
+            except Exception as ex:messagebox.showerror('Open Folder',str(ex))
+        def service():
+            if tr.selection():self.show_service_detail(tr.item(tr.selection()[0],'values')[0])
+        def remove():
+            r=selected_row()
+            if not r:return
+            if not messagebox.askyesno('Remove document','Remove this attachment from SERVIX?\n\nThe stored file will also be deleted when possible.'):return
+            p=Path(r['stored_path']); p=p if p.is_absolute() else DATA_ROOT/p
+            with connect() as con:con.execute('DELETE FROM attachments WHERE id=?',(r['id'],))
+            try:
+                if p.exists():p.unlink()
+            except OSError:pass
+            audit(self.current_user['username'],'attachment',r['id'],'DELETE',r['original_name'] or '');load()
+        tk.Button(bar,text='Open File',command=open_file,bg=BLUE,fg='white',bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Button(bar,text='Open Folder',command=folder,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Button(bar,text='Open Service',command=service,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Button(bar,text='Remove',command=remove,bg='#FDECEC',fg=RED,bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tr.bind('<Double-1>',lambda e:open_file());load()
 
     def show_dashboard(self):
         self.clear()
