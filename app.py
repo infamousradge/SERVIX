@@ -31,7 +31,35 @@ class Servix(tk.Tk):
         self.style.map('TNotebook.Tab',background=[('selected','white')],foreground=[('selected',BLUE)])
         self.current_user=None; self.withdraw()
         if not self.login(): self.destroy(); return
-        self.deiconify(); self.page=None; self.build_shell(); self.show_dashboard()
+        self.deiconify(); self.page=None; self.build_shell(); self.run_auto_backup(); self.show_dashboard()
+
+    def run_auto_backup(self):
+        if get_setting('auto_backup_enabled','1')!='1': return
+        try:
+            days=max(1,int(get_setting('auto_backup_days','1') or 1)); keep=max(1,int(get_setting('auto_backup_keep','14') or 14))
+            with connect() as con:last=con.execute("SELECT backup_date FROM backup_history WHERE status='Success' AND notes LIKE 'Automatic backup%' ORDER BY id DESC LIMIT 1").fetchone()
+            if last:
+                stamp=datetime.datetime.fromisoformat(last['backup_date'])
+                if datetime.datetime.now()-stamp<datetime.timedelta(days=days):return
+            folder=DATA_ROOT/'backups'; folder.mkdir(parents=True,exist_ok=True)
+            dest=folder/('SERVIX_AutoBackup_'+datetime.datetime.now().strftime('%Y%m%d_%H%M%S')+'.zip')
+            with connect() as con:con.execute('PRAGMA wal_checkpoint(FULL)')
+            with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED) as z:
+                z.write(DB,'data/servix.db'); att=DATA_ROOT/'attachments'
+                if att.exists():
+                    for p in att.rglob('*'):
+                        if p.is_file():z.write(p,'attachments/'+str(p.relative_to(att)))
+                z.writestr('manifest.json',json.dumps({'product':'SERVIX','created':datetime.datetime.now().isoformat(timespec='seconds'),'database':'data/servix.db','automatic':True},indent=2))
+            with connect() as con:con.execute('INSERT INTO backup_history(backup_date,filename,status,notes) VALUES(?,?,?,?)',(now(),str(dest),'Success','Automatic backup on application start'))
+            backups=sorted(folder.glob('SERVIX_AutoBackup_*.zip'),key=lambda p:p.stat().st_mtime,reverse=True)
+            for old in backups[keep:]:
+                try:old.unlink()
+                except OSError:pass
+            audit(self.current_user['username'],'backup',dest.name,'AUTO_CREATE','Automatic backup created')
+        except Exception as ex:
+            try:
+                with connect() as con:con.execute('INSERT INTO backup_history(backup_date,filename,status,notes) VALUES(?,?,?,?)',(now(),'Automatic backup','Failed',str(ex)[:250]))
+            except Exception:pass
 
     def login(self):
         with connect() as con:
@@ -1471,6 +1499,18 @@ class Servix(tk.Tk):
             set_setting('service_prefix',p); set_setting('service_start',n); set_setting('service_digits',d)
             messagebox.showinfo('Saved','Service ID numbering saved.')
         tk.Button(card,text='Save Service ID Numbering',command=save_settings,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=16,pady=(0,16))
+        auto=self.card(self.content); auto.pack(fill='x',padx=10,pady=(0,10))
+        tk.Label(auto,text='Automatic Backup',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=16,pady=(10,4))
+        ar=tk.Frame(auto,bg=CARD); ar.pack(fill='x',padx=16,pady=(4,12))
+        auto_enabled=tk.BooleanVar(value=get_setting('auto_backup_enabled','1')=='1'); tk.Checkbutton(ar,text='Enable automatic backup when SERVIX starts',variable=auto_enabled,bg=CARD,fg=TEXT).pack(side='left')
+        tk.Label(ar,text='Interval days',bg=CARD,fg=MUTED).pack(side='left',padx=(18,4)); auto_days=ttk.Entry(ar,width=6); auto_days.insert(0,get_setting('auto_backup_days','1')); auto_days.pack(side='left')
+        tk.Label(ar,text='Keep backups',bg=CARD,fg=MUTED).pack(side='left',padx=(18,4)); auto_keep=ttk.Entry(ar,width=6); auto_keep.insert(0,get_setting('auto_backup_keep','14')); auto_keep.pack(side='left')
+        def save_auto():
+            try:days=max(1,int(auto_days.get())); keep=max(1,int(auto_keep.get()))
+            except ValueError:return messagebox.showwarning('Automatic Backup','Interval and retention must be whole numbers.')
+            set_setting('auto_backup_enabled','1' if auto_enabled.get() else '0'); set_setting('auto_backup_days',days); set_setting('auto_backup_keep',keep)
+            audit(self.current_user['username'],'settings','automatic_backup','UPDATE',f'enabled={auto_enabled.get()}, days={days}, keep={keep}'); messagebox.showinfo('Saved','Automatic backup settings saved.')
+        tk.Button(ar,text='Save',command=save_auto,bg=BLUE,fg='white',bd=0,padx=14,pady=6).pack(side='left',padx=12)
         quality=self.card(self.content); quality.pack(fill='x',padx=10,pady=(0,10))
         tk.Label(quality,text='Data Quality / Repeat Complaint',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=16,pady=(10,4))
         qr=tk.Frame(quality,bg=CARD); qr.pack(fill='x',padx=16,pady=(4,12)); tk.Label(qr,text='Repeat complaint lookback (days)',bg=CARD,fg=MUTED).pack(side='left')
