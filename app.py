@@ -3,6 +3,8 @@ from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import csv
 from database import connect, init_db, next_code, now, today
+from attachment_utils import store_attachment
+from service_repository import add_history, add_part, upsert_calibration, add_attachment
 
 ROOT=Path(__file__).resolve().parent
 NAVY='#071A3D'; NAVY2='#0C2B5B'; BLUE='#0876D1'; CYAN='#11B6D8'; GREEN='#48C774'; BG='#F3F7FB'; CARD='#FFFFFF'; TEXT='#142033'; MUTED='#6E7B8D'; BORDER='#DDE6F0'; RED='#D9534F'; ORANGE='#F0A23B'
@@ -119,7 +121,8 @@ class Servix(tk.Tk):
         if not r:return
         self.heading(code,f"{r['client']} • {r['equipment']} • {r['make']} {r['model']} • S/N {r['serial'] or 'Not available'}")
         tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
-        ov=tk.Frame(tabs,bg=CARD); tech=tk.Frame(tabs,bg=CARD); comm=tk.Frame(tabs,bg=CARD); hist=tk.Frame(tabs,bg=CARD); tabs.add(ov,text=' Overview '); tabs.add(tech,text=' Technical '); tabs.add(comm,text=' Commercial '); tabs.add(hist,text=' History ')
+        ov=tk.Frame(tabs,bg=CARD); tech=tk.Frame(tabs,bg=CARD); parts_tab=tk.Frame(tabs,bg=CARD); cal_tab=tk.Frame(tabs,bg=CARD); att_tab=tk.Frame(tabs,bg=CARD); comm=tk.Frame(tabs,bg=CARD); hist=tk.Frame(tabs,bg=CARD)
+        tabs.add(ov,text=' Overview '); tabs.add(tech,text=' Technical '); tabs.add(parts_tab,text=' Parts '); tabs.add(cal_tab,text=' Calibration '); tabs.add(att_tab,text=' Attachments '); tabs.add(comm,text=' Commercial '); tabs.add(hist,text=' History ')
         for i,(k,v) in enumerate([('Status',r['status']),('Reason',r['reason']),('Warranty',r['warranty']),('AMC',r['amc']),('Engineer',r['engineer'] or '—'),('Priority',r['priority']),('Opened',r['opened']),('Received',r['received_date'] or '—')]):
             c=self.card(ov); c.grid(row=i//4,column=i%4,sticky='nsew',padx=8,pady=8); ov.grid_columnconfigure(i%4,weight=1); tk.Label(c,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=12,pady=(9,2)); tk.Label(c,text=str(v),bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=12,pady=(0,9))
         tk.Label(ov,text='Complaint / Requirement',bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).grid(row=2,column=0,columnspan=4,sticky='w',padx=10,pady=(15,3)); t=tk.Text(ov,height=5,font=('Segoe UI',10)); t.grid(row=3,column=0,columnspan=4,sticky='ew',padx=10); t.insert('1.0',r['complaint']); t.configure(state='disabled')
@@ -129,6 +132,66 @@ class Servix(tk.Tk):
                 con.execute('UPDATE services SET diagnosis=?,work_done=?,final_result=?,status=?,received_date=?,dispatch_date=?,modified=? WHERE code=?',(diag.get(),work.get(),result.get(),stat.get(),received.get(),dispatch.get(),now(),code)); sid=con.execute('SELECT id FROM services WHERE code=?',(code,)).fetchone()[0]; con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(sid,now(),f"Office update: {stat.get()} — {work.get() or diag.get() or 'record updated'}",'Office'))
             messagebox.showinfo('Saved','Technical update saved.'); self.show_service_detail(code)
         tk.Button(tech,text='Save Technical Update',command=save_tech,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=1,sticky='e',padx=10,pady=15)
+        # Parts: office entry only; add rows as the engineer reports work.
+        pcols=('Part No.','Description','Qty','FOC / Chargeable','Amount','Remarks'); ptr=ttk.Treeview(parts_tab,columns=pcols,show='headings',height=10)
+        for pc in pcols: ptr.heading(pc,text=pc)
+        ptr.pack(fill='both',expand=True,padx=12,pady=(12,6))
+        pform=tk.Frame(parts_tab,bg=CARD); pform.pack(fill='x',padx=12,pady=8)
+        pent={}
+        for i,(key,label,width) in enumerate([('no','Part No.',14),('desc','Description',28),('qty','Qty',8),('amount','Amount',10),('remarks','Remarks',22)]):
+            tk.Label(pform,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=4)
+            pent[key]=ttk.Entry(pform,width=width); pent[key].grid(row=1,column=i,padx=4,sticky='ew')
+        pcharge=ttk.Combobox(pform,width=15,state='readonly',values=['FOC','Chargeable']); pcharge.set('Chargeable'); pcharge.grid(row=1,column=5,padx=4)
+        def refresh_parts():
+            for x in ptr.get_children(): ptr.delete(x)
+            with connect() as con:
+                for x in con.execute('SELECT part_no,description,qty,chargeable,amount,remarks FROM parts WHERE service_id=? ORDER BY id DESC',(r['id'],)): ptr.insert('','end',values=tuple(x))
+        def save_part():
+            try: qty=float(pent['qty'].get() or 1); amount=float(pent['amount'].get() or 0)
+            except ValueError: return messagebox.showwarning('Check values','Quantity and amount must be numeric.')
+            if not pent['desc'].get().strip(): return messagebox.showwarning('Required','Part description is required.')
+            add_part(r['id'],pent['no'].get(),pent['desc'].get(),qty,pcharge.get(),amount,pent['remarks'].get())
+            add_history(r['id'],f"Part recorded: {pent['desc'].get()} x {qty}")
+            for x in pent.values(): x.delete(0,'end')
+            refresh_parts()
+        tk.Button(pform,text='+ Add Part',command=save_part,bg=BLUE,fg='white',bd=0,padx=14,pady=8).grid(row=1,column=6,padx=8)
+        refresh_parts()
+
+        # Calibration fields only matter when the service reason is Calibration.
+        cal_tab.grid_columnconfigure((0,1),weight=1)
+        cal_date=self.form_field(cal_tab,'Calibration Date',0,0); cal_result=self.form_field(cal_tab,'Result',0,1,['Pass','Fail'])
+        cert=self.form_field(cal_tab,'Certificate No.',2,0); next_due=self.form_field(cal_tab,'Next Due Date',2,1); cal_remarks=self.form_field(cal_tab,'Remarks',4,0)
+        with connect() as con: cr=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
+        if cr:
+            cal_date.insert(0,cr['calibration_date'] or ''); cal_result.set(cr['result'] or ''); cert.insert(0,cr['certificate_no'] or ''); next_due.insert(0,cr['next_due'] or ''); cal_remarks.insert(0,cr['remarks'] or '')
+        def save_cal():
+            if r['reason']=='Calibration' and (not cal_date.get() or not cal_result.get()): return messagebox.showwarning('Required','Calibration Date and Result are required for calibration jobs.')
+            upsert_calibration(r['id'],cal_date.get(),cal_result.get(),cert.get(),next_due.get(),cal_remarks.get()); add_history(r['id'],f"Calibration updated: {cal_result.get() or 'details saved'}"); messagebox.showinfo('Saved','Calibration information saved.')
+        tk.Button(cal_tab,text='Save Calibration',command=save_cal,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=1,sticky='e',padx=10,pady=15)
+        if r['reason']!='Calibration': tk.Label(cal_tab,text='This service is not marked as Calibration. These fields are optional.',bg=CARD,fg=MUTED).grid(row=7,column=0,columnspan=2,pady=8)
+
+        # Images are resized/compressed. PDFs remain lossless/readable.
+        acols=('Document','Type','Original','Stored','Saved'); atr=ttk.Treeview(att_tab,columns=acols,show='headings')
+        for ac in acols: atr.heading(ac,text=ac)
+        atr.pack(fill='both',expand=True,padx=12,pady=(12,6))
+        def human(n):
+            n=float(n or 0)
+            for unit in ('B','KB','MB','GB'):
+                if n<1024:return f'{n:.0f} {unit}' if unit=='B' else f'{n:.1f} {unit}'
+                n/=1024
+            return f'{n:.1f} TB'
+        def refresh_att():
+            for x in atr.get_children(): atr.delete(x)
+            with connect() as con:
+                for x in con.execute('SELECT original_name,kind,original_size,stored_size,created FROM attachments WHERE service_id=? ORDER BY id DESC',(r['id'],)): atr.insert('','end',values=(x['original_name'],x['kind'],human(x['original_size']),human(x['stored_size']),x['created']))
+        def attach():
+            path=filedialog.askopenfilename(filetypes=[('Images / PDF','*.jpg *.jpeg *.png *.webp *.pdf'),('All files','*.*')])
+            if not path:return
+            try: meta=store_attachment(path,code)
+            except Exception as ex:return messagebox.showerror('Attachment',str(ex))
+            add_attachment(r['id'],meta); add_history(r['id'],f"Attachment added: {meta['original_name']}"); refresh_att()
+        tk.Button(att_tab,text='+ Attach Image / PDF',command=attach,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=12,pady=(0,12)); refresh_att()
+
         comm.grid_columnconfigure((0,1,2),weight=1); foc=self.form_field(comm,'FOC / Chargeable',0,0,['FOC','Chargeable']); foc.set(r['foc_chargeable'] or ''); quote=self.form_field(comm,'Quotation Status',0,1,['Quotation Sent','No Quotation — Verbal Discussion','Estimate Shared by Phone','Quotation Not Required','Pending Decision']); quote.set(r['quote_status'] or ''); pay=self.form_field(comm,'Payment Status',0,2,['Not Applicable','Pending','Part Paid','Paid']); pay.set(r['payment_status'] or 'Not Applicable'); svc=self.form_field(comm,'Service Charge',2,0); svc.insert(0,str(r['service_charge'] or '')); parts=self.form_field(comm,'Parts Charge',2,1); parts.insert(0,str(r['parts_charge'] or '')); qa=self.form_field(comm,'Quote Amount',2,2); qa.insert(0,str(r['quote_amount'] or ''))
         def save_comm():
             def num(x):
