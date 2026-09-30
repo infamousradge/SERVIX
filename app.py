@@ -1288,6 +1288,43 @@ class Servix(tk.Tk):
                 messagebox.showinfo('Export complete','Portable data export created successfully.\n\n'+dest)
             except Exception as ex: messagebox.showerror('Export failed',str(ex))
         tk.Button(x,text='Export All Tables (CSV ZIP)',command=export_all,bg=GREEN,fg='white',bd=0,padx=14,pady=(0,12))
+        imp=panel('Controlled Client Import','Imports Clients from CSV with validation and duplicate protection. Required: Name and either Mobile or Email. Existing mobile/email records are skipped.')
+        def import_clients():
+            src=filedialog.askopenfilename(title='Select Client CSV',filetypes=[('CSV Files','*.csv')])
+            if not src:return
+            try:
+                with open(src,'r',encoding='utf-8-sig',newline='') as fh:
+                    reader=csv.DictReader(fh); headers={str(x).strip().lower():x for x in (reader.fieldnames or [])}
+                    def col(row,*names):
+                        for n in names:
+                            if n in headers:return (row.get(headers[n]) or '').strip()
+                        return ''
+                    rows=list(reader)
+                if not rows:return messagebox.showwarning('Import','CSV contains no data rows.')
+                valid=[]; errors=[]; seen=set()
+                with connect() as con:
+                    for n,row in enumerate(rows,2):
+                        name=col(row,'name','client name','customer name'); mobile=col(row,'mobile','phone','mobile no'); email=col(row,'email','email id').lower()
+                        contact=col(row,'contact','contact person'); address=col(row,'address'); city=col(row,'city'); pin=col(row,'pin','pincode','postal code')
+                        if not name or (not mobile and not email):errors.append(f'Row {n}: Name and Mobile or Email required');continue
+                        key=(mobile,email)
+                        if key in seen:errors.append(f'Row {n}: duplicate inside CSV');continue
+                        seen.add(key)
+                        dup=con.execute("SELECT code,name FROM clients WHERE (?<>'' AND mobile=?) OR (?<>'' AND lower(email)=?)",(mobile,mobile,email,email)).fetchone()
+                        if dup:errors.append(f"Row {n}: matches existing {dup['code']} {dup['name']}");continue
+                        valid.append((name,contact,mobile,email,address,city,pin))
+                summary=f'Rows: {len(rows)}\\nReady to import: {len(valid)}\\nSkipped / invalid: {len(errors)}'
+                if errors:summary+='\\n\\nFirst issues:\\n'+'\\n'.join(errors[:8])
+                if not valid:return messagebox.showwarning('Import validation',summary)
+                if not messagebox.askyesno('Confirm Client Import',summary+'\\n\\nImport the validated records?'):return
+                with connect() as con:
+                    for name,contact,mobile,email,address,city,pin in valid:
+                        code=next_code(con,'clients','client_prefix','CLI','client_start','client_digits')
+                        con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,pin,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(code,name,contact,mobile,email,address,city,pin,now(),now()))
+                audit(self.current_user['username'],'clients','CSV','IMPORT',f'{len(valid)} imported; {len(errors)} skipped from {Path(src).name}')
+                messagebox.showinfo('Import complete',f'{len(valid)} clients imported.\\n{len(errors)} rows skipped.')
+            except Exception as ex:messagebox.showerror('Client import failed',str(ex))
+        tk.Button(imp,text='Validate & Import Clients CSV',command=import_clients,bg=BLUE,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
         hist=panel('Backup History','Recent successful backup packages recorded by this installation.')
         with connect() as con: backups=con.execute('SELECT backup_date,filename,status FROM backup_history ORDER BY id DESC LIMIT 5').fetchall()
         for row in backups: tk.Label(hist,text=f"{row['backup_date']}  •  {row['status']}  •  {Path(row['filename']).name}",bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=2)
