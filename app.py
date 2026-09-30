@@ -211,6 +211,40 @@ class Servix(tk.Tk):
         with connect() as con:
             for r in con.execute('SELECT code,name,contact,mobile,email,city FROM clients ORDER BY id DESC'):tr.insert('','end',values=tuple(r))
         tk.Button(card,text='+ Add Client',bg=BLUE,fg='white',bd=0,padx=15,pady=8,command=self.client_dialog).place(relx=1,rely=0,x=-20,y=20,anchor='ne')
+        tr.bind('<Double-1>',lambda e:self.show_client_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+
+    def show_client_360(self,code):
+        self.clear()
+        with connect() as con:
+            r=con.execute('SELECT * FROM clients WHERE code=?',(code,)).fetchone()
+            if not r:return
+            eq=con.execute('SELECT * FROM equipment WHERE client_id=? ORDER BY id DESC',(r['id'],)).fetchall()
+            svc=con.execute('''SELECT s.code,s.opened,e.code equipment,e.make,e.model,e.serial,s.reason,s.status,s.warranty,s.amc,s.foc_chargeable,s.payment_status
+                               FROM services s LEFT JOIN equipment e ON e.id=s.equipment_id WHERE s.client_id=? ORDER BY s.id DESC''',(r['id'],)).fetchall()
+        self.heading(f"{r['code']} — {r['name']}",'Client 360 • contacts, equipment and complete service activity')
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
+        self.metric(metrics,'Equipment',len(eq),BLUE); self.metric(metrics,'Total Services',len(svc),GREEN)
+        self.metric(metrics,'Open Calls',sum(1 for x in svc if x['status'] not in ('Closed','Cancelled')),ORANGE)
+        self.metric(metrics,'Payment Pending',sum(1 for x in svc if x['payment_status'] in ('Pending','Part Paid')),RED)
+        info=self.card(self.content); info.pack(fill='x',padx=28,pady=14)
+        details=[('Contact',r['contact']),('Mobile',r['mobile']),('Email',r['email']),('City',r['city']),('Address',r['address'])]
+        for i,(k,v) in enumerate(details):
+            tk.Label(info,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=12,pady=(10,2))
+            tk.Label(info,text=v or '—',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=1,column=i,sticky='w',padx=12,pady=(0,10))
+            info.grid_columnconfigure(i,weight=1)
+        tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
+        et=tk.Frame(tabs,bg=CARD); st=tk.Frame(tabs,bg=CARD); tabs.add(et,text=' Equipment '); tabs.add(st,text=' Service History ')
+        ecols=('SERVIX ID','Make','Model','Serial','Stock / External ID','Warranty Till','AMC Till'); etr=ttk.Treeview(et,columns=ecols,show='headings')
+        for x in ecols:etr.heading(x,text=x)
+        etr.pack(fill='both',expand=True,padx=12,pady=12)
+        for x in eq:etr.insert('','end',values=(x['code'],x['make'],x['model'],x['serial'],x['stock_id'],x['warranty_till'],x['amc_till']))
+        etr.bind('<Double-1>',lambda e:self.show_equipment_360(etr.item(etr.focus(),'values')[0]) if etr.focus() else None)
+        scols=('Service ID','Opened','Equipment','Make / Model','Serial','Reason','Status','Warranty','AMC','Billing','Payment'); strr=ttk.Treeview(st,columns=scols,show='headings')
+        for x in scols:strr.heading(x,text=x)
+        strr.pack(fill='both',expand=True,padx=12,pady=12)
+        for x in svc:strr.insert('','end',values=(x['code'],x['opened'],x['equipment'],f"{x['make']} {x['model']}",x['serial'],x['reason'],x['status'],x['warranty'],x['amc'],x['foc_chargeable'] or '—',x['payment_status'] or '—'))
+        strr.bind('<Double-1>',lambda e:self.show_service_detail(strr.item(strr.focus(),'values')[0]) if strr.focus() else None)
+
     def client_dialog(self):
         d=tk.Toplevel(self); d.title('Add Client'); d.geometry('560x520'); d.configure(bg=CARD); vals={}; specs=[('name','Client / Company',True),('contact','Contact Person',False),('mobile','Mobile',False),('email','Email',False),('address','Address',False),('city','City',False),('notes','Notes',False)]
         for i,(k,l,req) in enumerate(specs):tk.Label(d,text=l+(' *' if req else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=25,pady=(10,2)); vals[k]=ttk.Entry(d); vals[k].pack(fill='x',padx=25)
@@ -229,6 +263,37 @@ class Servix(tk.Tk):
         with connect() as con:
             for r in con.execute('SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC'):tr.insert('','end',values=tuple(r))
         tk.Button(card,text='+ Add Equipment',bg=BLUE,fg='white',bd=0,padx=15,pady=8,command=self.equipment_dialog).place(relx=1,rely=0,x=-20,y=20,anchor='ne')
+        tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+
+    def show_equipment_360(self,code):
+        self.clear()
+        with connect() as con:
+            r=con.execute('''SELECT e.*,c.code client_code,c.name client_name FROM equipment e LEFT JOIN clients c ON c.id=e.client_id WHERE e.code=?''',(code,)).fetchone()
+            if not r:return
+            svc=con.execute('''SELECT code,opened,reason,complaint,warranty,amc,engineer,status,work_done,final_result,foc_chargeable,payment_status,dispatch_date
+                               FROM services WHERE equipment_id=? ORDER BY id DESC''',(r['id'],)).fetchall()
+            parts=con.execute('''SELECT p.part_no,p.description,p.qty,p.chargeable,p.amount,s.code service_code
+                                 FROM parts p JOIN services s ON s.id=p.service_id WHERE s.equipment_id=? ORDER BY p.id DESC''',(r['id'],)).fetchall()
+        self.heading(r['code'],f"{r['make']} {r['model']} • S/N {r['serial'] or 'Not available'} • Device 360")
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
+        self.metric(metrics,'Lifetime Services',len(svc),BLUE); self.metric(metrics,'Warranty Calls',sum(1 for x in svc if x['warranty']=='Yes'),GREEN)
+        self.metric(metrics,'AMC Calls',sum(1 for x in svc if x['amc']=='Yes'),CYAN); self.metric(metrics,'Parts Recorded',len(parts),ORANGE)
+        info=self.card(self.content); info.pack(fill='x',padx=28,pady=14)
+        vals=[('Client',f"{r['client_code']} — {r['client_name']}"),('Stock / External ID',r['stock_id']),('Type',r['equipment_type']),('Location',r['location']),('Warranty Till',r['warranty_till']),('AMC Till',r['amc_till'])]
+        for i,(k,v) in enumerate(vals):
+            tk.Label(info,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=10,pady=(10,2)); tk.Label(info,text=v or '—',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=1,column=i,sticky='w',padx=10,pady=(0,10)); info.grid_columnconfigure(i,weight=1)
+        tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
+        ht=tk.Frame(tabs,bg=CARD); pt=tk.Frame(tabs,bg=CARD); tabs.add(ht,text=' Lifetime Service History '); tabs.add(pt,text=' Parts History ')
+        hcols=('Service ID','Opened','Reason','Complaint','Warranty','AMC','Engineer','Status','Work Done','Result','Billing','Payment','Dispatch'); htr=ttk.Treeview(ht,columns=hcols,show='headings')
+        for x in hcols:htr.heading(x,text=x)
+        htr.pack(fill='both',expand=True,padx=12,pady=12)
+        for x in svc:htr.insert('','end',values=tuple(x))
+        htr.bind('<Double-1>',lambda e:self.show_service_detail(htr.item(htr.focus(),'values')[0]) if htr.focus() else None)
+        pcols=('Service ID','Part No.','Description','Qty','FOC / Chargeable','Amount'); ptr=ttk.Treeview(pt,columns=pcols,show='headings')
+        for x in pcols:ptr.heading(x,text=x)
+        ptr.pack(fill='both',expand=True,padx=12,pady=12)
+        for x in parts:ptr.insert('','end',values=(x['service_code'],x['part_no'],x['description'],x['qty'],x['chargeable'],x['amount']))
+
     def equipment_dialog(self):
         d=tk.Toplevel(self); d.title('Add Equipment'); d.geometry('650x650'); d.configure(bg=CARD)
         with connect() as con:clients=[(r['id'],f"{r['code']} — {r['name']}") for r in con.execute('SELECT id,code,name FROM clients ORDER BY name')]
