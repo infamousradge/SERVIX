@@ -231,7 +231,10 @@ class Servix(tk.Tk):
             c=self.card(ov); c.grid(row=i//4,column=i%4,sticky='nsew',padx=8,pady=8); ov.grid_columnconfigure(i%4,weight=1); tk.Label(c,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=12,pady=(9,2)); tk.Label(c,text=str(v),bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=12,pady=(0,9))
         tk.Label(ov,text='Complaint / Requirement',bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).grid(row=2,column=0,columnspan=4,sticky='w',padx=10,pady=(15,3)); t=tk.Text(ov,height=5,font=('Segoe UI',10)); t.grid(row=3,column=0,columnspan=4,sticky='ew',padx=10); t.insert('1.0',r['complaint']); t.configure(state='disabled')
         tech.grid_columnconfigure((0,1,2),weight=1)
-        stat=self.form_field(tech,'Status',0,0,['New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled']); stat.set(r['status'])
+        stage=tk.Frame(tech,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); stage.grid(row=-1,column=0,columnspan=3,sticky='ew',padx=10,pady=(10,4))
+        tk.Label(stage,text='WORKFLOW CONTROL',bg='#F7FAFD',fg=BLUE,font=('Segoe UI',8,'bold')).pack(side='left',padx=12,pady=8)
+        tk.Label(stage,text=f"Current: {r['status']}   •   Complete only the fields required for the stage you are moving to.",bg='#F7FAFD',fg=MUTED,font=('Segoe UI',8)).pack(side='left',padx=8)
+        stat=self.form_field(tech,'Status',0,0,['New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Reopened','Cancelled']); stat.set(r['status'])
         pending=self.form_field(tech,'Pending Reason',0,1,['','Awaiting Customer','Awaiting Parts','Awaiting Approval','Awaiting Payment','Awaiting Engineer','Other']); pending.set(r['pending_reason'] or '')
         eng=self.form_field(tech,'Engineer',0,2); eng.insert(0,r['engineer'] or '')
         received=self.form_field(tech,'Equipment Received Date',2,0); received.insert(0,r['received_date'] or '')
@@ -242,12 +245,13 @@ class Servix(tk.Tk):
         work=self.form_field(tech,'Work Performed',4,2); work.insert(0,r['work_done'] or '')
         testing=self.form_field(tech,'Testing / Verification',6,0); testing.insert(0,r['testing_result'] or '')
         result=self.form_field(tech,'Final Result',6,1,['Pending','Successful','Partially Resolved','Not Resolved']); result.set(r['final_result'] or 'Pending')
-        next_action=self.form_field(tech,'Next Action',6,2)
+        next_action=self.form_field(tech,'Next Action',6,2); next_action.insert(0,r['next_action'] or '')
         dispatch=self.form_field(tech,'Dispatch Date',8,0); dispatch.insert(0,r['dispatch_date'] or '')
         dispatch_mode=self.form_field(tech,'Dispatch Mode',8,1,['','Courier','Hand','Other']); dispatch_mode.set(r['dispatch_mode'] or '')
         dispatch_ref=self.form_field(tech,'Dispatch Reference / Remarks',8,2); dispatch_ref.insert(0,r['dispatch_reference'] or '')
         completion=self.form_field(tech,'Service Completion Date',10,0); completion.insert(0,r['completion_date'] or '')
         closure=self.form_field(tech,'Closure Date',10,1); closure.insert(0,r['closure_date'] or '')
+        cancel_reason=self.form_field(tech,'Cancel / Reopen Reason',10,2); cancel_reason.insert(0,r['cancel_reason'] or '')
 
         update_box=tk.LabelFrame(tech,text=' Add chronological engineer / office update ',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold'))
         update_box.grid(row=12,column=0,columnspan=3,sticky='ew',padx=10,pady=10); update_box.grid_columnconfigure((0,1,2),weight=1)
@@ -276,10 +280,14 @@ class Servix(tk.Tk):
             if target in ('Under Diagnosis','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed') and not eng.get().strip():missing.append('Engineer')
             if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and not work.get().strip():missing.append('Work Performed')
             if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and result.get() in ('','Pending'):missing.append('Final Result')
+            if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and not work_date.get().strip():missing.append('Engineer Visit / Work Date')
             if target in ('Dispatched','Closed') and not dispatch.get().strip():missing.append('Dispatch Date')
+            if target=='Dispatched' and not dispatch_mode.get():missing.append('Dispatch Mode')
             if target=='Closed' and not completion.get().strip():missing.append('Service Completion Date')
             if target=='Closed' and not closure.get().strip():missing.append('Closure Date')
             if target=='Closed' and not r['foc_chargeable']:missing.append('FOC / Chargeable (Commercial tab)')
+            if target=='Closed' and r['foc_chargeable']=='Chargeable' and (not r['payment_status'] or r['payment_status']=='Not Applicable'):missing.append('Payment Status (Commercial tab)')
+            if target in ('Cancelled','Reopened') and not cancel_reason.get().strip():missing.append('Cancel / Reopen Reason')
             if r['reason']=='Calibration' and target=='Closed':
                 with connect() as con: cal=con.execute('SELECT calibration_date,result FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
                 if not cal or not cal['calibration_date'] or not cal['result']:missing.append('Calibration Date + Result')
@@ -287,8 +295,9 @@ class Servix(tk.Tk):
             if target.startswith('Awaiting') and not pending.get():return messagebox.showwarning('Pending reason','Select a Pending Reason for an Awaiting status.')
             old_status=r['status']
             with connect() as con:
-                con.execute('''UPDATE services SET diagnosis=?,root_cause=?,work_done=?,testing_result=?,final_result=?,status=?,pending_reason=?,engineer=?,received_date=?,received_condition=?,work_date=?,dispatch_date=?,dispatch_mode=?,dispatch_reference=?,completion_date=?,closure_date=?,modified=? WHERE code=?''',(diag.get().strip(),root.get().strip(),work.get().strip(),testing.get().strip(),result.get(),target,pending.get(),eng.get().strip(),received.get().strip(),condition.get().strip(),work_date.get().strip(),dispatch.get().strip(),dispatch_mode.get(),dispatch_ref.get().strip(),completion.get().strip(),closure.get().strip(),now(),code))
+                con.execute('''UPDATE services SET diagnosis=?,root_cause=?,work_done=?,testing_result=?,final_result=?,status=?,pending_reason=?,engineer=?,received_date=?,received_condition=?,work_date=?,dispatch_date=?,dispatch_mode=?,dispatch_reference=?,completion_date=?,closure_date=?,next_action=?,cancel_reason=?,modified=? WHERE code=?''',(diag.get().strip(),root.get().strip(),work.get().strip(),testing.get().strip(),result.get(),target,pending.get(),eng.get().strip(),received.get().strip(),condition.get().strip(),work_date.get().strip(),dispatch.get().strip(),dispatch_mode.get(),dispatch_ref.get().strip(),completion.get().strip(),closure.get().strip(),next_action.get().strip(),cancel_reason.get().strip(),now(),code))
                 note=f"Status {old_status} → {target}" if old_status!=target else f"Technical record updated — {target}"
+                if target in ('Cancelled','Reopened'): note+=f" — Reason: {cancel_reason.get().strip()}"
                 con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),note,'Office'))
             messagebox.showinfo('Saved','Service workflow updated.'); self.show_service_detail(code)
         tk.Button(tech,text='Save Workflow Update',command=save_tech,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=16,column=2,sticky='e',padx=10,pady=15)
