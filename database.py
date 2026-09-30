@@ -27,6 +27,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS exports(id INTEGER PRIMARY KEY, export_date TEXT, from_date TEXT, to_date TEXT, filename TEXT, record_count INTEGER);
         CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS sequences(entity TEXT PRIMARY KEY, next_number INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS commercial_discussions(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, discussion_date TEXT NOT NULL, person TEXT, contact TEXT, method TEXT, amount REAL DEFAULT 0, approved TEXT, notes TEXT, user TEXT);
+        CREATE TABLE IF NOT EXISTS payments(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, payment_date TEXT NOT NULL, amount REAL NOT NULL DEFAULT 0, mode TEXT, reference TEXT, notes TEXT, user TEXT);
+        CREATE INDEX IF NOT EXISTS idx_commercial_discussions_service ON commercial_discussions(service_id);
+        CREATE INDEX IF NOT EXISTS idx_payments_service ON payments(service_id);
         CREATE INDEX IF NOT EXISTS idx_services_code ON services(code);
         CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
         CREATE INDEX IF NOT EXISTS idx_equipment_serial ON equipment(serial);
@@ -38,7 +42,8 @@ def init_db():
         existing={r[1] for r in con.execute("PRAGMA table_info(services)")}
         additions={
             'pending_reason':'TEXT','work_date':'TEXT','root_cause':'TEXT','testing_result':'TEXT',
-            'completion_date':'TEXT','closure_date':'TEXT','dispatch_reference':'TEXT'
+            'completion_date':'TEXT','closure_date':'TEXT','dispatch_reference':'TEXT',
+            'quote_no':'TEXT','quote_date':'TEXT','po_reference':'TEXT','invoice_no':'TEXT','invoice_date':'TEXT','invoice_amount':'REAL DEFAULT 0','payment_reference':'TEXT'
         }
         for name,kind in additions.items():
             if name not in existing: con.execute(f'ALTER TABLE services ADD COLUMN {name} {kind}')
