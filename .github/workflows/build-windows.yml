@@ -32,10 +32,24 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --windowed --name SERVIX app.py
 
+      - name: Build professional Windows installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" installer\\SERVIX.iss
+
       - name: Package Windows build
         shell: pwsh
         run: |
           Compress-Archive -Path dist\SERVIX\* -DestinationPath SERVIX-Windows.zip -Force
+
+      - name: Upload SERVIX Setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: SERVIX-Setup
+          path: installer-output/SERVIX-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
