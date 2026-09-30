@@ -785,15 +785,20 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_calibration(self):
-        self.clear(); self.heading('Calibration Control','Due dates, overdue certificates and complete calibration service history')
-        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
+        self.clear()
+        top=tk.Frame(self.content,bg='#164F7C',height=38); top.pack(fill='x'); top.pack_propagate(False)
+        tk.Label(top,text='Calibration Control',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(top,text='Calibration Jobs / Certificates / Due-Date Control',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=10,pady=(8,0))
         self.metric(metrics,'Open Jobs',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration' AND status NOT IN ('Closed','Cancelled')"),BLUE,'Active calibration work')
         self.metric(metrics,'Due in 30 Days',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)>=date('now') AND date(next_due)<=date('now','+30 day')"),ORANGE,'Plan customer follow-up')
         self.metric(metrics,'Overdue',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<date('now')"),RED,'Requires attention')
         self.metric(metrics,'Passed',self.q1("SELECT COUNT(*) FROM calibration WHERE result='Pass'"),GREEN,'Recorded calibration results')
-        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=18)
+        card=self.card(self.content); card.pack(fill='both',expand=True,padx=10,pady=7)
         head=tk.Frame(card,bg=CARD); head.pack(fill='x',padx=14,pady=(12,4))
-        tk.Label(head,text='Calibration Register',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(side='left')
+        tk.Label(head,text='Calibration Register',font=('Segoe UI',8,'bold'),bg=CARD,fg=TEXT).pack(side='left')
+        q=tk.StringVar(); ttk.Entry(head,textvariable=q,width=28).pack(side='left',padx=10)
+        tk.Label(head,text='Service / Client / Equipment / Serial / Certificate',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='left')
         flt=ttk.Combobox(head,state='readonly',width=18,values=['All','Overdue','Due in 30 Days','Open Jobs']); flt.set('All'); flt.pack(side='right')
         cols=('Service ID','Client','Equipment','Make / Model','Serial','Calibration Date','Result','Certificate','Next Due','Status'); tr=ttk.Treeview(card,columns=cols,show='headings')
         widths=[115,180,115,180,120,110,80,120,110,120]
@@ -811,7 +816,14 @@ class Servix(tk.Tk):
                     ORDER BY CASE WHEN cal.next_due IS NULL OR cal.next_due='' THEN 1 ELSE 0 END, cal.next_due, s.id DESC'''
             with connect() as con:
                 for r in con.execute(sql):tr.insert('','end',values=(r['code'],r['name'],r['code'] if False else r[2],f"{r['make']} {r['model']}",r['serial'],r['calibration_date'],r['result'],r['certificate_no'],r['next_due'],r['status']))
-        flt.bind('<<ComboboxSelected>>',load); load()
+        flt.bind('<<ComboboxSelected>>',load)
+        def search_load(*_):
+            load()
+            term=q.get().strip().lower()
+            if term:
+                for item in list(tr.get_children()):
+                    if term not in ' '.join(str(v or '') for v in tr.item(item,'values')).lower(): tr.delete(item)
+        q.trace_add('write',search_load); load()
         tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_commercial(self):
@@ -858,8 +870,11 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_reports(self):
-        self.clear(); self.heading('Reports & Analytics','Operational filters, management totals and export-ready service data')
-        filters=self.card(self.content); filters.pack(fill='x',padx=28,pady=(0,12))
+        self.clear()
+        topbar=tk.Frame(self.content,bg='#164F7C',height=38); topbar.pack(fill='x'); topbar.pack_propagate(False)
+        tk.Label(topbar,text='Reports & Analytics',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(topbar,text='Operational Filters / Management View / Export',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        filters=self.card(self.content); filters.pack(fill='x',padx=10,pady=(8,6))
         bar=tk.Frame(filters,bg=CARD); bar.pack(fill='x',padx=14,pady=12)
         tk.Label(bar,text='From',bg=CARD,fg=MUTED).pack(side='left'); from_e=ttk.Entry(bar,width=12); from_e.pack(side='left',padx=(5,12))
         tk.Label(bar,text='To',bg=CARD,fg=MUTED).pack(side='left'); to_e=ttk.Entry(bar,width=12); to_e.pack(side='left',padx=(5,12))
@@ -867,12 +882,12 @@ class Servix(tk.Tk):
         tk.Label(bar,text='Coverage',bg=CARD,fg=MUTED).pack(side='left'); coverage=ttk.Combobox(bar,state='readonly',width=15,values=['All','Warranty','AMC','OOW','FOC','Chargeable']); coverage.set('All'); coverage.pack(side='left',padx=(5,12))
         tk.Label(bar,text='Reason',bg=CARD,fg=MUTED).pack(side='left'); reason=ttk.Combobox(bar,state='readonly',width=18,values=['All','Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up']); reason.set('All'); reason.pack(side='left',padx=(5,8))
 
-        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22,pady=(0,12))
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=10,pady=(0,6))
         cards=[]
         for title,accent in [('Records',BLUE),('Open',ORANGE),('Closed',GREEN),('Outstanding ₹',RED)]: cards.append(self.metric(metrics,title,'-',accent,'Current filter'))
 
-        table=self.card(self.content); table.pack(fill='both',expand=True,padx=28,pady=(0,12))
-        top=tk.Frame(table,bg=CARD); top.pack(fill='x',padx=14,pady=(12,4)); tk.Label(top,text='Service Report',bg=CARD,fg=TEXT,font=('Segoe UI',13,'bold')).pack(side='left')
+        table=self.card(self.content); table.pack(fill='both',expand=True,padx=10,pady=(0,6))
+        top=tk.Frame(table,bg=CARD); top.pack(fill='x',padx=14,pady=(12,4)); tk.Label(top,text='Service Report',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left')
         cols=('Service ID','Opened','Client','Equipment','Reason','Engineer','Status','Coverage','Billing','Payment','Outstanding'); tr=ttk.Treeview(table,columns=cols,show='headings',height=13)
         for x,w in zip(cols,[115,105,180,120,155,115,130,95,95,105,105]): tr.heading(x,text=x); tr.column(x,width=w,anchor='w')
         tr.pack(fill='both',expand=True,padx=14,pady=(4,8))
