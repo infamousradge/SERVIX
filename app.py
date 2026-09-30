@@ -6,7 +6,7 @@ import shutil
 import zipfile
 import json
 import datetime
-from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT
+from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT, ROLES
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
 from service_report import create_service_report
@@ -29,7 +29,7 @@ class Servix(tk.Tk):
         self.style.configure('TNotebook',background=BG,borderwidth=0)
         self.style.configure('TNotebook.Tab',font=('Segoe UI',8,'bold'),padding=(9,5),background='#EAF1F8',foreground=MUTED)
         self.style.map('TNotebook.Tab',background=[('selected','white')],foreground=[('selected',BLUE)])
-        self.page=None; self.build_shell(); self.show_dashboard()
+        self.current_user={'username':'admin','display_name':'Admin','role':'Administrator'}; self.page=None; self.build_shell(); self.show_dashboard()
 
     def build_shell(self):
         self.sidebar=tk.Frame(self,bg='#063765',width=168); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
@@ -1054,6 +1054,46 @@ class Servix(tk.Tk):
                 messagebox.showinfo('Export complete','Portable data export created successfully.\n\n'+dest)
             except Exception as ex: messagebox.showerror('Export failed',str(ex))
         tk.Button(x,text='Export All Tables (CSV ZIP)',command=export_all,bg=GREEN,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
+
+    def show_users(self):
+        self.clear()
+        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text='Users & Roles',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text='Access Administration',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=self.card(self.content); body.pack(fill='both',expand=True,padx=10,pady=8)
+        cols=('Username','Display Name','Role','Status'); tree=ttk.Treeview(body,columns=cols,show='headings',height=14)
+        for col in cols: tree.heading(col,text=col); tree.column(col,width=190 if col!='Role' else 240,anchor='w')
+        tree.pack(fill='both',expand=True,padx=10,pady=(10,6))
+        def refresh():
+            tree.delete(*tree.get_children())
+            with connect() as con: rows=con.execute('SELECT id,username,display_name,role,active FROM users ORDER BY display_name').fetchall()
+            for r in rows: tree.insert('', 'end',iid=str(r['id']),values=(r['username'],r['display_name'],r['role'],'Active' if r['active'] else 'Disabled'))
+        def edit_user(uid=None):
+            row=None
+            if uid:
+                with connect() as con: row=con.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
+            d=tk.Toplevel(self); d.title('User'); d.geometry('470x350'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+            vals={}
+            for key,label in [('username','Username'),('display_name','Display Name')]:
+                tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=22,pady=(12,3)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=22)
+            role=tk.StringVar(value=row['role'] if row else 'Service Coordinator')
+            tk.Label(d,text='Role',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=22,pady=(12,3)); ttk.Combobox(d,textvariable=role,values=ROLES,state='readonly').pack(fill='x',padx=22)
+            active=tk.BooleanVar(value=bool(row['active']) if row else True); tk.Checkbutton(d,text='Active user',variable=active,bg=CARD,fg=TEXT,activebackground=CARD).pack(anchor='w',padx=18,pady=12)
+            if row: vals['username'].insert(0,row['username']); vals['display_name'].insert(0,row['display_name'])
+            def save_user():
+                username=vals['username'].get().strip(); name=vals['display_name'].get().strip()
+                if not username or not name:return messagebox.showwarning('Required','Username and Display Name are required.',parent=d)
+                try:
+                    with connect() as con:
+                        if row: con.execute('UPDATE users SET username=?,display_name=?,role=?,active=?,modified=? WHERE id=?',(username,name,role.get(),1 if active.get() else 0,now(),uid))
+                        else: con.execute('INSERT INTO users(username,display_name,role,active,created,modified) VALUES(?,?,?,?,?,?)',(username,name,role.get(),1 if active.get() else 0,now(),now()))
+                    d.destroy(); refresh()
+                except Exception as ex: messagebox.showerror('User not saved',str(ex),parent=d)
+            tk.Button(d,text='Save User',command=save_user,bg=BLUE,fg='white',bd=0,padx=16,pady=7).pack(pady=14)
+        buttons=tk.Frame(body,bg=CARD); buttons.pack(fill='x',padx=10,pady=(0,10))
+        tk.Button(buttons,text='+ New User',command=lambda:edit_user(),bg=BLUE,fg='white',bd=0,padx=13,pady=7).pack(side='left')
+        tk.Button(buttons,text='Edit Selected',command=lambda:edit_user(int(tree.selection()[0])) if tree.selection() else None,bg='#EAF2FF',fg=BLUE,bd=0,padx=13,pady=7).pack(side='left',padx=6)
+        refresh()
 
     def show_settings(self):
         self.clear()
