@@ -333,6 +333,22 @@ class Servix(tk.Tk):
     def global_search(self):
         q=self.search.get().strip()
         if not q or q.startswith('Search Service ID'):return
-        self.clear(); self.heading('Search Results',q); box=self.card(self.content); box.pack(fill='both',expand=True,padx=28,pady=(0,22)); like=f'%{q}%'; self.service_tree(box,where='s.code LIKE ? OR c.name LIKE ? OR e.code LIKE ? OR e.serial LIKE ? OR e.make LIKE ? OR e.model LIKE ?',args=(like,like,like,like,like,like))
+        self.clear(); self.heading('Search Results',q); like=f'%{q}%'
+        tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
+        services=tk.Frame(tabs,bg=CARD); clients=tk.Frame(tabs,bg=CARD); equipment=tk.Frame(tabs,bg=CARD)
+        tabs.add(services,text=' Service Calls '); tabs.add(clients,text=' Clients '); tabs.add(equipment,text=' Equipment ')
+        self.service_tree(services,where='s.code LIKE ? OR c.name LIKE ? OR e.code LIKE ? OR e.serial LIKE ? OR e.make LIKE ? OR e.model LIKE ?',args=(like,like,like,like,like,like))
+        ccols=('Client ID','Name','Contact','Mobile','Email','City'); ctr=ttk.Treeview(clients,columns=ccols,show='headings')
+        for x in ccols:ctr.heading(x,text=x)
+        ctr.pack(fill='both',expand=True,padx=12,pady=12)
+        ecols=('SERVIX ID','Client','Make','Model','Serial','Stock / External ID'); etr=ttk.Treeview(equipment,columns=ecols,show='headings')
+        for x in ecols:etr.heading(x,text=x)
+        etr.pack(fill='both',expand=True,padx=12,pady=12)
+        with connect() as con:
+            for x in con.execute('SELECT code,name,contact,mobile,email,city FROM clients WHERE code LIKE ? OR name LIKE ? OR mobile LIKE ? OR email LIKE ?',(like,like,like,like)):ctr.insert('','end',values=tuple(x))
+            for x in con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
+                                    WHERE e.code LIKE ? OR c.name LIKE ? OR e.make LIKE ? OR e.model LIKE ? OR e.serial LIKE ? OR e.stock_id LIKE ?''',(like,like,like,like,like,like)):etr.insert('','end',values=tuple(x))
+        ctr.bind('<Double-1>',lambda e:self.show_client_360(ctr.item(ctr.focus(),'values')[0]) if ctr.focus() else None)
+        etr.bind('<Double-1>',lambda e:self.show_equipment_360(etr.item(etr.focus(),'values')[0]) if etr.focus() else None)
 
 if __name__=='__main__': Servix().mainloop()
