@@ -18,6 +18,12 @@ def init_db():
         CREATE TABLE IF NOT EXISTS parts(id INTEGER PRIMARY KEY, service_id INTEGER, part_no TEXT, description TEXT, qty REAL, chargeable TEXT, amount REAL DEFAULT 0, remarks TEXT);
         CREATE TABLE IF NOT EXISTS attachments(id INTEGER PRIMARY KEY, service_id INTEGER, original_name TEXT, stored_path TEXT, kind TEXT, original_size INTEGER, stored_size INTEGER, created TEXT);
         CREATE TABLE IF NOT EXISTS exports(id INTEGER PRIMARY KEY, export_date TEXT, from_date TEXT, to_date TEXT, filename TEXT, record_count INTEGER);
+        CREATE INDEX IF NOT EXISTS idx_services_code ON services(code);
+        CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
+        CREATE INDEX IF NOT EXISTS idx_equipment_serial ON equipment(serial);
+        CREATE INDEX IF NOT EXISTS idx_history_service ON history(service_id);
+        CREATE INDEX IF NOT EXISTS idx_parts_service ON parts(service_id);
+        CREATE INDEX IF NOT EXISTS idx_attachments_service ON attachments(service_id);
         ''')
 
 def next_code(prefix, table):

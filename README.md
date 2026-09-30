@@ -12,7 +12,10 @@ Standalone, office-operated Windows service management application.
 - Office-side engineer updates
 - Service history timeline
 - Commercial / quotation / payment fields
-- Attachment area (image/PDF; compression pipeline is part of the next implementation layer)
+- Service detail workflow with Overview / Technical / Parts / Calibration / Attachments / Commercial / History tabs
+- Parts usage entries from office-side engineer updates
+- Calibration completion fields and certificate references
+- Image/PDF attachments; images are automatically resized/compressed, while PDFs are kept lossless/readable
 - Filtered service list and CSV export
 - Local SQLite database
 
@@ -37,3 +40,7 @@ Standalone, office-operated Windows service management application.
 - Customer receipt after dispatch is not tracked in detail.
 - Courier/AWB is optional.
 - Attachments should be optimized/compressed while remaining readable.
+
+
+## Current workflow build
+The `feature/service-workflow-v2` development branch adds the first complete office-side service update layer. Open a Service ID from Service Calls and use the tabs to record technical progress, parts, calibration, documents and commercial status. Engineers do not need direct application access.

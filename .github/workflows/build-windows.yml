@@ -1,0 +1,46 @@
+name: Build SERVIX Windows App
+
+on:
+  push:
+    branches: [ main, feature/service-workflow-v2 ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build SERVIX EXE
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name SERVIX app.py
+
+      - name: Package Windows build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\SERVIX\* -DestinationPath SERVIX-Windows.zip -Force
+
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: SERVIX-Windows
+          path: SERVIX-Windows.zip
+          if-no-files-found: error
+          retention-days: 30
