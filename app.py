@@ -24,10 +24,10 @@ class Servix(tk.Tk):
         self.style.configure('Treeview',font=('Segoe UI',8),rowheight=24,background='white',fieldbackground='white',borderwidth=0)
         self.style.configure('Treeview.Heading',font=('Segoe UI',8,'bold'),background='#EAF1F8',foreground=TEXT,padding=5)
         self.style.map('Treeview',background=[('selected','#D9ECFF')],foreground=[('selected',TEXT)])
-        self.style.configure('TLabel',font=('Segoe UI',8)); self.style.configure('TButton',font=('Segoe UI',8))
+        self.style.configure('TLabel',font=('Segoe UI',8)); self.style.configure('TButton',font=('Segoe UI',8),padding=(8,5))
         self.style.configure('TEntry',font=('Segoe UI',8),padding=3); self.style.configure('TCombobox',font=('Segoe UI',8),padding=2)
         self.style.configure('TNotebook',background=BG,borderwidth=0)
-        self.style.configure('TNotebook.Tab',font=('Segoe UI',8,'bold'),padding=(9,5),background='#EAF1F8',foreground=MUTED)
+        self.style.configure('TNotebook.Tab',font=('Segoe UI',8,'bold'),padding=(10,6),background='#EAF1F8',foreground=MUTED)
         self.style.map('TNotebook.Tab',background=[('selected','white')],foreground=[('selected',BLUE)])
         self.current_user=None; self.withdraw()
         if not self.login(): self.destroy(); return
@@ -179,6 +179,11 @@ class Servix(tk.Tk):
         h=tk.Frame(self.content,bg=BG); h.pack(fill='x',padx=28,pady=(24,14)); left=tk.Frame(h,bg=BG); left.pack(side='left'); tk.Label(left,text=title,font=('Segoe UI',22,'bold'),bg=BG,fg=TEXT).pack(anchor='w');
         if subtitle: tk.Label(left,text=subtitle,font=('Segoe UI',9),bg=BG,fg=MUTED).pack(anchor='w',pady=(3,0))
         if action: tk.Button(h,text=action_text,command=action,bg=BLUE,fg='white',font=('Segoe UI',9,'bold'),bd=0,padx=18,pady=10,cursor='hand2').pack(side='right')
+    def section_header(self,title,subtitle=''):
+        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text=title,bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        if subtitle: tk.Label(h,text=subtitle,bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        return h
     def card(self,parent):
         return tk.Frame(parent,bg=CARD,highlightthickness=1,highlightbackground=BORDER)
     def metric(self,parent,title,value,accent=BLUE,sub=''):
@@ -213,9 +218,7 @@ class Servix(tk.Tk):
 
     def show_engineers(self):
         if not self.require('engineers'): return
-        self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
-        tk.Label(h,text='Engineers',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(h,text='Engineer Master / Workload / Assignment',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Engineers','Engineer Master / Workload / Assignment')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
         for x in [('Active Engineers',self.q1("SELECT COUNT(*) FROM engineers WHERE active=1"),GREEN,'Available master records'),('Active Services',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status NOT IN ('Closed','Cancelled')"),BLUE,'Assigned work'),('Unassigned',self.q1("SELECT COUNT(*) FROM services WHERE (engineer IS NULL OR engineer='') AND status NOT IN ('Closed','Cancelled')"),ORANGE,'Needs assignment'),('Closed Jobs',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status='Closed'"),GREEN,'Completed')]: self.metric(m,*x)
@@ -261,9 +264,7 @@ class Servix(tk.Tk):
 
     def show_parts_inventory(self):
         if not self.require('parts'): return
-        self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
-        tk.Label(h,text='Parts / Inventory',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(h,text='Parts Master / Stock Ledger / Service Usage',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Parts / Inventory','Parts Master / Stock Ledger / Service Usage')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
         stock_sql="SELECT COALESCE(SUM(CASE WHEN movement_type IN ('Opening','Receipt','Adjustment +','Return') THEN qty ELSE -qty END),0) FROM inventory_movements"
@@ -325,9 +326,7 @@ class Servix(tk.Tk):
 
     def show_documents(self):
         if not self.require('documents'): return
-        self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
-        tk.Label(h,text='Documents',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(h,text='Service Documents / Photos / Certificates',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Documents','Service Documents / Photos / Certificates')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
         for x in [('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE,'Images and PDFs'),('PDF Files',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(original_name) LIKE '%.pdf'"),RED,'Stored PDFs'),('Photos',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(original_name) NOT LIKE '%.pdf'"),GREEN,'Stored images'),('Services With Files',self.q1('SELECT COUNT(DISTINCT service_id) FROM attachments'),ORANGE,'Documented jobs')]: self.metric(m,*x)
@@ -1003,10 +1002,7 @@ class Servix(tk.Tk):
             for x in con.execute('SELECT event_date,user,note FROM history WHERE service_id=? ORDER BY id DESC',(sid,)):tr.insert('','end',values=tuple(x))
 
     def show_clients(self):
-        self.clear()
-        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
-        tk.Label(head,text='Clients',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(head,text='Client Master / Service Customers',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Clients','Client Master / Service Customers')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
         tk.Label(tools,text='Search Client',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,5),pady=8)
@@ -1118,10 +1114,7 @@ class Servix(tk.Tk):
         tk.Button(d,text='Save Client',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=20)
 
     def show_equipment(self):
-        self.clear()
-        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
-        tk.Label(head,text='Equipment',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(head,text='Permanent Equipment Master / Service History',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Equipment','Permanent Equipment Master / Service History')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
         tk.Label(tools,text='Search Equipment',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,5),pady=8)
@@ -1258,10 +1251,7 @@ class Servix(tk.Tk):
         for name,val,color in rows:self.metric(holder,name,val,color)
         box=self.card(self.content); box.pack(fill='both',expand=True,padx=28,pady=18); tk.Label(box,text='Use Service Calls and Equipment records for detailed entries. More dedicated controls will be added in the next build.',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(pady=35)
     def show_warranty(self):
-        self.clear()
-        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
-        tk.Label(head,text='Warranty & AMC',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(head,text='Equipment Coverage / Expiry Control',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Warranty & AMC','Equipment Coverage / Expiry Control')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         metrics=tk.Frame(body,bg=BG); metrics.pack(fill='x',pady=(0,6))
         self.metric(metrics,'Warranty Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"),ORANGE,'Next 30 days')
@@ -1308,10 +1298,7 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_calibration(self):
-        self.clear()
-        top=tk.Frame(self.content,bg='#164F7C',height=38); top.pack(fill='x'); top.pack_propagate(False)
-        tk.Label(top,text='Calibration Control',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(top,text='Calibration Jobs / Certificates / Due-Date Control',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Calibration Control','Calibration Jobs / Certificates / Due-Date Control')
         metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=10,pady=(8,0))
         self.metric(metrics,'Open Jobs',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration' AND status NOT IN ('Closed','Cancelled')"),BLUE,'Active calibration work')
         self.metric(metrics,'Due in 30 Days',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)>=date('now') AND date(next_due)<=date('now','+30 day')"),ORANGE,'Plan customer follow-up')
@@ -1350,10 +1337,7 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_commercial(self):
-        self.clear()
-        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
-        tk.Label(head,text='Commercial & Payments',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(head,text='Quotation / Approval / Invoice / Collection Control',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Commercial & Payments','Quotation / Approval / Invoice / Collection Control')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         metrics=tk.Frame(body,bg=BG); metrics.pack(fill='x',pady=(0,6))
         self.metric(metrics,'Quotation Pending',self.q1("SELECT COUNT(*) FROM services WHERE quote_status='Pending Decision'"),ORANGE,'Customer decision')
@@ -1393,10 +1377,7 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_reports(self):
-        self.clear()
-        topbar=tk.Frame(self.content,bg='#164F7C',height=38); topbar.pack(fill='x'); topbar.pack_propagate(False)
-        tk.Label(topbar,text='Reports & Analytics',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(topbar,text='Operational Filters / Management View / Export',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Reports & Analytics','Operational Filters / Management View / Export')
         filters=self.card(self.content); filters.pack(fill='x',padx=10,pady=(8,6))
         bar=tk.Frame(filters,bg=CARD); bar.pack(fill='x',padx=14,pady=12)
         tk.Label(bar,text='From',bg=CARD,fg=MUTED).pack(side='left'); from_e=ttk.Entry(bar,width=12); from_e.pack(side='left',padx=(5,12))
@@ -1617,10 +1598,7 @@ class Servix(tk.Tk):
 
     def show_users(self):
         if not self.require('admin'): return
-        self.clear()
-        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
-        tk.Label(h,text='Users & Roles',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(h,text='Access Administration',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Users & Roles','Access Administration')
         body=self.card(self.content); body.pack(fill='both',expand=True,padx=10,pady=8)
         cols=('Username','Display Name','Role','Status'); tree=ttk.Treeview(body,columns=cols,show='headings',height=14)
         for col in cols: tree.heading(col,text=col); tree.column(col,width=190 if col!='Role' else 240,anchor='w')
@@ -1672,10 +1650,7 @@ class Servix(tk.Tk):
 
     def show_settings(self):
         if not self.require('admin'): return
-        self.clear()
-        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
-        tk.Label(h,text='Administration',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(h,text='Branding / Identity / Numbering Settings',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.clear(); self.section_header('Administration','Branding / Identity / Numbering Settings')
         brand=self.card(self.content); brand.pack(fill='x',padx=10,pady=(8,6)); brand.grid_columnconfigure((0,1,2),weight=1)
         tk.Label(brand,text='Company Branding / Header',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).grid(row=0,column=0,columnspan=3,sticky='w',padx=14,pady=(12,2))
         tk.Label(brand,text='Change HAC/company identity later without changing application code.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=1,column=0,columnspan=3,sticky='w',padx=14,pady=(0,8))
