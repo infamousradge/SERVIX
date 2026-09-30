@@ -340,7 +340,8 @@ class Servix(tk.Tk):
         tk.Button(equip_box,text='View Full Equipment History',command=lambda:self.show_equipment_360(eq['code']),bg='#EAF4FF',fg=BLUE,bd=0,padx=10,pady=6).grid(row=9,column=0,columnspan=2,sticky='ew',padx=10,pady=8)
         for rr,(lab,val) in enumerate([('Date of Complaint',r['opened']),('Reason for Service',r['reason']),('Priority',r['priority']),('Assigned Engineer',r['engineer'] or 'Unassigned'),('Current Status',r['status']),('Warranty',r['warranty']),('AMC',r['amc'])]): readonly_row(service_box,lab,val,rr)
         tk.Label(service_box,text='Complaint Details',bg=CARD,fg=MUTED,font=('Segoe UI',7)).grid(row=8,column=0,sticky='nw',padx=(10,5),pady=4)
-        complaint=tk.Text(service_box,height=4,font=('Segoe UI',8),wrap='word'); complaint.grid(row=8,column=1,sticky='ew',padx=(0,10),pady=4); complaint.insert('1.0',r['complaint']); complaint.configure(state='disabled')        with connect() as con: cal_head=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
+        complaint=tk.Text(service_box,height=4,font=('Segoe UI',8),wrap='word'); complaint.grid(row=8,column=1,sticky='ew',padx=(0,10),pady=4); complaint.insert('1.0',r['complaint']); complaint.configure(state='disabled')
+        with connect() as con: cal_head=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
         if r['reason']=='Calibration':
             cal_rows=[('Received Date',cal_head['received_date'] if cal_head else ''),('Performed Date',cal_head['calibration_date'] if cal_head else ''),('Result',cal_head['result'] if cal_head else 'Pending'),('Certificate No.',cal_head['certificate_no'] if cal_head else ''),('Certificate Date',cal_head['certificate_date'] if cal_head else ''),('Next Due',cal_head['next_due'] if cal_head else ''),('Performed By',cal_head['performed_by'] if cal_head else '')]
             for rr,(lab,val) in enumerate(cal_rows): readonly_row(cal_summary,lab,val,rr)
