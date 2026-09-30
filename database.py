@@ -90,7 +90,7 @@ def init_db():
         }
         for name,kind in additions.items():
             if name not in existing: con.execute(f'ALTER TABLE services ADD COLUMN {name} {kind}')
-        defaults={'service_prefix':'SRV','service_start':'1','service_digits':'6','client_prefix':'CLI','client_start':'1','client_digits':'6','equipment_prefix':'SEQ','equipment_start':'1','equipment_digits':'6','company_short_name':'HAC','company_name':'HAC','system_title':'Service Management System','system_subtitle':'Service   |   Calibration   |   Warranty   |   AMC','company_logo_path':'','repeat_complaint_days':'60','auto_backup_enabled':'1'}
+        defaults={'service_prefix':'SRV','service_start':'1','service_digits':'6','client_prefix':'CLI','client_start':'1','client_digits':'6','equipment_prefix':'SEQ','equipment_start':'1','equipment_digits':'6','company_short_name':'HAC','company_name':'HAC','system_title':'Service Management System','system_subtitle':'Service   |   Calibration   |   Warranty   |   AMC','company_logo_path':'','repeat_complaint_days':'60','auto_backup_enabled':'1','auto_backup_days':'1','auto_backup_keep':'14'}
         for key,value in defaults.items(): con.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(key,value))
     ensure_default_user()
 
