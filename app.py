@@ -1160,6 +1160,30 @@ class Servix(tk.Tk):
             d.destroy(); self.show_equipment_360(eq['code'])
         tk.Button(d,text='Transfer Ownership',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=8).pack(pady=10)
 
+    def update_coverage_dialog(self,code):
+        if not self.require('warranty') or not self.require_edit(): return
+        with connect() as con: eq=con.execute('SELECT id,code,make,model,warranty_till,amc_till FROM equipment WHERE code=?',(code,)).fetchone()
+        if not eq:return
+        d=tk.Toplevel(self); d.title('Update Warranty / AMC Coverage'); d.geometry('610x430'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+        tk.Label(d,text=f"Coverage Update • {eq['code']} • {eq['make']} {eq['model']}",bg=CARD,fg=NAVY,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24,pady=(18,10))
+        tk.Label(d,text='Coverage Type *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); typ=ttk.Combobox(d,state='readonly',values=['Warranty','AMC']); typ.pack(fill='x',padx=24,pady=(2,8)); typ.set('Warranty')
+        tk.Label(d,text='New Coverage Till (YYYY-MM-DD) *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); till=ttk.Entry(d); till.pack(fill='x',padx=24,pady=(2,8))
+        tk.Label(d,text='Reference / Contract No.',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); ref=ttk.Entry(d); ref.pack(fill='x',padx=24,pady=(2,8))
+        tk.Label(d,text='Reason *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
+        def save():
+            if not till.get().strip() or not reason.get().strip():return messagebox.showwarning('Required','New coverage date and reason are required.',parent=d)
+            try: datetime.datetime.strptime(till.get().strip(),'%Y-%m-%d')
+            except ValueError:return messagebox.showwarning('Date','Coverage Till must be YYYY-MM-DD.',parent=d)
+            field='warranty_till' if typ.get()=='Warranty' else 'amc_till'; old=eq[field] or ''
+            if old==till.get().strip():return messagebox.showinfo('No change','The new coverage date is the same as the current date.',parent=d)
+            if not messagebox.askyesno('Confirm Coverage Update',f"{typ.get()} coverage will change from {old or 'Not Set'} to {till.get().strip()}.\n\nReason: {reason.get().strip()}",parent=d):return
+            with connect() as con:
+                con.execute(f'UPDATE equipment SET {field}=?,modified=? WHERE id=?',(till.get().strip(),now(),eq['id']))
+                con.execute('INSERT INTO equipment_coverage_history(equipment_id,coverage_type,previous_till,new_till,reference,reason,username,created) VALUES(?,?,?,?,?,?,?,?)',(eq['id'],typ.get(),old,till.get().strip(),ref.get().strip(),reason.get().strip(),self.current_user['username'],now()))
+            audit(self.current_user['username'],'equipment',code,'COVERAGE_UPDATE',f"{typ.get()}: {old or 'Not Set'} -> {till.get().strip()}; ref={ref.get().strip()}; reason={reason.get().strip()}")
+            d.destroy(); self.show_warranty()
+        tk.Button(d,text='Save Coverage Update',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=8).pack(pady=10)
+
     def show_equipment_360(self,code):
         self.clear()
         with connect() as con:
@@ -1169,6 +1193,7 @@ class Servix(tk.Tk):
                                FROM services WHERE equipment_id=? ORDER BY id DESC''',(r['id'],)).fetchall()
             parts=con.execute('''SELECT p.part_no,p.description,p.qty,p.chargeable,p.amount,s.code service_code
                                  FROM parts p JOIN services s ON s.id=p.service_id WHERE s.equipment_id=? ORDER BY p.id DESC''',(r['id'],)).fetchall()
+            coverage=con.execute('''SELECT coverage_type,previous_till,new_till,reference,reason,username,created FROM equipment_coverage_history WHERE equipment_id=? ORDER BY id DESC''',(r['id'],)).fetchall()
             owners=con.execute('''SELECT h.effective_date,fc.code from_code,fc.name from_name,tc.code to_code,tc.name to_name,h.reason,h.username
                                   FROM equipment_ownership_history h LEFT JOIN clients fc ON fc.id=h.from_client_id LEFT JOIN clients tc ON tc.id=h.to_client_id
                                   WHERE h.equipment_id=? ORDER BY h.id DESC''',(r['id'],)).fetchall()
@@ -1184,7 +1209,7 @@ class Servix(tk.Tk):
         for i,(k,v) in enumerate(vals):
             tk.Label(info,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=10,pady=(10,2)); tk.Label(info,text=v or '—',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=1,column=i,sticky='w',padx=10,pady=(0,10)); info.grid_columnconfigure(i,weight=1)
         tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
-        ht=tk.Frame(tabs,bg=CARD); pt=tk.Frame(tabs,bg=CARD); ot=tk.Frame(tabs,bg=CARD); tabs.add(ht,text=' Lifetime Service History '); tabs.add(pt,text=' Parts History '); tabs.add(ot,text=' Ownership History ')
+        ht=tk.Frame(tabs,bg=CARD); pt=tk.Frame(tabs,bg=CARD); ct=tk.Frame(tabs,bg=CARD); ot=tk.Frame(tabs,bg=CARD); tabs.add(ht,text=' Lifetime Service History '); tabs.add(pt,text=' Parts History '); tabs.add(ct,text=' Coverage History '); tabs.add(ot,text=' Ownership History ')
         hcols=('Service ID','Opened','Reason','Complaint','Warranty','AMC','Engineer','Status','Work Done','Result','Billing','Payment','Dispatch'); htr=ttk.Treeview(ht,columns=hcols,show='headings')
         for x in hcols:htr.heading(x,text=x)
         htr.pack(fill='both',expand=True,padx=12,pady=12)
@@ -1194,6 +1219,10 @@ class Servix(tk.Tk):
         for x in pcols:ptr.heading(x,text=x)
         ptr.pack(fill='both',expand=True,padx=12,pady=12)
         for x in parts:ptr.insert('','end',values=(x['service_code'],x['part_no'],x['description'],x['qty'],x['chargeable'],x['amount']))
+        ccols=('Changed','Type','Previous Till','New Till','Reference','Reason','Changed By'); ctr=ttk.Treeview(ct,columns=ccols,show='headings')
+        for x in ccols:ctr.heading(x,text=x)
+        ctr.pack(fill='both',expand=True,padx=12,pady=12)
+        for x in coverage:ctr.insert('','end',values=(x['created'],x['coverage_type'],x['previous_till'] or '—',x['new_till'] or '—',x['reference'] or '—',x['reason'],x['username']))
         ocols=('Effective Date','Previous Owner','New Owner','Reason','Changed By'); otr=ttk.Treeview(ot,columns=ocols,show='headings')
         for x in ocols:otr.heading(x,text=x)
         otr.pack(fill='both',expand=True,padx=12,pady=12)
@@ -1235,6 +1264,7 @@ class Servix(tk.Tk):
         q=tk.StringVar(); ttk.Entry(tools,textvariable=q,width=30).pack(side='left',pady=6)
         mode=tk.StringVar(value='All Coverage'); cb=ttk.Combobox(tools,textvariable=mode,state='readonly',width=18,values=['All Coverage','Active','Expiring','Expired','Warranty','AMC']); cb.pack(side='left',padx=7,pady=6)
         tk.Label(tools,text='Double-click equipment to open full history',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='right',padx=10)
+        if self.can_edit(): tk.Button(tools,text='Update Coverage',bg=BLUE,fg='white',bd=0,padx=11,pady=5,command=lambda:self.update_coverage_dialog(tr.item(tr.focus(),'values')[0]) if tr.focus() else messagebox.showinfo('Coverage','Select an equipment record first.')).pack(side='right',padx=4,pady=5)
         card=self.card(body); card.pack(fill='both',expand=True)
         cols=('Equipment ID','Client','Make / Model','Serial No.','Warranty Till','Warranty Status','AMC Till','AMC Status','Location'); tr=ttk.Treeview(card,columns=cols,show='headings')
         widths=(95,190,180,120,95,95,95,90,130)
