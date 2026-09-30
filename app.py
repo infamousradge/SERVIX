@@ -1325,6 +1325,46 @@ class Servix(tk.Tk):
                 messagebox.showinfo('Import complete',f'{len(valid)} clients imported.\\n{len(errors)} rows skipped.')
             except Exception as ex:messagebox.showerror('Client import failed',str(ex))
         tk.Button(imp,text='Validate & Import Clients CSV',command=import_clients,bg=BLUE,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
+        eqimp=panel('Controlled Equipment Import','Imports equipment against an existing SERVIX Client. Required: Client ID, Make, Model and Serial. Use NOT AVAILABLE when no serial exists.')
+        def import_equipment():
+            src=filedialog.askopenfilename(title='Select Equipment CSV',filetypes=[('CSV Files','*.csv')])
+            if not src:return
+            try:
+                with open(src,'r',encoding='utf-8-sig',newline='') as fh:
+                    reader=csv.DictReader(fh); headers={str(x).strip().lower():x for x in (reader.fieldnames or [])}; rows=list(reader)
+                def ecol(row,*names):
+                    for n in names:
+                        if n in headers:return (row.get(headers[n]) or '').strip()
+                    return ''
+                if not rows:return messagebox.showwarning('Import','CSV contains no data rows.')
+                valid=[]; errors=[]; seen=set()
+                with connect() as con:
+                    for n,row in enumerate(rows,2):
+                        client_code=ecol(row,'client id','client code','client'); make=ecol(row,'make','manufacturer'); model=ecol(row,'model'); serial=ecol(row,'serial','serial no','serial number')
+                        etype=ecol(row,'type','equipment type'); stock=ecol(row,'stock id','external id'); sold=ecol(row,'sold by us','sold by'); sold_date=ecol(row,'sold date')
+                        warranty=ecol(row,'warranty till','warranty up to'); amc=ecol(row,'amc till','amc up to'); location=ecol(row,'location')
+                        if not client_code or not make or not model or not serial:errors.append(f'Row {n}: Client ID, Make, Model and Serial are required');continue
+                        client=con.execute('SELECT id FROM clients WHERE lower(code)=lower(?)',(client_code,)).fetchone()
+                        if not client:errors.append(f'Row {n}: Client ID {client_code} not found');continue
+                        key=serial.lower()
+                        if key!='not available':
+                            if key in seen:errors.append(f'Row {n}: duplicate serial inside CSV');continue
+                            seen.add(key)
+                            dup=con.execute("SELECT code FROM equipment WHERE lower(serial)=lower(?) AND lower(serial)<>'not available'",(serial,)).fetchone()
+                            if dup:errors.append(f"Row {n}: serial already belongs to {dup['code']}");continue
+                        valid.append((client['id'],make,model,serial,stock,etype,sold,sold_date,warranty,amc,location))
+                summary=f'Rows: {len(rows)}\\nReady to import: {len(valid)}\\nSkipped / invalid: {len(errors)}'
+                if errors:summary+='\\n\\nFirst issues:\\n'+'\\n'.join(errors[:8])
+                if not valid:return messagebox.showwarning('Import validation',summary)
+                if not messagebox.askyesno('Confirm Equipment Import',summary+'\\n\\nImport the validated equipment?'):return
+                with connect() as con:
+                    for rec in valid:
+                        code=next_code('SEQ','equipment')
+                        con.execute('INSERT INTO equipment(code,client_id,make,model,serial,stock_id,equipment_type,sold_by,sold_date,warranty_till,amc_till,location,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',(code,)+rec+(now(),now()))
+                audit(self.current_user['username'],'equipment','CSV','IMPORT',f'{len(valid)} imported; {len(errors)} skipped from {Path(src).name}')
+                messagebox.showinfo('Import complete',f'{len(valid)} equipment records imported.\\n{len(errors)} rows skipped.')
+            except Exception as ex:messagebox.showerror('Equipment import failed',str(ex))
+        tk.Button(eqimp,text='Validate & Import Equipment CSV',command=import_equipment,bg=BLUE,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
         hist=panel('Backup History','Recent successful backup packages recorded by this installation.')
         with connect() as con: backups=con.execute('SELECT backup_date,filename,status FROM backup_history ORDER BY id DESC LIMIT 5').fetchall()
         for row in backups: tk.Label(hist,text=f"{row['backup_date']}  •  {row['status']}  •  {Path(row['filename']).name}",bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=2)
