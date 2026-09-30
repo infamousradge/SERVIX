@@ -814,7 +814,48 @@ class Servix(tk.Tk):
         flt.bind('<<ComboboxSelected>>',load); load()
         tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
-    def show_commercial(self):self.simple_summary('Commercial & Payments','Quotation, verbal discussion, FOC/chargeable and payment tracking',[('Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Pending'"),RED),('Paid',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Paid'"),GREEN),('FOC',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='FOC'"),BLUE),('Chargeable',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='Chargeable'"),ORANGE)])
+    def show_commercial(self):
+        self.clear()
+        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text='Commercial & Payments',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text='Quotation / Approval / Invoice / Collection Control',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        metrics=tk.Frame(body,bg=BG); metrics.pack(fill='x',pady=(0,6))
+        self.metric(metrics,'Quotation Pending',self.q1("SELECT COUNT(*) FROM services WHERE quote_status='Pending Decision'"),ORANGE,'Customer decision')
+        self.metric(metrics,'To Be Invoiced',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='To Be Invoiced'"),BLUE,'Chargeable jobs')
+        self.metric(metrics,'Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Payment Pending','Part Paid','Invoice Raised')"),RED,'Collection follow-up')
+        outstanding=self.q1("SELECT COALESCE(SUM(MAX(0,COALESCE(invoice_amount,0)-COALESCE(amount_received,0))),0) FROM services WHERE foc_chargeable='Chargeable'")
+        self.metric(metrics,'Outstanding ₹',f'{float(outstanding or 0):,.0f}',RED,'Chargeable services')
+        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
+        tk.Label(tools,text='Commercial Register',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,8),pady=8)
+        q=tk.StringVar(); ttk.Entry(tools,textvariable=q,width=28).pack(side='left',pady=6)
+        mode=tk.StringVar(value='All'); cb=ttk.Combobox(tools,textvariable=mode,state='readonly',width=18,values=['All','Quotation Pending','Chargeable','FOC','To Be Invoiced','Payment Pending','Part Paid','Paid']); cb.pack(side='left',padx=7,pady=6)
+        tk.Label(tools,text='Double-click a row to open the Service Request',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='right',padx=10)
+        card=self.card(body); card.pack(fill='both',expand=True)
+        cols=('Service ID','Client','Equipment','Quotation / Approval','Billing','Invoice No.','Invoice Amount','Received','Outstanding','Payment Status','Service Status'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        widths=(100,175,105,180,85,100,100,90,95,115,115)
+        for x,w in zip(cols,widths):tr.heading(x,text=x); tr.column(x,width=w,minwidth=65,anchor='w')
+        tr.tag_configure('pending',foreground='#B42318'); tr.tag_configure('part',foreground='#B54708'); tr.tag_configure('paid',foreground='#16794A')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            for x in tr.get_children():tr.delete(x)
+            term=q.get().strip().lower(); filt=mode.get()
+            with connect() as con:
+                rows=con.execute("""SELECT s.code,c.name,e.code equipment,s.quote_status,s.foc_chargeable,s.invoice_no,s.invoice_amount,s.amount_received,s.payment_status,s.status FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY s.id DESC""").fetchall()
+            for r in rows:
+                inv=float(r['invoice_amount'] or 0); rec=float(r['amount_received'] or 0); bal=max(0,inv-rec)
+                hay=' '.join(str(r[k] or '') for k in r.keys()).lower()
+                if term and term not in hay:continue
+                if filt=='Quotation Pending' and r['quote_status']!='Pending Decision':continue
+                if filt in ('Chargeable','FOC') and r['foc_chargeable']!=filt:continue
+                if filt=='To Be Invoiced' and r['payment_status']!='To Be Invoiced':continue
+                if filt=='Payment Pending' and r['payment_status'] not in ('Pending','Payment Pending','Invoice Raised'):continue
+                if filt=='Part Paid' and r['payment_status']!='Part Paid':continue
+                if filt=='Paid' and r['payment_status']!='Paid':continue
+                tag='paid' if r['payment_status']=='Paid' else ('part' if r['payment_status']=='Part Paid' else ('pending' if bal>0 or r['quote_status']=='Pending Decision' else ''))
+                tr.insert('','end',values=(r['code'],r['name'],r['equipment'],r['quote_status'] or '—',r['foc_chargeable'] or '—',r['invoice_no'] or '—',f'₹{inv:,.2f}',f'₹{rec:,.2f}',f'₹{bal:,.2f}',r['payment_status'] or '—',r['status']),tags=(tag,) if tag else ())
+        q.trace_add('write',load); cb.bind('<<ComboboxSelected>>',load); load()
+        tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_reports(self):
         self.clear(); self.heading('Reports & Analytics','Operational filters, management totals and export-ready service data')
