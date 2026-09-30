@@ -352,9 +352,10 @@ class Servix(tk.Tk):
         def save():
             if not vals['name'].get() or (not vals['mobile'].get() and not vals['email'].get()):return messagebox.showwarning('Required','Client name and at least Mobile or Email are required.',parent=d)
             with connect() as con:
-                dup=con.execute('SELECT code,name FROM clients WHERE (mobile<>"" AND mobile=?) OR (email<>"" AND email=?)',(vals['mobile'].get(),vals['email'].get())).fetchone()
-                if dup and not messagebox.askyesno('Possible duplicate',f"Possible duplicate: {dup['code']} — {dup['name']}\nCreate anyway?",parent=d):return
-                ts=now(); con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(next_code('CLI','clients'),*[vals[k].get() for k in ('name','contact','mobile','email','address','city','notes')],ts,ts))
+                dup=con.execute('SELECT code,name FROM clients WHERE (mobile<>"" AND mobile=?) OR (email<>"" AND LOWER(email)=LOWER(?))',(vals['mobile'].get().strip(),vals['email'].get().strip())).fetchone()
+                if dup:
+                    return messagebox.showwarning('Possible duplicate',f"Possible duplicate: {dup['code']} — {dup['name']}\n\nOpen/review the existing client before creating another. Duplicate override will be added under Administration with authorization and audit.",parent=d)
+                ts=now(); con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(next_code('CLI','clients'),*[vals[k].get().strip() for k in ('name','contact','mobile','email','address','city','notes')],ts,ts))
             d.destroy(); self.show_clients()
         tk.Button(d,text='Save Client',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=20)
 
@@ -404,8 +405,8 @@ class Servix(tk.Tk):
             if not vals['client'].get() or not vals['make'].get() or not vals['model'].get():return messagebox.showwarning('Required','Client, Make and Model are mandatory.',parent=d)
             with connect() as con:
                 if vals['serial'].get():
-                    dup=con.execute('SELECT code FROM equipment WHERE serial=?',(vals['serial'].get(),)).fetchone()
-                    if dup and not messagebox.askyesno('Possible duplicate',f"Serial already exists as {dup['code']}. Create anyway?",parent=d):return
+                    dup=con.execute('SELECT code FROM equipment WHERE LOWER(TRIM(serial))=LOWER(TRIM(?))',(vals['serial'].get(),)).fetchone()
+                    if dup:return messagebox.showwarning('Existing equipment',f"Serial already exists as {dup['code']}. Reuse that permanent SERVIX Equipment ID instead of creating a duplicate.",parent=d)
                 ts=now(); con.execute('''INSERT INTO equipment(code,client_id,make,model,serial,stock_id,equipment_type,sold_by,warranty_till,amc_till,location,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)''',(next_code('SEQ','equipment'),cmap[vals['client'].get()],vals['make'].get(),vals['model'].get(),vals['serial'].get(),vals['stock'].get(),vals['type'].get(),vals['sold'].get(),vals['warranty'].get(),vals['amc'].get(),vals['location'].get(),ts,ts))
             d.destroy(); self.show_equipment()
         tk.Button(d,text='Save Equipment',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=18)
