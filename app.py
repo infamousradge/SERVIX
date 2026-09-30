@@ -452,7 +452,7 @@ class Servix(tk.Tk):
 
     def show_services(self):
         self.clear(); self.heading('Service Calls','Search, review and update complete service history',self.show_new_service,'+ New Service')
-        bar=self.card(self.content); bar.pack(fill='x',padx=28,pady=(0,12)); tk.Label(bar,text='Status',bg=CARD,fg=MUTED).pack(side='left',padx=(15,5),pady=12); st=ttk.Combobox(bar,width=20,state='readonly',values=['All','New','Assigned','Received','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Closed']); st.set('All'); st.pack(side='left'); holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=28,pady=(0,22))
+        bar=self.card(self.content); bar.pack(fill='x',padx=28,pady=(0,12)); tk.Label(bar,text='Status',bg=CARD,fg=MUTED).pack(side='left',padx=(15,5),pady=12); st=ttk.Combobox(bar,width=20,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened']); st.set('All'); st.pack(side='left'); holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=28,pady=(0,22))
         tree=self.service_tree(holder)
         def filter_it(*_):
             for i in tree.get_children():tree.delete(i)
@@ -466,6 +466,7 @@ class Servix(tk.Tk):
         tk.Label(parent,text=label+(' *' if required else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=row,column=col,sticky='w',padx=10,pady=(8,3)); w=ttk.Combobox(parent,values=values,width=width,state='readonly') if values is not None else ttk.Entry(parent,width=width); w.grid(row=row+1,column=col,sticky='ew',padx=10,pady=(0,8)); return w
 
     def show_new_service(self):
+        if not self.require('services'): return
         if not self.require_edit(): return self.show_services()
         self.clear()
         bar=tk.Frame(self.content,bg='#164F7C',height=36); bar.pack(fill='x'); bar.pack_propagate(False)
@@ -908,7 +909,7 @@ class Servix(tk.Tk):
             if not path:return
             try: meta=store_attachment(path,code)
             except Exception as ex:return messagebox.showerror('Attachment',str(ex))
-            add_attachment(r['id'],meta); add_history(r['id'],f"Attachment added: {meta['original_name']}"); refresh_att()
+            add_attachment(r['id'],meta); add_history(r['id'],f"Attachment added: {meta['original_name']}",self.current_user['username']); audit(self.current_user['username'],'service',code,'ATTACHMENT_ADD',meta['original_name']); refresh_att()
         tk.Button(cards,text='+\nAdd Files',command=attach,bg='white',fg=BLUE,bd=1,relief='solid',font=('Segoe UI',8,'bold'),width=10,height=4).pack(side='left',padx=3)
         refresh_att()
 
