@@ -979,6 +979,8 @@ class Servix(tk.Tk):
         q=tk.StringVar(); ent=ttk.Entry(tools,textvariable=q,width=42); ent.pack(side='left',pady=7)
         tk.Label(tools,text='Name / Contact / Mobile / Email / City',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='left',padx=8)
         tk.Button(tools,text='+ New Client',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.client_dialog).pack(side='right',padx=8,pady=5)
+        if self.current_user['role']=='Administrator':
+            tk.Button(tools,text='Merge Clients',bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=6,command=self.merge_clients_dialog).pack(side='right',padx=3,pady=5)
         card=self.card(body); card.pack(fill='both',expand=True)
         cols=('Client ID','Client Name','Contact Person','Mobile','Email','City'); tr=ttk.Treeview(card,columns=cols,show='headings')
         widths=(90,230,160,120,220,130)
@@ -1027,6 +1029,33 @@ class Servix(tk.Tk):
         strr.pack(fill='both',expand=True,padx=12,pady=12)
         for x in svc:strr.insert('','end',values=(x['code'],x['opened'],x['equipment'],f"{x['make']} {x['model']}",x['serial'],x['reason'],x['status'],x['warranty'],x['amc'],x['foc_chargeable'] or '—',x['payment_status'] or '—'))
         strr.bind('<Double-1>',lambda e:self.show_service_detail(strr.item(strr.focus(),'values')[0]) if strr.focus() else None)
+
+    def merge_clients_dialog(self):
+        if self.current_user['role']!='Administrator':
+            return messagebox.showwarning('Administrator required','Only an Administrator can merge Client records.')
+        with connect() as con: rows=con.execute('SELECT id,code,name,mobile,email FROM clients ORDER BY name,code').fetchall()
+        if len(rows)<2:return messagebox.showinfo('Merge Clients','At least two Client records are required.')
+        labels=[f"{r['code']} — {r['name']} — {r['mobile'] or r['email'] or 'No contact'}" for r in rows]; lookup={x:r for x,r in zip(labels,rows)}
+        d=tk.Toplevel(self); d.title('Merge Duplicate Clients'); d.geometry('650x360'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+        tk.Label(d,text='Merge Duplicate Clients',bg=CARD,fg=NAVY,font=('Segoe UI',12,'bold')).pack(anchor='w',padx=24,pady=(20,8))
+        tk.Label(d,text='Keep Client (master record)',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); keep=ttk.Combobox(d,values=labels,state='readonly'); keep.pack(fill='x',padx=24,pady=(2,10))
+        tk.Label(d,text='Merge Client (duplicate record)',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); source=ttk.Combobox(d,values=labels,state='readonly'); source.pack(fill='x',padx=24,pady=(2,10))
+        tk.Label(d,text='Merge reason *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
+        def merge():
+            if not keep.get() or not source.get() or keep.get()==source.get():return messagebox.showwarning('Merge Clients','Select two different Client records.',parent=d)
+            why=reason.get().strip()
+            if not why:return messagebox.showwarning('Reason required','Enter the reason for this Client merge.',parent=d)
+            k=lookup[keep.get()]; src=lookup[source.get()]
+            with connect() as con:
+                ec=con.execute('SELECT COUNT(*) FROM equipment WHERE client_id=?',(src['id'],)).fetchone()[0]; sc=con.execute('SELECT COUNT(*) FROM services WHERE client_id=?',(src['id'],)).fetchone()[0]
+            if not messagebox.askyesno('Confirm Client merge',f"KEEP: {k['code']} — {k['name']}\nMERGE: {src['code']} — {src['name']}\n\nMove {ec} equipment and {sc} service records to the kept Client?\n\nThe duplicate Client record will then be removed. This cannot be automatically undone.\n\nReason: {why}",parent=d):return
+            with connect() as con:
+                con.execute('UPDATE equipment SET client_id=?,modified=? WHERE client_id=?',(k['id'],now(),src['id']))
+                con.execute('UPDATE services SET client_id=?,modified=? WHERE client_id=?',(k['id'],now(),src['id']))
+                con.execute('DELETE FROM clients WHERE id=?',(src['id'],))
+            audit(self.current_user['username'],'client',k['code'],'MERGE',f"Merged {src['code']} — {src['name']} into {k['code']} — {k['name']}; equipment={ec}; services={sc}; reason: {why}")
+            d.destroy(); self.show_client_360(k['code'])
+        tk.Button(d,text='Merge Clients',command=merge,bg=RED,fg='white',bd=0,padx=18,pady=8).pack(pady=12)
 
     def client_dialog(self):
         if not self.require_edit(): return
