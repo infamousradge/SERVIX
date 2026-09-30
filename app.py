@@ -713,8 +713,8 @@ class Servix(tk.Tk):
             if not self.require_edit(): return
             if not upd_date.get().strip() or not (upd_diag.get().strip() or upd_work.get().strip()):return messagebox.showwarning('Update required','Enter the update date/time and Diagnosis/Update or Work Done.')
             with connect() as con:
-                con.execute('''INSERT INTO service_updates(service_id,update_date,engineer,update_type,diagnosis,work_done,result,next_action,user) VALUES(?,?,?,?,?,?,?,?,?)''',(r['id'],upd_date.get().strip(),upd_eng.get().strip(),upd_type.get(),upd_diag.get().strip(),upd_work.get().strip(),result.get(),upd_next.get().strip(),'Office'))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"{upd_type.get()}: {upd_work.get().strip() or upd_diag.get().strip()}",'Office'))
+                con.execute('''INSERT INTO service_updates(service_id,update_date,engineer,update_type,diagnosis,work_done,result,next_action,user) VALUES(?,?,?,?,?,?,?,?,?)''',(r['id'],upd_date.get().strip(),upd_eng.get().strip(),upd_type.get(),upd_diag.get().strip(),upd_work.get().strip(),result.get(),upd_next.get().strip(),self.current_user['username']))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"{upd_type.get()}: {upd_work.get().strip() or upd_diag.get().strip()}",self.current_user['username']))
                 con.execute('UPDATE services SET modified=? WHERE id=?',(now(),r['id']))
             self.show_service_detail(code)
         tk.Button(update_box,text='+ Add Update',command=add_update,bg='#EAF2FF',fg=BLUE,bd=0,padx=15,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=10)
@@ -757,7 +757,7 @@ class Servix(tk.Tk):
                 con.execute('''UPDATE services SET diagnosis=?,root_cause=?,work_done=?,testing_result=?,final_result=?,status=?,pending_reason=?,engineer=?,received_date=?,received_condition=?,work_date=?,dispatch_date=?,dispatch_mode=?,dispatch_reference=?,completion_date=?,closure_date=?,next_action=?,cancel_reason=?,modified=? WHERE code=?''',(diag.get().strip(),root.get().strip(),work.get().strip(),testing.get().strip(),result.get(),target,pending.get(),eng.get().strip(),received.get().strip(),condition.get().strip(),work_date.get().strip(),dispatch.get().strip(),dispatch_mode.get(),dispatch_ref.get().strip(),completion.get().strip(),closure.get().strip(),next_action.get().strip(),cancel_reason.get().strip(),now(),code))
                 note=f"Status {old_status} → {target}" if old_status!=target else f"Technical record updated — {target}"
                 if target in ('Cancelled','Reopened'): note+=f" — Reason: {cancel_reason.get().strip()}"
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),note,'Office'))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),note,self.current_user['username']))
             messagebox.showinfo('Saved','Service workflow updated.'); self.show_service_detail(code)
         tk.Button(tech,text='Save Workflow Update',command=save_tech,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=16,column=2,sticky='e',padx=10,pady=15)
         location_tab.grid_columnconfigure((0,1),weight=1)
@@ -771,7 +771,7 @@ class Servix(tk.Tk):
             if not self.require_edit(): return
             with connect() as con:
                 con.execute('UPDATE services SET service_location=?,pickup_location=?,drop_location=?,location_notes=?,modified=? WHERE id=?',(service_loc.get().strip(),pickup.get().strip(),drop.get().strip(),loc_notes.get().strip(),now(),r['id']))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'Location / movement details updated','Office'))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'Location / movement details updated',self.current_user['username']))
             messagebox.showinfo('Saved','Location and movement details saved.')
         tk.Button(location_tab,text='Save Location Details',command=save_location,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=6,column=1,sticky='e',padx=10,pady=12)
 
@@ -921,7 +921,7 @@ class Servix(tk.Tk):
             if foc.get()=='Chargeable' and pay.get()=='Not Applicable': return messagebox.showwarning('Payment status','Select the applicable payment status for a chargeable service.')
             with connect() as con:
                 con.execute('''UPDATE services SET foc_chargeable=?,quote_status=?,payment_status=?,service_charge=?,parts_charge=?,quote_amount=?,quote_no=?,quote_date=?,po_reference=?,invoice_no=?,invoice_date=?,invoice_amount=?,modified=? WHERE code=?''',(foc.get(),quote.get(),pay.get(),money(svc.get()),money(parts.get()),money(qa.get()),qno.get().strip(),qdate.get().strip(),po.get().strip(),inv.get().strip(),invdate.get().strip(),money(invamt.get()),now(),code))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial update: {foc.get() or 'billing pending'} / {pay.get()}",'Office'))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial update: {foc.get() or 'billing pending'} / {pay.get()}",self.current_user['username']))
             messagebox.showinfo('Saved','Commercial information saved.'); self.show_service_detail(code)
         tk.Button(comm,text='Save Commercial Update',command=save_comm,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=10,column=2,sticky='e',padx=10,pady=10)
 
@@ -937,8 +937,8 @@ class Servix(tk.Tk):
             if not self.require_edit(): return
             if not dnotes.get().strip(): return messagebox.showwarning('Discussion','Enter discussion / approval notes.')
             with connect() as con:
-                con.execute('INSERT INTO commercial_discussions(service_id,discussion_date,person,method,amount,approved,notes,user) VALUES(?,?,?,?,?,?,?,?)',(r['id'],ddate.get(),dperson.get().strip(),dmethod.get(),money(damount.get()),dapproved.get(),dnotes.get().strip(),'Office'))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial discussion: {dnotes.get().strip()}",'Office'))
+                con.execute('INSERT INTO commercial_discussions(service_id,discussion_date,person,method,amount,approved,notes,user) VALUES(?,?,?,?,?,?,?,?)',(r['id'],ddate.get(),dperson.get().strip(),dmethod.get(),money(damount.get()),dapproved.get(),dnotes.get().strip(),self.current_user['username']))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial discussion: {dnotes.get().strip()}",self.current_user['username']))
             self.show_service_detail(code)
         tk.Button(discussion,text='+ Add Discussion',command=add_discussion,bg='#EAF2FF',fg=BLUE,bd=0,padx=14,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=8)
 
@@ -953,12 +953,12 @@ class Servix(tk.Tk):
             amount=money(pamount.get())
             if amount<=0:return messagebox.showwarning('Payment','Enter an amount greater than zero.')
             with connect() as con:
-                con.execute('INSERT INTO payments(service_id,payment_date,amount,mode,reference,notes,user) VALUES(?,?,?,?,?,?,?)',(r['id'],pdate.get(),amount,pmode.get(),pref.get().strip(),pnote.get().strip(),'Office'))
+                con.execute('INSERT INTO payments(service_id,payment_date,amount,mode,reference,notes,user) VALUES(?,?,?,?,?,?,?)',(r['id'],pdate.get(),amount,pmode.get(),pref.get().strip(),pnote.get().strip(),self.current_user['username']))
                 total=con.execute('SELECT COALESCE(SUM(amount),0) FROM payments WHERE service_id=?',(r['id'],)).fetchone()[0]
                 invoice=money(invamt.get()) or money(r['invoice_amount'])
                 new_status='Paid' if invoice>0 and total>=invoice else 'Part Paid'
                 con.execute('UPDATE services SET amount_received=?,payment_status=?,payment_reference=?,modified=? WHERE id=?',(total,new_status,pref.get().strip(),now(),r['id']))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Payment recorded: ₹{amount:,.2f} ({pmode.get() or 'mode not specified'})",'Office'))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Payment recorded: ₹{amount:,.2f} ({pmode.get() or 'mode not specified'})",self.current_user['username']))
             self.show_service_detail(code)
         tk.Button(payment,text='+ Record Payment',command=add_payment,bg=GREEN,fg='white',bd=0,padx=14,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=8)
 
