@@ -3,7 +3,10 @@ from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import csv
 import shutil
-from database import connect, init_db, next_code, now, today, get_setting, set_setting
+import zipfile
+import json
+import datetime
+from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
 from service_report import create_service_report
@@ -41,7 +44,7 @@ class Servix(tk.Tk):
         else: tk.Label(brand,text=get_setting('company_short_name','HAC'),font=('Segoe UI',25,'bold'),bg='#073A69',fg='white').pack(anchor='w',padx=20,pady=(5,0))
         tk.Label(brand,text='SERVICE MANAGEMENT',font=('Segoe UI',6,'bold'),bg='#073A69',fg='#B9D9F4').pack(anchor='w',padx=21)
         self.nav={}
-        items=[('Dashboard','⌂',self.show_dashboard),('Service Calls','⌕',self.show_services),('Clients','♟',self.show_clients),('Equipment','▣',self.show_equipment),('Warranty & AMC','◆',self.show_warranty),('Engineers','♟',self.show_engineers),('Parts / Inventory','↕',self.show_parts_inventory),('Commercial & Payments','₹',self.show_commercial),('Documents','▧',self.show_documents),('Reports & Analytics','▥',self.show_reports),('Data Export / Import','⇄',self.show_reports),('Administration','⚙',self.show_settings)]
+        items=[('Dashboard','⌂',self.show_dashboard),('Service Calls','⌕',self.show_services),('Clients','♟',self.show_clients),('Equipment','▣',self.show_equipment),('Warranty & AMC','◆',self.show_warranty),('Engineers','♟',self.show_engineers),('Parts / Inventory','↕',self.show_parts_inventory),('Commercial & Payments','₹',self.show_commercial),('Documents','▧',self.show_documents),('Reports & Analytics','▥',self.show_reports),('Data Export / Import','⇄',self.show_data_management),('Administration','⚙',self.show_settings)]
         for label,icon,cmd in items:
             btn=tk.Button(self.sidebar,text=f'  {icon}   {label}',font=('Segoe UI',8),anchor='w',bd=0,relief='flat',bg='#063765',fg='white',activebackground='#0876D1',activeforeground='white',cursor='hand2',command=lambda l=label,c=cmd:self.go(l,c)); btn.pack(fill='x',pady=0,ipady=7); self.nav[label]=btn
         right=tk.Frame(self,bg=BG); right.pack(side='left',fill='both',expand=True)
@@ -987,6 +990,70 @@ class Servix(tk.Tk):
         with connect() as con: rows=con.execute('SELECT export_date,from_date,to_date,filename,record_count FROM exports ORDER BY id DESC LIMIT 5').fetchall()
         for x in rows: tk.Label(hist,text=f"{x['export_date']}  •  {x['record_count']} records  •  {Path(x['filename']).name}",bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=2)
         if not rows: tk.Label(hist,text='No exports recorded yet.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(2,10))
+
+    def show_data_management(self):
+        self.clear()
+        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text='Data Export / Import',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text='Backup / Restore / Portable CSV Export',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        def panel(title,desc):
+            p=self.card(body); p.pack(fill='x',pady=(0,7))
+            tk.Label(p,text=title,bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=14,pady=(10,2))
+            tk.Label(p,text=desc,bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(0,8)); return p
+        b=panel('Complete Backup','Creates one ZIP containing the live SQLite database, attachments and a manifest. Use before upgrades or major data changes.')
+        def backup():
+            dest=filedialog.asksaveasfilename(title='Save SERVIX Backup',defaultextension='.zip',filetypes=[('SERVIX Backup','*.zip')],initialfile='SERVIX_Backup_'+datetime.datetime.now().strftime('%Y%m%d_%H%M')+'.zip')
+            if not dest:return
+            try:
+                with connect() as con: con.execute('PRAGMA wal_checkpoint(FULL)')
+                with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED) as z:
+                    z.write(DB,'data/servix.db')
+                    att=DATA_ROOT/'attachments'
+                    if att.exists():
+                        for p in att.rglob('*'):
+                            if p.is_file(): z.write(p,'attachments/'+str(p.relative_to(att)))
+                    manifest={'product':'SERVIX','created':datetime.datetime.now().isoformat(timespec='seconds'),'database':'data/servix.db','attachments':True}
+                    z.writestr('manifest.json',json.dumps(manifest,indent=2))
+                messagebox.showinfo('Backup complete','SERVIX backup created successfully.\n\n'+dest)
+            except Exception as ex: messagebox.showerror('Backup failed',str(ex))
+        tk.Button(b,text='Create Complete Backup',command=backup,bg=BLUE,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
+        r=panel('Restore Backup','Restores a SERVIX backup ZIP. A safety copy of the current database is created first. SERVIX should be restarted after restore.')
+        def restore():
+            src=filedialog.askopenfilename(title='Select SERVIX Backup',filetypes=[('SERVIX Backup','*.zip')])
+            if not src:return
+            if not messagebox.askyesno('Confirm restore','Restore this backup? Current data will be replaced after a safety copy is created.'):return
+            try:
+                with zipfile.ZipFile(src) as z:
+                    if 'manifest.json' not in z.namelist() or 'data/servix.db' not in z.namelist(): raise ValueError('This is not a valid SERVIX backup.')
+                    safety=DB.with_name('servix_before_restore_'+datetime.datetime.now().strftime('%Y%m%d_%H%M%S')+'.db'); shutil.copy2(DB,safety)
+                    tmp=DB.with_suffix('.restore'); tmp.write_bytes(z.read('data/servix.db')); shutil.move(str(tmp),str(DB))
+                    att=DATA_ROOT/'attachments'; att.mkdir(parents=True,exist_ok=True)
+                    for n in z.namelist():
+                        if n.startswith('attachments/') and not n.endswith('/'):
+                            rel=Path(n).relative_to('attachments'); target=att/rel; target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(z.read(n))
+                messagebox.showinfo('Restore complete','Backup restored. Please close and reopen SERVIX before continuing.')
+            except Exception as ex: messagebox.showerror('Restore failed',str(ex))
+        tk.Button(r,text='Restore Backup',command=restore,bg='#EAF2FF',fg=BLUE,bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
+        x=panel('Portable Data Export','Exports every SQLite table to separate CSV files inside one ZIP, plus a manifest. This does not modify SERVIX data.')
+        def export_all():
+            dest=filedialog.asksaveasfilename(title='Export SERVIX Data',defaultextension='.zip',filetypes=[('ZIP Archive','*.zip')],initialfile='SERVIX_Data_Export_'+datetime.datetime.now().strftime('%Y%m%d_%H%M')+'.zip')
+            if not dest:return
+            try:
+                import io
+                with connect() as con:
+                    tables=[r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+                    with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED) as z:
+                        for table in tables:
+                            rows=con.execute('SELECT * FROM "'+table.replace('"','""')+'"').fetchall(); out=io.StringIO(newline=''); w=csv.writer(out)
+                            if rows:w.writerow(rows[0].keys()); w.writerows([tuple(r) for r in rows])
+                            else:
+                                cols=[r[1] for r in con.execute('PRAGMA table_info("'+table.replace('"','""')+'")')]; w.writerow(cols)
+                            z.writestr('tables/'+table+'.csv',out.getvalue())
+                        z.writestr('manifest.json',json.dumps({'product':'SERVIX','created':datetime.datetime.now().isoformat(timespec='seconds'),'tables':tables},indent=2))
+                messagebox.showinfo('Export complete','Portable data export created successfully.\n\n'+dest)
+            except Exception as ex: messagebox.showerror('Export failed',str(ex))
+        tk.Button(x,text='Export All Tables (CSV ZIP)',command=export_all,bg=GREEN,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
 
     def show_settings(self):
         self.clear()
