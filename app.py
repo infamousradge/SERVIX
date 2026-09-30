@@ -1305,22 +1305,22 @@ class Servix(tk.Tk):
                 with connect() as con:
                     for n,row in enumerate(rows,2):
                         name=col(row,'name','client name','customer name'); mobile=col(row,'mobile','phone','mobile no'); email=col(row,'email','email id').lower()
-                        contact=col(row,'contact','contact person'); address=col(row,'address'); city=col(row,'city'); pin=col(row,'pin','pincode','postal code')
+                        contact=col(row,'contact','contact person'); address=col(row,'address'); city=col(row,'city')
                         if not name or (not mobile and not email):errors.append(f'Row {n}: Name and Mobile or Email required');continue
                         key=(mobile,email)
                         if key in seen:errors.append(f'Row {n}: duplicate inside CSV');continue
                         seen.add(key)
                         dup=con.execute("SELECT code,name FROM clients WHERE (?<>'' AND mobile=?) OR (?<>'' AND lower(email)=?)",(mobile,mobile,email,email)).fetchone()
                         if dup:errors.append(f"Row {n}: matches existing {dup['code']} {dup['name']}");continue
-                        valid.append((name,contact,mobile,email,address,city,pin))
+                        valid.append((name,contact,mobile,email,address,city))
                 summary=f'Rows: {len(rows)}\\nReady to import: {len(valid)}\\nSkipped / invalid: {len(errors)}'
                 if errors:summary+='\\n\\nFirst issues:\\n'+'\\n'.join(errors[:8])
                 if not valid:return messagebox.showwarning('Import validation',summary)
                 if not messagebox.askyesno('Confirm Client Import',summary+'\\n\\nImport the validated records?'):return
                 with connect() as con:
-                    for name,contact,mobile,email,address,city,pin in valid:
-                        code=next_code(con,'clients','client_prefix','CLI','client_start','client_digits')
-                        con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,pin,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(code,name,contact,mobile,email,address,city,pin,now(),now()))
+                    for name,contact,mobile,email,address,city in valid:
+                        code=next_code('CLI','clients')
+                        con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,created,modified) VALUES(?,?,?,?,?,?,?,?,?)',(code,name,contact,mobile,email,address,city,now(),now()))
                 audit(self.current_user['username'],'clients','CSV','IMPORT',f'{len(valid)} imported; {len(errors)} skipped from {Path(src).name}')
                 messagebox.showinfo('Import complete',f'{len(valid)} clients imported.\\n{len(errors)} rows skipped.')
             except Exception as ex:messagebox.showerror('Client import failed',str(ex))
