@@ -132,6 +132,14 @@ class Servix(tk.Tk):
         messagebox.showwarning('Access restricted','Your SERVIX role does not have permission for this area.')
         return False
 
+    def can_edit(self):
+        return bool(self.current_user and self.current_user['role'] != 'Management / View Only')
+
+    def require_edit(self):
+        if self.can_edit(): return True
+        messagebox.showwarning('View only','Management / View Only can review SERVIX records but cannot create, edit, delete, return, upload or otherwise modify data.')
+        return False
+
     def build_shell(self):
         self.sidebar=tk.Frame(self,bg='#063765',width=168); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
         brand=tk.Frame(self.sidebar,bg='#073A69',height=62); brand.pack(fill='x'); brand.pack_propagate(False)
@@ -451,6 +459,7 @@ class Servix(tk.Tk):
         tk.Label(parent,text=label+(' *' if required else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=row,column=col,sticky='w',padx=10,pady=(8,3)); w=ttk.Combobox(parent,values=values,width=width,state='readonly') if values is not None else ttk.Entry(parent,width=width); w.grid(row=row+1,column=col,sticky='ew',padx=10,pady=(0,8)); return w
 
     def show_new_service(self):
+        if not self.require_edit(): return self.show_services()
         self.clear()
         bar=tk.Frame(self.content,bg='#164F7C',height=36); bar.pack(fill='x'); bar.pack_propagate(False)
         tk.Label(bar,text='Service Request - New / Edit',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
@@ -695,6 +704,7 @@ class Servix(tk.Tk):
         upd_eng=self.form_field(update_box,'Engineer',0,2,active_engineers); upd_eng.set(r['engineer'] or '')
         upd_diag=self.form_field(update_box,'Diagnosis / Update',2,0); upd_work=self.form_field(update_box,'Work Done',2,1); upd_next=self.form_field(update_box,'Next Action',2,2)
         def add_update():
+            if not self.require_edit(): return
             if not upd_date.get().strip() or not (upd_diag.get().strip() or upd_work.get().strip()):return messagebox.showwarning('Update required','Enter the update date/time and Diagnosis/Update or Work Done.')
             with connect() as con:
                 con.execute('''INSERT INTO service_updates(service_id,update_date,engineer,update_type,diagnosis,work_done,result,next_action,user) VALUES(?,?,?,?,?,?,?,?,?)''',(r['id'],upd_date.get().strip(),upd_eng.get().strip(),upd_type.get(),upd_diag.get().strip(),upd_work.get().strip(),result.get(),upd_next.get().strip(),'Office'))
@@ -710,6 +720,7 @@ class Servix(tk.Tk):
             for x in con.execute('SELECT update_date,update_type,engineer,diagnosis,work_done,next_action FROM service_updates WHERE service_id=? ORDER BY id DESC',(r['id'],)):utr.insert('','end',values=tuple(x))
 
         def save_tech():
+            if not self.require_edit(): return
             target=stat.get(); missing=[]
             if target=='Received' and not received.get().strip():missing.append('Equipment Received Date')
             if target in ('Under Diagnosis','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed') and not eng.get().strip():missing.append('Engineer')
@@ -774,6 +785,7 @@ class Servix(tk.Tk):
             with connect() as con:
                 for x in con.execute('SELECT id,part_no,description,qty,chargeable,amount,remarks FROM parts WHERE service_id=? ORDER BY id DESC',(r['id'],)): ptr.insert('','end',iid=str(x['id']),values=tuple(x)[1:])
         def save_part():
+            if not self.require_edit(): return
             item=invmap.get(partsel.get())
             if not item:return messagebox.showwarning('Required','Select an active Inventory Part.')
             try: qty=float(pent['qty'].get() or 1); amount=float(pent['amount'].get() or 0)
@@ -792,6 +804,7 @@ class Servix(tk.Tk):
             refresh_parts(); messagebox.showinfo('Part issued','Part recorded against the service and deducted from inventory.')
         tk.Button(pform,text='+ Issue Part',command=save_part,bg=BLUE,fg='white',bd=0,padx=14,pady=8).grid(row=1,column=5,padx=8)
         def return_part():
+            if not self.require_edit(): return
             sel=ptr.selection()
             if not sel:return messagebox.showwarning('Select part','Select the issued part to return.')
             part_id=int(sel[0])
@@ -826,6 +839,7 @@ class Servix(tk.Tk):
         if cr:
             cal_date.insert(0,cr['calibration_date'] or ''); cal_result.set(cr['result'] or ''); cert.insert(0,cr['certificate_no'] or ''); next_due.insert(0,cr['next_due'] or ''); cal_remarks.insert(0,cr['remarks'] or '')
         def save_cal():
+            if not self.require_edit(): return
             if r['reason']=='Calibration' and (not cal_date.get() or not cal_result.get()): return messagebox.showwarning('Required','Calibration Date and Result are required for calibration jobs.')
             upsert_calibration(r['id'],cal_date.get(),cal_result.get(),cert.get(),next_due.get(),cal_remarks.get()); add_history(r['id'],f"Calibration updated: {cal_result.get() or 'details saved'}"); messagebox.showinfo('Saved','Calibration information saved.')
         tk.Button(cal_tab,text='Save Calibration',command=save_cal,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=1,sticky='e',padx=10,pady=15)
