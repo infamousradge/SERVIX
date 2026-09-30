@@ -349,14 +349,82 @@ class Servix(tk.Tk):
             add_attachment(r['id'],meta); add_history(r['id'],f"Attachment added: {meta['original_name']}"); refresh_att()
         tk.Button(att_tab,text='+ Attach Image / PDF',command=attach,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=12,pady=(0,12)); refresh_att()
 
-        comm.grid_columnconfigure((0,1,2),weight=1); foc=self.form_field(comm,'FOC / Chargeable',0,0,['FOC','Chargeable']); foc.set(r['foc_chargeable'] or ''); quote=self.form_field(comm,'Quotation Status',0,1,['Quotation Sent','No Quotation — Verbal Discussion','Estimate Shared by Phone','Quotation Not Required','Pending Decision']); quote.set(r['quote_status'] or ''); pay=self.form_field(comm,'Payment Status',0,2,['Not Applicable','Pending','Part Paid','Paid']); pay.set(r['payment_status'] or 'Not Applicable'); svc=self.form_field(comm,'Service Charge',2,0); svc.insert(0,str(r['service_charge'] or '')); parts=self.form_field(comm,'Parts Charge',2,1); parts.insert(0,str(r['parts_charge'] or '')); qa=self.form_field(comm,'Quote Amount',2,2); qa.insert(0,str(r['quote_amount'] or ''))
+        comm.grid_columnconfigure((0,1,2),weight=1)
+        foc=self.form_field(comm,'Billing Decision',0,0,['','FOC','Chargeable']); foc.set(r['foc_chargeable'] or '')
+        quote=self.form_field(comm,'Quotation / Approval Status',0,1,['','Quotation Sent','No Quotation - Verbal Discussion','Estimate Shared by Phone','Estimate Shared by Email/WhatsApp','Quotation Not Required','FOC','AMC Covered','Pending Decision']); quote.set(r['quote_status'] or '')
+        pay=self.form_field(comm,'Payment Status',0,2,['Not Applicable','To Be Invoiced','Invoice Raised','Pending','Part Paid','Paid']); pay.set(r['payment_status'] or 'Not Applicable')
+        svc=self.form_field(comm,'Service Charge',2,0); svc.insert(0,str(r['service_charge'] or ''))
+        parts=self.form_field(comm,'Parts Charge',2,1); parts.insert(0,str(r['parts_charge'] or ''))
+        qa=self.form_field(comm,'Quote Amount',2,2); qa.insert(0,str(r['quote_amount'] or ''))
+        qno=self.form_field(comm,'Quote No.',4,0); qno.insert(0,r['quote_no'] or '')
+        qdate=self.form_field(comm,'Quote Date',4,1); qdate.insert(0,r['quote_date'] or '')
+        po=self.form_field(comm,'PO / Approval Reference',4,2); po.insert(0,r['po_reference'] or '')
+        inv=self.form_field(comm,'Invoice No.',6,0); inv.insert(0,r['invoice_no'] or '')
+        invdate=self.form_field(comm,'Invoice Date',6,1); invdate.insert(0,r['invoice_date'] or '')
+        invamt=self.form_field(comm,'Invoice Amount',6,2); invamt.insert(0,str(r['invoice_amount'] or ''))
+
+        def money(x):
+            try:return float(x or 0)
+            except:return 0
+        paid_total=self.q1('SELECT COALESCE(SUM(amount),0) FROM payments WHERE service_id=?',(r['id'],))
+        balance=max(0,money(r['invoice_amount'])-paid_total)
+        summary=tk.Label(comm,text=f"Payments received: ₹{paid_total:,.2f}    Outstanding: ₹{balance:,.2f}",bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold'))
+        summary.grid(row=8,column=0,columnspan=3,sticky='w',padx=10,pady=8)
+
         def save_comm():
-            def num(x):
-                try:return float(x or 0)
-                except:return 0
-            with connect() as con:con.execute('UPDATE services SET foc_chargeable=?,quote_status=?,payment_status=?,service_charge=?,parts_charge=?,quote_amount=?,modified=? WHERE code=?',(foc.get(),quote.get(),pay.get(),num(svc.get()),num(parts.get()),num(qa.get()),now(),code))
-            messagebox.showinfo('Saved','Commercial information saved.')
-        tk.Button(comm,text='Save Commercial Update',command=save_comm,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=4,column=2,sticky='e',padx=10,pady=15)
+            if foc.get()=='FOC': pay.set('Not Applicable')
+            if foc.get()=='Chargeable' and pay.get()=='Not Applicable': return messagebox.showwarning('Payment status','Select the applicable payment status for a chargeable service.')
+            with connect() as con:
+                con.execute('''UPDATE services SET foc_chargeable=?,quote_status=?,payment_status=?,service_charge=?,parts_charge=?,quote_amount=?,quote_no=?,quote_date=?,po_reference=?,invoice_no=?,invoice_date=?,invoice_amount=?,modified=? WHERE code=?''',(foc.get(),quote.get(),pay.get(),money(svc.get()),money(parts.get()),money(qa.get()),qno.get().strip(),qdate.get().strip(),po.get().strip(),inv.get().strip(),invdate.get().strip(),money(invamt.get()),now(),code))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial update: {foc.get() or 'billing pending'} / {pay.get()}",'Office'))
+            messagebox.showinfo('Saved','Commercial information saved.'); self.show_service_detail(code)
+        tk.Button(comm,text='Save Commercial Update',command=save_comm,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=10,column=2,sticky='e',padx=10,pady=10)
+
+        discussion=tk.LabelFrame(comm,text=' Commercial discussion / approval log ',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold'))
+        discussion.grid(row=12,column=0,columnspan=3,sticky='ew',padx=10,pady=8); discussion.grid_columnconfigure((0,1,2),weight=1)
+        ddate=self.form_field(discussion,'Date / Time',0,0); ddate.insert(0,now())
+        dperson=self.form_field(discussion,'Person / Customer',0,1)
+        dmethod=self.form_field(discussion,'Method',0,2,['Phone','Email','WhatsApp','In Person','Other'])
+        damount=self.form_field(discussion,'Amount Discussed',2,0)
+        dapproved=self.form_field(discussion,'Approved?',2,1,['Pending','Yes','No']); dapproved.set('Pending')
+        dnotes=self.form_field(discussion,'Discussion Notes',2,2)
+        def add_discussion():
+            if not dnotes.get().strip(): return messagebox.showwarning('Discussion','Enter discussion / approval notes.')
+            with connect() as con:
+                con.execute('INSERT INTO commercial_discussions(service_id,discussion_date,person,method,amount,approved,notes,user) VALUES(?,?,?,?,?,?,?,?)',(r['id'],ddate.get(),dperson.get().strip(),dmethod.get(),money(damount.get()),dapproved.get(),dnotes.get().strip(),'Office'))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial discussion: {dnotes.get().strip()}",'Office'))
+            self.show_service_detail(code)
+        tk.Button(discussion,text='+ Add Discussion',command=add_discussion,bg='#EAF2FF',fg=BLUE,bd=0,padx=14,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=8)
+
+        payment=tk.LabelFrame(comm,text=' Payment entry ',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold'))
+        payment.grid(row=14,column=0,columnspan=3,sticky='ew',padx=10,pady=8); payment.grid_columnconfigure((0,1,2),weight=1)
+        pdate=self.form_field(payment,'Payment Date',0,0); pdate.insert(0,today())
+        pamount=self.form_field(payment,'Amount Received',0,1)
+        pmode=self.form_field(payment,'Mode',0,2,['Bank Transfer','Cheque','Cash','UPI','Card','Other'])
+        pref=self.form_field(payment,'Reference',2,0); pnote=self.form_field(payment,'Notes',2,1)
+        def add_payment():
+            amount=money(pamount.get())
+            if amount<=0:return messagebox.showwarning('Payment','Enter an amount greater than zero.')
+            with connect() as con:
+                con.execute('INSERT INTO payments(service_id,payment_date,amount,mode,reference,notes,user) VALUES(?,?,?,?,?,?,?)',(r['id'],pdate.get(),amount,pmode.get(),pref.get().strip(),pnote.get().strip(),'Office'))
+                total=con.execute('SELECT COALESCE(SUM(amount),0) FROM payments WHERE service_id=?',(r['id'],)).fetchone()[0]
+                invoice=money(invamt.get()) or money(r['invoice_amount'])
+                new_status='Paid' if invoice>0 and total>=invoice else 'Part Paid'
+                con.execute('UPDATE services SET amount_received=?,payment_status=?,payment_reference=?,modified=? WHERE id=?',(total,new_status,pref.get().strip(),now(),r['id']))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Payment recorded: ₹{amount:,.2f} ({pmode.get() or 'mode not specified'})",'Office'))
+            self.show_service_detail(code)
+        tk.Button(payment,text='+ Record Payment',command=add_payment,bg=GREEN,fg='white',bd=0,padx=14,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=8)
+
+        logs=tk.Frame(comm,bg=CARD); logs.grid(row=16,column=0,columnspan=3,sticky='nsew',padx=10,pady=8)
+        lcols=('Date','Type','Person / Mode','Amount','Status / Reference','Notes'); ltr=ttk.Treeview(logs,columns=lcols,show='headings',height=7)
+        for x in lcols:ltr.heading(x,text=x)
+        ltr.pack(fill='both',expand=True)
+        with connect() as con:
+            for x in con.execute('SELECT discussion_date,person,method,amount,approved,notes FROM commercial_discussions WHERE service_id=? ORDER BY id DESC',(r['id'],)):
+                ltr.insert('','end',values=(x['discussion_date'],'Discussion',x['person'] or x['method'],x['amount'],x['approved'],x['notes']))
+            for x in con.execute('SELECT payment_date,mode,amount,reference,notes FROM payments WHERE service_id=? ORDER BY id DESC',(r['id'],)):
+                ltr.insert('','end',values=(x['payment_date'],'Payment',x['mode'],x['amount'],x['reference'],' '+(x['notes'] or '')))
+
         cols=('Date','User','Update'); tr=ttk.Treeview(hist,columns=cols,show='headings'); [tr.heading(c,text=c) for c in cols]; tr.column('Date',width=150); tr.column('User',width=100); tr.column('Update',width=800); tr.pack(fill='both',expand=True,padx=12,pady=12)
         with connect() as con:
             sid=r['id']
