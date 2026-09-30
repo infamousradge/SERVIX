@@ -32,6 +32,14 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --windowed --name SERVIX app.py
 
+      - name: Smoke test packaged SERVIX startup
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath ".\\dist\\SERVIX\\SERVIX.exe" -PassThru
+          Start-Sleep -Seconds 10
+          if ($p.HasExited) { throw "SERVIX exited during startup smoke test with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+
       - name: Build professional Windows installer
         shell: pwsh
         run: |
