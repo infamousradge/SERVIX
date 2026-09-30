@@ -212,6 +212,7 @@ class Servix(tk.Tk):
         if open_fn:tr.bind('<Double-1>',lambda e:open_fn(tr.item(tr.focus(),'values')[open_col]) if tr.focus() else None)
 
     def show_engineers(self):
+        if not self.require('engineers'): return
         self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
         tk.Label(h,text='Engineers',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
         tk.Label(h,text='Engineer Master / Workload / Assignment',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
@@ -234,7 +235,7 @@ class Servix(tk.Tk):
                 if not term or term in ' '.join(str(v or '') for v in vals).lower(): tr.insert('', 'end',iid=str(r['id']),values=vals)
         q.trace_add('write',load)
         def edit(uid=None):
-            if not self.require_edit(): return
+            if not self.require('engineers') or not self.require_edit(): return
             row=None
             if uid:
                 with connect() as con: row=con.execute('SELECT * FROM engineers WHERE id=?',(uid,)).fetchone()
@@ -259,6 +260,7 @@ class Servix(tk.Tk):
         load()
 
     def show_parts_inventory(self):
+        if not self.require('parts'): return
         self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
         tk.Label(h,text='Parts / Inventory',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
         tk.Label(h,text='Parts Master / Stock Ledger / Service Usage',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
@@ -302,7 +304,7 @@ class Servix(tk.Tk):
                 audit(self.current_user['username'],'inventory',name,'UPDATE' if row else 'CREATE','Part master saved'); d.destroy(); load()
             tk.Button(d,text='Save Part',command=save,bg=BLUE,fg='white',bd=0,padx=16,pady=7).pack(pady=14)
         def movement():
-            if not self.require_edit(): return
+            if not self.require('parts') or not self.require_edit(): return
             if not tr.selection():return messagebox.showwarning('Inventory','Select a part first.')
             uid=int(tr.selection()[0]); name=tr.item(tr.selection()[0],'values')[1]
             d=tk.Toplevel(self); d.title('Stock Movement'); d.geometry('440x370'); d.configure(bg=CARD); d.transient(self); d.grab_set()
@@ -322,6 +324,7 @@ class Servix(tk.Tk):
         load()
 
     def show_documents(self):
+        if not self.require('documents'): return
         self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
         tk.Label(h,text='Documents',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
         tk.Label(h,text='Service Documents / Photos / Certificates',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
@@ -364,7 +367,7 @@ class Servix(tk.Tk):
         def service():
             if tr.selection():self.show_service_detail(tr.item(tr.selection()[0],'values')[0])
         def remove():
-            if not self.require_edit(): return
+            if not self.require('documents') or not self.require_edit(): return
             r=selected_row()
             if not r:return
             if not messagebox.askyesno('Remove document','Remove this attachment from SERVIX?\n\nThe stored file will also be deleted when possible.'):return
@@ -1084,7 +1087,7 @@ class Servix(tk.Tk):
         tk.Button(d,text='Merge Clients',command=merge,bg=RED,fg='white',bd=0,padx=18,pady=8).pack(pady=12)
 
     def client_dialog(self):
-        if not self.require_edit(): return
+        if not self.require('clients') or not self.require_edit(): return
         d=tk.Toplevel(self); d.title('Add Client'); d.geometry('560x520'); d.configure(bg=CARD); vals={}; specs=[('name','Client / Company',True),('contact','Contact Person',False),('mobile','Mobile',False),('email','Email',False),('address','Address',False),('city','City',False),('notes','Notes',False)]
         for i,(k,l,req) in enumerate(specs):tk.Label(d,text=l+(' *' if req else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=25,pady=(10,2)); vals[k]=ttk.Entry(d); vals[k].pack(fill='x',padx=25)
         def save():
@@ -1134,7 +1137,7 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def transfer_equipment_ownership(self,code):
-        if not self.require_edit(): return
+        if not self.require('equipment') or not self.require_edit(): return
         with connect() as con:
             eq=con.execute('SELECT e.*,c.code client_code,c.name client_name FROM equipment e JOIN clients c ON c.id=e.client_id WHERE e.code=?',(code,)).fetchone()
             clients=con.execute('SELECT id,code,name FROM clients WHERE id<>? ORDER BY name,code',(eq['client_id'],)).fetchall() if eq else []
@@ -1229,7 +1232,7 @@ class Servix(tk.Tk):
         for x in owners:otr.insert('','end',values=(x['effective_date'],f"{x['from_code'] or '—'} — {x['from_name'] or '—'}",f"{x['to_code']} — {x['to_name']}",x['reason'],x['username']))
 
     def equipment_dialog(self):
-        if not self.require_edit(): return
+        if not self.require('equipment') or not self.require_edit(): return
         d=tk.Toplevel(self); d.title('Add Equipment'); d.geometry('650x650'); d.configure(bg=CARD)
         with connect() as con:clients=[(r['id'],f"{r['code']} — {r['name']}") for r in con.execute('SELECT id,code,name FROM clients ORDER BY name')]
         cmap={v:k for k,v in clients}; vals={}; specs=[('client','Client',list(cmap)),('make','Make',None),('model','Model',None),('serial','Serial Number',None),('stock','Stock / External Equipment ID',None),('type','Equipment Type',None),('sold','Sold By',['Us','Other','Unknown']),('warranty','Warranty Till',None),('amc','AMC Till',None),('location','Location / Department',None)]
