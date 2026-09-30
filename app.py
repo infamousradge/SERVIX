@@ -857,16 +857,22 @@ class Servix(tk.Tk):
 
         # Calibration fields only matter when the service reason is Calibration.
         cal_tab.grid_columnconfigure((0,1),weight=1)
-        cal_date=self.form_field(cal_tab,'Calibration Date',0,0); cal_result=self.form_field(cal_tab,'Result',0,1,['Pass','Fail'])
-        cert=self.form_field(cal_tab,'Certificate No.',2,0); next_due=self.form_field(cal_tab,'Next Due Date',2,1); cal_remarks=self.form_field(cal_tab,'Remarks',4,0)
+        cal_received=self.form_field(cal_tab,'Received Date',0,0); cal_date=self.form_field(cal_tab,'Performed Date',0,1); cal_result=self.form_field(cal_tab,'Result',0,2,['Pass','Fail'])
+        cert=self.form_field(cal_tab,'Certificate No.',2,0); cert_date=self.form_field(cal_tab,'Certificate Date',2,1); next_due=self.form_field(cal_tab,'Next Due Date',2,2)
+        performed_by=self.form_field(cal_tab,'Performed By',4,0); standards=self.form_field(cal_tab,'Standards / Reference',4,1); cal_remarks=self.form_field(cal_tab,'Remarks',4,2)
         with connect() as con: cr=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
         if cr:
-            cal_date.insert(0,cr['calibration_date'] or ''); cal_result.set(cr['result'] or ''); cert.insert(0,cr['certificate_no'] or ''); next_due.insert(0,cr['next_due'] or ''); cal_remarks.insert(0,cr['remarks'] or '')
+            cal_received.insert(0,cr['received_date'] or ''); cal_date.insert(0,cr['calibration_date'] or ''); cal_result.set(cr['result'] or ''); cert.insert(0,cr['certificate_no'] or ''); cert_date.insert(0,cr['certificate_date'] or ''); next_due.insert(0,cr['next_due'] or ''); performed_by.insert(0,cr['performed_by'] or ''); standards.insert(0,cr['standards_reference'] or ''); cal_remarks.insert(0,cr['remarks'] or '')
         def save_cal():
             if not self.require_edit(): return
-            if r['reason']=='Calibration' and (not cal_date.get() or not cal_result.get()): return messagebox.showwarning('Required','Calibration Date and Result are required for calibration jobs.')
-            upsert_calibration(r['id'],cal_date.get(),cal_result.get(),cert.get(),next_due.get(),cal_remarks.get()); add_history(r['id'],f"Calibration updated: {cal_result.get() or 'details saved'}"); messagebox.showinfo('Saved','Calibration information saved.')
-        tk.Button(cal_tab,text='Save Calibration',command=save_cal,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=1,sticky='e',padx=10,pady=15)
+            if r['reason']=='Calibration' and (not cal_date.get() or not cal_result.get()): return messagebox.showwarning('Required','Performed Date and Result are required for calibration jobs.')
+            for label,value in [('Received Date',cal_received.get()),('Performed Date',cal_date.get()),('Certificate Date',cert_date.get()),('Next Due Date',next_due.get())]:
+                if value.strip():
+                    try: datetime.datetime.strptime(value.strip(),'%Y-%m-%d')
+                    except ValueError:return messagebox.showwarning(label,f'{label} must be YYYY-MM-DD.')
+            upsert_calibration(r['id'],cal_received.get(),cal_date.get(),cal_result.get(),cert.get(),cert_date.get(),next_due.get(),performed_by.get(),standards.get(),cal_remarks.get())
+            add_history(r['id'],f"Calibration updated: {cal_result.get() or 'details saved'}",self.current_user['username']); audit(self.current_user['username'],'service',code,'CALIBRATION_UPDATE',cal_result.get() or 'details saved'); messagebox.showinfo('Saved','Calibration information saved.')
+        tk.Button(cal_tab,text='Save Calibration',command=save_cal,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=2,sticky='e',padx=10,pady=15)
         if r['reason']!='Calibration': tk.Label(cal_tab,text='This service is not marked as Calibration. These fields are optional.',bg=CARD,fg=MUTED).grid(row=7,column=0,columnspan=2,pady=8)
 
         # Compact document cards aligned to the approved Service Request design.

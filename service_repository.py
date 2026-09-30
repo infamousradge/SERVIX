@@ -16,18 +16,22 @@ def add_part(service_id: int, part_no: str, description: str, qty: float, charge
         )
         con.execute("UPDATE services SET modified=? WHERE id=?", (now(), service_id))
 
-def upsert_calibration(service_id: int, calibration_date: str, result: str, certificate_no: str, next_due: str, remarks: str):
+def upsert_calibration(service_id: int, received_date: str, calibration_date: str, result: str, certificate_no: str, certificate_date: str, next_due: str, performed_by: str, standards_reference: str, remarks: str):
     with connect() as con:
         con.execute(
-            """INSERT INTO calibration(service_id,calibration_date,result,certificate_no,next_due,remarks)
-               VALUES(?,?,?,?,?,?)
+            """INSERT INTO calibration(service_id,received_date,calibration_date,result,certificate_no,certificate_date,next_due,performed_by,standards_reference,remarks)
+               VALUES(?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(service_id) DO UPDATE SET
+                 received_date=excluded.received_date,
                  calibration_date=excluded.calibration_date,
                  result=excluded.result,
                  certificate_no=excluded.certificate_no,
+                 certificate_date=excluded.certificate_date,
                  next_due=excluded.next_due,
+                 performed_by=excluded.performed_by,
+                 standards_reference=excluded.standards_reference,
                  remarks=excluded.remarks""",
-            (service_id, calibration_date, result, certificate_no.strip(), next_due, remarks.strip()),
+            (service_id, received_date, calibration_date, result, certificate_no.strip(), certificate_date, next_due, performed_by.strip(), standards_reference.strip(), remarks.strip()),
         )
         con.execute("UPDATE services SET modified=? WHERE id=?", (now(), service_id))
 
