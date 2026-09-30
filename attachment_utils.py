@@ -1,11 +1,15 @@
 from pathlib import Path
 from PIL import Image, ImageOps
 import shutil
-import uuid
+import uuid, os, sys
 
-ROOT = Path(__file__).resolve().parent
-ATTACHMENTS = ROOT / "attachments"
-ATTACHMENTS.mkdir(exist_ok=True)
+APP_ROOT = Path(__file__).resolve().parent
+if sys.platform == "win32":
+    DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home()/"AppData"/"Local"))/"SERVIX"
+else:
+    DATA_ROOT = Path.home()/".servix"
+ATTACHMENTS = DATA_ROOT / "attachments"
+ATTACHMENTS.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_IMAGE = {".jpg", ".jpeg", ".png", ".webp"}
 ALLOWED_PDF = {".pdf"}
@@ -50,7 +54,7 @@ def store_attachment(source_path: str, service_code: str) -> dict:
 
     return {
         "original_name": src.name,
-        "stored_path": str(dest.relative_to(ROOT)),
+        "stored_path": str(dest),
         "kind": kind,
         "original_size": original_size,
         "stored_size": dest.stat().st_size,
