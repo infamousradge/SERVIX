@@ -9,12 +9,21 @@ else:
 DATA=DATA_ROOT/'data'; DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'servix.db'
 
+ROLES=('Administrator','Service Manager','Service Coordinator','Commercial / Accounts','Management / View Only')
+
+def ensure_default_user():
+    with connect() as con:
+        if not con.execute('SELECT 1 FROM users LIMIT 1').fetchone():
+            ts=datetime.datetime.now().isoformat(timespec='seconds')
+            con.execute('INSERT INTO users(username,display_name,role,active,created,modified) VALUES(?,?,?,?,?,?)',('admin','Admin','Administrator',1,ts,ts))
+
 def connect():
     con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; return con
 
 def init_db():
     with connect() as con:
         con.executescript('''
+        CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created TEXT, modified TEXT);
         CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, code TEXT UNIQUE, name TEXT NOT NULL, contact TEXT, mobile TEXT, email TEXT, address TEXT, city TEXT, notes TEXT, created TEXT, modified TEXT);
         CREATE TABLE IF NOT EXISTS equipment(id INTEGER PRIMARY KEY, code TEXT UNIQUE, client_id INTEGER NOT NULL, make TEXT NOT NULL, model TEXT NOT NULL, serial TEXT, stock_id TEXT, equipment_type TEXT, sold_by TEXT, sold_date TEXT, warranty_till TEXT, amc_till TEXT, location TEXT, notes TEXT, created TEXT, modified TEXT);
         CREATE TABLE IF NOT EXISTS services(id INTEGER PRIMARY KEY, code TEXT UNIQUE, client_id INTEGER NOT NULL, equipment_id INTEGER NOT NULL, opened TEXT, request_source TEXT, reason TEXT NOT NULL, complaint TEXT NOT NULL, warranty TEXT NOT NULL, amc TEXT NOT NULL, engineer TEXT, priority TEXT, status TEXT, received_date TEXT, received_condition TEXT, diagnosis TEXT, work_done TEXT, final_result TEXT, foc_chargeable TEXT, service_charge REAL DEFAULT 0, parts_charge REAL DEFAULT 0, quote_status TEXT, quote_amount REAL DEFAULT 0, payment_status TEXT, amount_received REAL DEFAULT 0, dispatch_date TEXT, dispatch_mode TEXT, notes TEXT, modified TEXT);
@@ -58,6 +67,8 @@ def get_setting(key, default=''):
 def set_setting(key, value):
     with connect() as con:
         con.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(value)))
+
+    ensure_default_user()
 
 def next_code(prefix, table):
     mapping={'services':'service','clients':'client','equipment':'equipment'}
