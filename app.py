@@ -227,12 +227,68 @@ class Servix(tk.Tk):
         for i,(k,v) in enumerate([('Status',r['status']),('Reason',r['reason']),('Warranty',r['warranty']),('AMC',r['amc']),('Engineer',r['engineer'] or '—'),('Priority',r['priority']),('Opened',r['opened']),('Received',r['received_date'] or '—')]):
             c=self.card(ov); c.grid(row=i//4,column=i%4,sticky='nsew',padx=8,pady=8); ov.grid_columnconfigure(i%4,weight=1); tk.Label(c,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=12,pady=(9,2)); tk.Label(c,text=str(v),bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=12,pady=(0,9))
         tk.Label(ov,text='Complaint / Requirement',bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).grid(row=2,column=0,columnspan=4,sticky='w',padx=10,pady=(15,3)); t=tk.Text(ov,height=5,font=('Segoe UI',10)); t.grid(row=3,column=0,columnspan=4,sticky='ew',padx=10); t.insert('1.0',r['complaint']); t.configure(state='disabled')
-        tech.grid_columnconfigure((0,1),weight=1); diag=self.form_field(tech,'Diagnosis / Assessment',0,0); work=self.form_field(tech,'Work Done',0,1); result=self.form_field(tech,'Final Result',2,0,['Pending','Successful','Partially Resolved','Not Resolved']); stat=self.form_field(tech,'Status',2,1,['New','Assigned','Received','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Closed']); stat.set(r['status']); received=self.form_field(tech,'Equipment Received Date',4,0); received.insert(0,r['received_date'] or ''); dispatch=self.form_field(tech,'Dispatch Date',4,1); dispatch.insert(0,r['dispatch_date'] or ''); diag.insert(0,r['diagnosis'] or ''); work.insert(0,r['work_done'] or ''); result.set(r['final_result'] or 'Pending')
-        def save_tech():
+        tech.grid_columnconfigure((0,1,2),weight=1)
+        stat=self.form_field(tech,'Status',0,0,['New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled']); stat.set(r['status'])
+        pending=self.form_field(tech,'Pending Reason',0,1,['','Awaiting Customer','Awaiting Parts','Awaiting Approval','Awaiting Payment','Awaiting Engineer','Other']); pending.set(r['pending_reason'] or '')
+        eng=self.form_field(tech,'Engineer',0,2); eng.insert(0,r['engineer'] or '')
+        received=self.form_field(tech,'Equipment Received Date',2,0); received.insert(0,r['received_date'] or '')
+        condition=self.form_field(tech,'Received Condition / Accessories',2,1); condition.insert(0,r['received_condition'] or '')
+        work_date=self.form_field(tech,'Engineer Visit / Work Date',2,2); work_date.insert(0,r['work_date'] or '')
+        diag=self.form_field(tech,'Diagnosis',4,0); diag.insert(0,r['diagnosis'] or '')
+        root=self.form_field(tech,'Root Cause',4,1); root.insert(0,r['root_cause'] or '')
+        work=self.form_field(tech,'Work Performed',4,2); work.insert(0,r['work_done'] or '')
+        testing=self.form_field(tech,'Testing / Verification',6,0); testing.insert(0,r['testing_result'] or '')
+        result=self.form_field(tech,'Final Result',6,1,['Pending','Successful','Partially Resolved','Not Resolved']); result.set(r['final_result'] or 'Pending')
+        next_action=self.form_field(tech,'Next Action',6,2)
+        dispatch=self.form_field(tech,'Dispatch Date',8,0); dispatch.insert(0,r['dispatch_date'] or '')
+        dispatch_mode=self.form_field(tech,'Dispatch Mode',8,1,['','Courier','Hand','Other']); dispatch_mode.set(r['dispatch_mode'] or '')
+        dispatch_ref=self.form_field(tech,'Dispatch Reference / Remarks',8,2); dispatch_ref.insert(0,r['dispatch_reference'] or '')
+        completion=self.form_field(tech,'Service Completion Date',10,0); completion.insert(0,r['completion_date'] or '')
+        closure=self.form_field(tech,'Closure Date',10,1); closure.insert(0,r['closure_date'] or '')
+
+        update_box=tk.LabelFrame(tech,text=' Add chronological engineer / office update ',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold'))
+        update_box.grid(row=12,column=0,columnspan=3,sticky='ew',padx=10,pady=10); update_box.grid_columnconfigure((0,1,2),weight=1)
+        upd_type=self.form_field(update_box,'Update Type',0,0,['Engineer Update','Technical','Customer Communication','Follow-up','Management']); upd_type.set('Engineer Update')
+        upd_date=self.form_field(update_box,'Date / Time',0,1); upd_date.insert(0,now())
+        upd_eng=self.form_field(update_box,'Engineer',0,2); upd_eng.insert(0,r['engineer'] or '')
+        upd_diag=self.form_field(update_box,'Diagnosis / Update',2,0); upd_work=self.form_field(update_box,'Work Done',2,1); upd_next=self.form_field(update_box,'Next Action',2,2)
+        def add_update():
+            if not upd_date.get().strip() or not (upd_diag.get().strip() or upd_work.get().strip()):return messagebox.showwarning('Update required','Enter the update date/time and Diagnosis/Update or Work Done.')
             with connect() as con:
-                con.execute('UPDATE services SET diagnosis=?,work_done=?,final_result=?,status=?,received_date=?,dispatch_date=?,modified=? WHERE code=?',(diag.get(),work.get(),result.get(),stat.get(),received.get(),dispatch.get(),now(),code)); sid=con.execute('SELECT id FROM services WHERE code=?',(code,)).fetchone()[0]; con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(sid,now(),f"Office update: {stat.get()} — {work.get() or diag.get() or 'record updated'}",'Office'))
-            messagebox.showinfo('Saved','Technical update saved.'); self.show_service_detail(code)
-        tk.Button(tech,text='Save Technical Update',command=save_tech,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=1,sticky='e',padx=10,pady=15)
+                con.execute('''INSERT INTO service_updates(service_id,update_date,engineer,update_type,diagnosis,work_done,result,next_action,user) VALUES(?,?,?,?,?,?,?,?,?)''',(r['id'],upd_date.get().strip(),upd_eng.get().strip(),upd_type.get(),upd_diag.get().strip(),upd_work.get().strip(),result.get(),upd_next.get().strip(),'Office'))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"{upd_type.get()}: {upd_work.get().strip() or upd_diag.get().strip()}",'Office'))
+                con.execute('UPDATE services SET modified=? WHERE id=?',(now(),r['id']))
+            self.show_service_detail(code)
+        tk.Button(update_box,text='+ Add Update',command=add_update,bg='#EAF2FF',fg=BLUE,bd=0,padx=15,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=10)
+
+        ucols=('Date','Type','Engineer','Diagnosis / Update','Work Done','Next Action'); utr=ttk.Treeview(tech,columns=ucols,show='headings',height=6)
+        for x in ucols:utr.heading(x,text=x)
+        utr.grid(row=14,column=0,columnspan=3,sticky='nsew',padx=10,pady=8)
+        with connect() as con:
+            for x in con.execute('SELECT update_date,update_type,engineer,diagnosis,work_done,next_action FROM service_updates WHERE service_id=? ORDER BY id DESC',(r['id'],)):utr.insert('','end',values=tuple(x))
+
+        def save_tech():
+            target=stat.get(); missing=[]
+            if target=='Received' and not received.get().strip():missing.append('Equipment Received Date')
+            if target in ('Under Diagnosis','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed') and not eng.get().strip():missing.append('Engineer')
+            if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and not work.get().strip():missing.append('Work Performed')
+            if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and result.get() in ('','Pending'):missing.append('Final Result')
+            if target in ('Dispatched','Closed') and not dispatch.get().strip():missing.append('Dispatch Date')
+            if target=='Closed' and not completion.get().strip():missing.append('Service Completion Date')
+            if target=='Closed' and not closure.get().strip():missing.append('Closure Date')
+            if target=='Closed' and not r['foc_chargeable']:missing.append('FOC / Chargeable (Commercial tab)')
+            if r['reason']=='Calibration' and target=='Closed':
+                with connect() as con: cal=con.execute('SELECT calibration_date,result FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
+                if not cal or not cal['calibration_date'] or not cal['result']:missing.append('Calibration Date + Result')
+            if missing:return messagebox.showwarning('Cannot complete this stage','Complete these required items first:\n\n• '+'\n• '.join(missing))
+            if target.startswith('Awaiting') and not pending.get():return messagebox.showwarning('Pending reason','Select a Pending Reason for an Awaiting status.')
+            old_status=r['status']
+            with connect() as con:
+                con.execute('''UPDATE services SET diagnosis=?,root_cause=?,work_done=?,testing_result=?,final_result=?,status=?,pending_reason=?,engineer=?,received_date=?,received_condition=?,work_date=?,dispatch_date=?,dispatch_mode=?,dispatch_reference=?,completion_date=?,closure_date=?,modified=? WHERE code=?''',(diag.get().strip(),root.get().strip(),work.get().strip(),testing.get().strip(),result.get(),target,pending.get(),eng.get().strip(),received.get().strip(),condition.get().strip(),work_date.get().strip(),dispatch.get().strip(),dispatch_mode.get(),dispatch_ref.get().strip(),completion.get().strip(),closure.get().strip(),now(),code))
+                note=f"Status {old_status} → {target}" if old_status!=target else f"Technical record updated — {target}"
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),note,'Office'))
+            messagebox.showinfo('Saved','Service workflow updated.'); self.show_service_detail(code)
+        tk.Button(tech,text='Save Workflow Update',command=save_tech,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=16,column=2,sticky='e',padx=10,pady=15)
         # Parts: office entry only; add rows as the engineer reports work.
         pcols=('Part No.','Description','Qty','FOC / Chargeable','Amount','Remarks'); ptr=ttk.Treeview(parts_tab,columns=pcols,show='headings',height=10)
         for pc in pcols: ptr.heading(pc,text=pc)
