@@ -759,6 +759,7 @@ class Servix(tk.Tk):
         drop=self.form_field(location_tab,'Drop / Return Location',4,0); drop.insert(0,r['drop_location'] or '')
         loc_notes=self.form_field(location_tab,'Location / Movement Notes',4,1); loc_notes.insert(0,r['location_notes'] or '')
         def save_location():
+            if not self.require_edit(): return
             with connect() as con:
                 con.execute('UPDATE services SET service_location=?,pickup_location=?,drop_location=?,location_notes=?,modified=? WHERE id=?',(service_loc.get().strip(),pickup.get().strip(),drop.get().strip(),loc_notes.get().strip(),now(),r['id']))
                 con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'Location / movement details updated','Office'))
@@ -874,6 +875,7 @@ class Servix(tk.Tk):
             
             for x in docs: atr.insert('','end',values=(x['original_name'],x['kind'],human(x['original_size']),human(x['stored_size']),x['created']))
         def attach():
+            if not self.require_edit(): return
             path=filedialog.askopenfilename(filetypes=[('Images / PDF','*.jpg *.jpeg *.png *.webp *.pdf'),('All files','*.*')])
             if not path:return
             try: meta=store_attachment(path,code)
@@ -905,6 +907,7 @@ class Servix(tk.Tk):
         summary.grid(row=8,column=0,columnspan=3,sticky='w',padx=10,pady=8)
 
         def save_comm():
+            if not self.require_edit(): return
             if foc.get()=='FOC': pay.set('Not Applicable')
             if foc.get()=='Chargeable' and pay.get()=='Not Applicable': return messagebox.showwarning('Payment status','Select the applicable payment status for a chargeable service.')
             with connect() as con:
@@ -922,6 +925,7 @@ class Servix(tk.Tk):
         dapproved=self.form_field(discussion,'Approved?',2,1,['Pending','Yes','No']); dapproved.set('Pending')
         dnotes=self.form_field(discussion,'Discussion Notes',2,2)
         def add_discussion():
+            if not self.require_edit(): return
             if not dnotes.get().strip(): return messagebox.showwarning('Discussion','Enter discussion / approval notes.')
             with connect() as con:
                 con.execute('INSERT INTO commercial_discussions(service_id,discussion_date,person,method,amount,approved,notes,user) VALUES(?,?,?,?,?,?,?,?)',(r['id'],ddate.get(),dperson.get().strip(),dmethod.get(),money(damount.get()),dapproved.get(),dnotes.get().strip(),'Office'))
@@ -936,6 +940,7 @@ class Servix(tk.Tk):
         pmode=self.form_field(payment,'Mode',0,2,['Bank Transfer','Cheque','Cash','UPI','Card','Other'])
         pref=self.form_field(payment,'Reference',2,0); pnote=self.form_field(payment,'Notes',2,1)
         def add_payment():
+            if not self.require_edit(): return
             amount=money(pamount.get())
             if amount<=0:return messagebox.showwarning('Payment','Enter an amount greater than zero.')
             with connect() as con:
