@@ -48,10 +48,37 @@ class Servix(tk.Tk):
         def submit(*_):
             row=authenticate(user.get(),pwd.get())
             if not row: msg.config(text='Invalid username/password or disabled account.'); return
-            self.current_user={k:row[k] for k in ('id','username','display_name','role')}; result['ok']=True; d.destroy()
+            self.current_user={k:row[k] for k in ('id','username','display_name','role')}; audit(row['username'],'session',row['id'],'LOGIN','Successful login')
+            if row['must_change_password'] and not self.change_password(row['id'],row['username'],forced=True): return
+            result['ok']=True; d.destroy()
         tk.Button(d,text='Sign In',command=submit,bg=BLUE,fg='white',bd=0,padx=30,pady=7).pack(pady=8)
         pwd.bind('<Return>',submit); d.grab_set(); user.focus_set(); self.wait_window(d)
         return result['ok']
+
+    def change_password(self,user_id,username,forced=False):
+        result={'ok':False}; d=tk.Toplevel(self); d.title('Change Password'); d.geometry('430x300'); d.resizable(False,False); d.configure(bg=CARD)
+        tk.Label(d,text='Change Password',bg=CARD,fg=NAVY,font=('Segoe UI',14,'bold')).pack(pady=(22,5))
+        tk.Label(d,text='A new password is required before continuing.' if forced else 'Set a new SERVIX password.',bg=CARD,fg=MUTED).pack(pady=(0,12))
+        p1=ttk.Entry(d,show='*'); p2=ttk.Entry(d,show='*')
+        for label,w in [('New Password (minimum 8 characters)',p1),('Confirm Password',p2)]:
+            tk.Label(d,text=label,bg=CARD,fg=TEXT).pack(anchor='w',padx=45,pady=(7,2)); w.pack(fill='x',padx=45)
+        msg=tk.Label(d,text='',bg=CARD,fg=RED); msg.pack(pady=5)
+        def save():
+            if len(p1.get())<8: msg.config(text='Password must be at least 8 characters.'); return
+            if p1.get()!=p2.get(): msg.config(text='Passwords do not match.'); return
+            salt,digest=hash_password(p1.get())
+            with connect() as con:con.execute('UPDATE users SET password_salt=?,password_hash=?,must_change_password=0,modified=? WHERE id=?',(salt,digest,now(),user_id))
+            audit(username,'user',user_id,'PASSWORD_CHANGE','Password changed'); result['ok']=True; d.destroy()
+        tk.Button(d,text='Save Password',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=7).pack(pady=8)
+        d.protocol('WM_DELETE_WINDOW',lambda:d.destroy()); d.grab_set(); p1.focus_set(); self.wait_window(d); return result['ok']
+
+    def logout(self):
+        if not messagebox.askyesno('Sign out','Sign out of SERVIX?'): return
+        audit(self.current_user['username'],'session',self.current_user['id'],'LOGOUT','User signed out')
+        for w in self.winfo_children(): w.destroy()
+        self.current_user=None; self.withdraw()
+        if self.login(): self.deiconify(); self.build_shell(); self.show_dashboard()
+        else:self.destroy()
 
     def set_initial_password(self,user_id):
         result={'ok':False}; d=tk.Toplevel(self); d.title('Create Administrator Password'); d.geometry('430x310'); d.resizable(False,False); d.configure(bg=CARD)
@@ -104,7 +131,7 @@ class Servix(tk.Tk):
         tk.Button(searchwrap,text='⌕',command=self.global_search,bg='#EEF3F8',fg=NAVY,bd=0,font=('Segoe UI',11),padx=12).pack(side='right',fill='y')
         user=tk.Frame(top,bg='#063765'); user.pack(side='right',padx=20)
         tk.Label(user,text='●',bg='#063765',fg='#8BC8F5',font=('Segoe UI',16)).pack(side='left',padx=6)
-        uf=tk.Frame(user,bg='#063765'); uf.pack(side='left'); tk.Label(uf,text=self.current_user['display_name'],bg='#063765',fg='white',font=('Segoe UI',8,'bold')).pack(anchor='w'); tk.Label(uf,text=self.current_user['role'],bg='#063765',fg='#D6E8F7',font=('Segoe UI',6)).pack(anchor='w')
+        uf=tk.Frame(user,bg='#063765'); uf.pack(side='left'); tk.Label(uf,text=self.current_user['display_name'],bg='#063765',fg='white',font=('Segoe UI',8,'bold')).pack(anchor='w'); tk.Label(uf,text=self.current_user['role'],bg='#063765',fg='#D6E8F7',font=('Segoe UI',6)).pack(anchor='w'); tk.Button(user,text='Sign Out',command=self.logout,bg='#063765',fg='white',activebackground='#164F7C',activeforeground='white',bd=0,font=('Segoe UI',7,'underline')).pack(side='left',padx=(10,0))
         self.content=tk.Frame(right,bg=BG); self.content.pack(fill='both',expand=True)
 
     def go(self,label,cmd):
@@ -1299,14 +1326,20 @@ class Servix(tk.Tk):
                 try:
                     with connect() as con:
                         if row:
+                            removing_admin=row['role']=='Administrator' and (role.get()!='Administrator' or not active.get())
+                            if removing_admin:
+                                admins=con.execute("SELECT COUNT(*) FROM users WHERE role='Administrator' AND active=1 AND id<>?",(uid,)).fetchone()[0]
+                                if admins<1: raise ValueError('SERVIX must keep at least one active Administrator.')
                             con.execute('UPDATE users SET username=?,display_name=?,role=?,active=?,modified=? WHERE id=?',(username,name,role.get(),1 if active.get() else 0,now(),uid))
                             if password.get():
                                 if len(password.get())<8: raise ValueError('Password must be at least 8 characters.')
-                                salt,digest=hash_password(password.get()); con.execute('UPDATE users SET password_salt=?,password_hash=?,must_change_password=0 WHERE id=?',(salt,digest,uid))
+                                salt,digest=hash_password(password.get()); con.execute('UPDATE users SET password_salt=?,password_hash=?,must_change_password=1 WHERE id=?',(salt,digest,uid))
+                            audit(self.current_user['username'],'user',uid,'UPDATE',f'{username} / {role.get()} / active={active.get()}')
                         else:
                             if len(password.get())<8: raise ValueError('A password of at least 8 characters is required for a new user.')
                             salt,digest=hash_password(password.get())
-                            con.execute('INSERT INTO users(username,display_name,role,active,password_salt,password_hash,must_change_password,created,modified) VALUES(?,?,?,?,?,?,0,?,?)',(username,name,role.get(),1 if active.get() else 0,salt,digest,now(),now()))
+                            cur=con.execute('INSERT INTO users(username,display_name,role,active,password_salt,password_hash,must_change_password,created,modified) VALUES(?,?,?,?,?,?,1,?,?)',(username,name,role.get(),1 if active.get() else 0,salt,digest,now(),now()))
+                            audit(self.current_user['username'],'user',cur.lastrowid,'CREATE',f'{username} / {role.get()}')
                     d.destroy(); refresh()
                 except Exception as ex: messagebox.showerror('User not saved',str(ex),parent=d)
             tk.Button(d,text='Save User',command=save_user,bg=BLUE,fg='white',bd=0,padx=16,pady=7).pack(pady=14)
