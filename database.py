@@ -1,7 +1,12 @@
 from pathlib import Path
-import sqlite3, datetime
-ROOT=Path(__file__).resolve().parent
-DATA=ROOT/'data'; DATA.mkdir(exist_ok=True)
+import sqlite3, datetime, os, sys
+
+APP_ROOT=Path(__file__).resolve().parent
+if sys.platform == 'win32':
+    DATA_ROOT=Path(os.environ.get('LOCALAPPDATA', Path.home()/'AppData'/'Local'))/'SERVIX'
+else:
+    DATA_ROOT=Path.home()/'.servix'
+DATA=DATA_ROOT/'data'; DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'servix.db'
 
 def connect():
@@ -20,6 +25,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS parts(id INTEGER PRIMARY KEY, service_id INTEGER, part_no TEXT, description TEXT, qty REAL, chargeable TEXT, amount REAL DEFAULT 0, remarks TEXT);
         CREATE TABLE IF NOT EXISTS attachments(id INTEGER PRIMARY KEY, service_id INTEGER, original_name TEXT, stored_path TEXT, kind TEXT, original_size INTEGER, stored_size INTEGER, created TEXT);
         CREATE TABLE IF NOT EXISTS exports(id INTEGER PRIMARY KEY, export_date TEXT, from_date TEXT, to_date TEXT, filename TEXT, record_count INTEGER);
+        CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sequences(entity TEXT PRIMARY KEY, next_number INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS idx_services_code ON services(code);
         CREATE INDEX IF NOT EXISTS idx_services_status ON services(status);
         CREATE INDEX IF NOT EXISTS idx_equipment_serial ON equipment(serial);
@@ -35,11 +42,42 @@ def init_db():
         }
         for name,kind in additions.items():
             if name not in existing: con.execute(f'ALTER TABLE services ADD COLUMN {name} {kind}')
+        defaults={'service_prefix':'SRV','service_start':'1','service_digits':'6','client_prefix':'CLI','client_start':'1','client_digits':'6','equipment_prefix':'SEQ','equipment_start':'1','equipment_digits':'6'}
+        for key,value in defaults.items(): con.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(key,value))
+
+def get_setting(key, default=''):
+    with connect() as con:
+        row=con.execute('SELECT value FROM settings WHERE key=?',(key,)).fetchone()
+    return row[0] if row else default
+
+def set_setting(key, value):
+    with connect() as con:
+        con.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(value)))
 
 def next_code(prefix, table):
+    mapping={'services':'service','clients':'client','equipment':'equipment'}
+    entity=mapping.get(table,table)
     with connect() as con:
-        n=con.execute(f'SELECT COALESCE(MAX(id),0)+1 FROM {table}').fetchone()[0]
-    return f'{prefix}-{n:06d}'
+        configured_prefix=con.execute('SELECT value FROM settings WHERE key=?',(f'{entity}_prefix',)).fetchone()
+        start=con.execute('SELECT value FROM settings WHERE key=?',(f'{entity}_start',)).fetchone()
+        digits=con.execute('SELECT value FROM settings WHERE key=?',(f'{entity}_digits',)).fetchone()
+        p=(configured_prefix[0] if configured_prefix else prefix).strip() or prefix
+        start_no=max(1,int(start[0] if start else 1)); width=max(1,int(digits[0] if digits else 6))
+        row=con.execute('SELECT next_number FROM sequences WHERE entity=?',(entity,)).fetchone()
+        if row:
+            n=max(start_no,int(row[0]))
+        else:
+            # Existing installations continue above all already-issued numeric suffixes.
+            issued=[]
+            for x in con.execute(f'SELECT code FROM {table} WHERE code IS NOT NULL'):
+                try: issued.append(int(str(x[0]).rsplit('-',1)[-1]))
+                except (ValueError,TypeError): pass
+            n=max([start_no]+[x+1 for x in issued])
+        code=f'{p}-{n:0{width}d}'
+        while con.execute(f'SELECT 1 FROM {table} WHERE code=?',(code,)).fetchone():
+            n+=1; code=f'{p}-{n:0{width}d}'
+        con.execute('INSERT INTO sequences(entity,next_number) VALUES(?,?) ON CONFLICT(entity) DO UPDATE SET next_number=excluded.next_number',(entity,n+1))
+    return code
 
 def now(): return datetime.datetime.now().isoformat(timespec='minutes')
 def today(): return datetime.date.today().isoformat()

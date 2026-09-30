@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import csv
-from database import connect, init_db, next_code, now, today
+from database import connect, init_db, next_code, now, today, get_setting, set_setting
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
 
@@ -26,7 +26,7 @@ class Servix(tk.Tk):
         tk.Label(brand,text='⚙',font=('Segoe UI Symbol',31),bg=NAVY,fg=CYAN).pack(side='left',padx=(18,7))
         b=tk.Frame(brand,bg=NAVY); b.pack(side='left',pady=22); tk.Label(b,text='SERVIX',font=('Segoe UI',22,'bold'),bg=NAVY,fg='white').pack(anchor='w'); tk.Label(b,text='SERVICE MANAGEMENT',font=('Segoe UI',7),bg=NAVY,fg='#8EDFE8').pack(anchor='w')
         self.nav={}
-        items=[('Dashboard','▦',self.show_dashboard),('Service Calls','☷',self.show_services),('New Service','＋',self.show_new_service),('Clients','♙',self.show_clients),('Equipment','⚙',self.show_equipment),('Warranty & AMC','◇',self.show_warranty),('Calibration','◎',self.show_calibration),('Commercial','₹',self.show_commercial),('Reports & Export','▥',self.show_reports)]
+        items=[('Dashboard','▦',self.show_dashboard),('Service Calls','☷',self.show_services),('New Service','＋',self.show_new_service),('Clients','♙',self.show_clients),('Equipment','⚙',self.show_equipment),('Warranty & AMC','◇',self.show_warranty),('Calibration','◎',self.show_calibration),('Commercial','₹',self.show_commercial),('Reports & Export','▥',self.show_reports),('Settings','⚙',self.show_settings)]
         for label,icon,cmd in items:
             btn=tk.Button(self.sidebar,text=f'  {icon}   {label}',font=('Segoe UI',10),anchor='w',bd=0,relief='flat',bg=NAVY,fg='#DDE9F7',activebackground=NAVY2,activeforeground='white',cursor='hand2',command=lambda l=label,c=cmd:self.go(l,c)); btn.pack(fill='x',padx=10,pady=2,ipady=9); self.nav[label]=btn
         tk.Label(self.sidebar,text='SERVIX V1 • LOCAL DATABASE',font=('Segoe UI',7),bg=NAVY,fg='#7790B0').pack(side='bottom',pady=16)
@@ -487,6 +487,26 @@ class Servix(tk.Tk):
             with open(path,'w',newline='',encoding='utf-8-sig') as f:w=csv.writer(f); w.writerow(headers); w.writerows([tuple(x) for x in rows])
             messagebox.showinfo('Export complete',f'{len(rows)} service records exported.')
         tk.Button(box,text='Export Service Data to CSV',command=export,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='w',padx=18,pady=16)
+
+    def show_settings(self):
+        self.clear(); self.heading('Administration - Settings','Configure Service ID numbering before go-live')
+        card=self.card(self.content); card.pack(fill='x',padx=28,pady=(0,16))
+        tk.Label(card,text='Service ID Numbering',bg=CARD,fg=TEXT,font=('Segoe UI',13,'bold')).pack(anchor='w',padx=16,pady=(14,4))
+        row=tk.Frame(card,bg=CARD); row.pack(fill='x',padx=16,pady=12)
+        prefix=ttk.Entry(row,width=10); prefix.insert(0,get_setting('service_prefix','SRV')); prefix.pack(side='left',padx=5)
+        start=ttk.Entry(row,width=15); start.insert(0,get_setting('service_start','1')); start.pack(side='left',padx=5)
+        digits=ttk.Entry(row,width=8); digits.insert(0,get_setting('service_digits','6')); digits.pack(side='left',padx=5)
+        def save_settings():
+            try: n=max(1,int(start.get())); d=max(1,int(digits.get()))
+            except ValueError: return messagebox.showwarning('Numbering','Starting number and digits must be whole numbers.')
+            p=prefix.get().strip().upper()
+            if not p: return messagebox.showwarning('Numbering','Prefix cannot be blank.')
+            with connect() as con: issued=con.execute('SELECT COUNT(*) FROM services').fetchone()[0]
+            old=int(get_setting('service_start','1'))
+            if issued and n!=old: return messagebox.showwarning('Protected setting','Service IDs already exist, so the starting number is locked.')
+            set_setting('service_prefix',p); set_setting('service_start',n); set_setting('service_digits',d)
+            messagebox.showinfo('Saved','Service ID numbering saved.')
+        tk.Button(card,text='Save Service ID Numbering',command=save_settings,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=16,pady=(0,16))
 
     def global_search(self):
         q=self.search.get().strip()
