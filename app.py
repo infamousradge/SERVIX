@@ -149,16 +149,58 @@ class Servix(tk.Tk):
         if open_fn:tr.bind('<Double-1>',lambda e:open_fn(tr.item(tr.focus(),'values')[open_col]) if tr.focus() else None)
 
     def show_engineers(self):
-        metrics=[('Active Services',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status NOT IN ('Closed','Cancelled')"),BLUE,'Assigned work'),('Unassigned',self.q1("SELECT COUNT(*) FROM services WHERE (engineer IS NULL OR engineer='') AND status NOT IN ('Closed','Cancelled')"),ORANGE,'Needs assignment'),('Engineers',self.q1("SELECT COUNT(DISTINCT engineer) FROM services WHERE engineer!=''"),GREEN,'Recorded names'),('Closed Jobs',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status='Closed'"),GREEN,'Completed')]
-        self._register_screen('Engineers','Engineer Workload / Assignment Register',metrics,('Engineer','Active Jobs','Closed Jobs','Latest Service','Latest Status'),(210,100,100,130,150),"""SELECT s.engineer,SUM(CASE WHEN s.status NOT IN ('Closed','Cancelled') THEN 1 ELSE 0 END),SUM(CASE WHEN s.status='Closed' THEN 1 ELSE 0 END),MAX(s.code),MAX(s.status) FROM services s WHERE COALESCE(s.engineer,'')!='' GROUP BY s.engineer ORDER BY 2 DESC,s.engineer""",'Search engineer')
+        self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text='Engineers',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text='Engineer Master / Workload / Assignment',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
+        for x in [('Active Engineers',self.q1("SELECT COUNT(*) FROM engineers WHERE active=1"),GREEN,'Available master records'),('Active Services',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status NOT IN ('Closed','Cancelled')"),BLUE,'Assigned work'),('Unassigned',self.q1("SELECT COUNT(*) FROM services WHERE (engineer IS NULL OR engineer='') AND status NOT IN ('Closed','Cancelled')"),ORANGE,'Needs assignment'),('Closed Jobs',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status='Closed'"),GREEN,'Completed')]: self.metric(m,*x)
+        bar=self.card(body); bar.pack(fill='x',pady=(0,6)); q=tk.StringVar(); ttk.Entry(bar,textvariable=q,width=30).pack(side='left',padx=10,pady=7)
+        card=self.card(body); card.pack(fill='both',expand=True); cols=('Code','Engineer','Mobile','Email','Specialization','Active Jobs','Closed Jobs','Status'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        for c,w in zip(cols,(90,180,120,190,170,90,90,90)): tr.heading(c,text=c); tr.column(c,width=w,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            tr.delete(*tr.get_children()); term=q.get().strip().lower()
+            with connect() as con: rows=con.execute("""SELECT e.id,e.code,e.name,e.mobile,e.email,e.specialization,
+              SUM(CASE WHEN s.status NOT IN ('Closed','Cancelled') THEN 1 ELSE 0 END) active_jobs,
+              SUM(CASE WHEN s.status='Closed' THEN 1 ELSE 0 END) closed_jobs,e.active
+              FROM engineers e LEFT JOIN services s ON lower(trim(s.engineer))=lower(trim(e.name))
+              GROUP BY e.id ORDER BY e.active DESC,e.name""").fetchall()
+            for r in rows:
+                vals=(r['code'],r['name'],r['mobile'],r['email'],r['specialization'],r['active_jobs'],r['closed_jobs'],'Active' if r['active'] else 'Disabled')
+                if not term or term in ' '.join(str(v or '') for v in vals).lower(): tr.insert('', 'end',iid=str(r['id']),values=vals)
+        q.trace_add('write',load)
+        def edit(uid=None):
+            row=None
+            if uid:
+                with connect() as con: row=con.execute('SELECT * FROM engineers WHERE id=?',(uid,)).fetchone()
+            d=tk.Toplevel(self); d.title('Engineer Master'); d.geometry('500x510'); d.configure(bg=CARD); d.transient(self); d.grab_set(); vals={}
+            for key,label in [('name','Engineer Name *'),('mobile','Mobile'),('email','Email'),('specialization','Specialization'),('notes','Notes')]:
+                tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24,pady=(9,2)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=24)
+                if row: vals[key].insert(0,row[key] or '')
+            active=tk.BooleanVar(value=bool(row['active']) if row else True); tk.Checkbutton(d,text='Active engineer',variable=active,bg=CARD).pack(anchor='w',padx=20,pady=10)
+            def save():
+                name=vals['name'].get().strip()
+                if not name:return messagebox.showwarning('Required','Engineer Name is required.',parent=d)
+                ts=now()
+                with connect() as con:
+                    if row: con.execute('UPDATE engineers SET name=?,mobile=?,email=?,specialization=?,active=?,notes=?,modified=? WHERE id=?',(name,vals['mobile'].get().strip(),vals['email'].get().strip(),vals['specialization'].get().strip(),1 if active.get() else 0,vals['notes'].get().strip(),ts,uid))
+                    else:
+                        n=con.execute('SELECT COALESCE(MAX(id),0)+1 FROM engineers').fetchone()[0]; code=f"ENG-{n:04d}"
+                        con.execute('INSERT INTO engineers(code,name,mobile,email,specialization,active,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?)',(code,name,vals['mobile'].get().strip(),vals['email'].get().strip(),vals['specialization'].get().strip(),1 if active.get() else 0,vals['notes'].get().strip(),ts,ts))
+                audit(self.current_user['username'],'engineer',name,'UPDATE' if row else 'CREATE','Engineer master saved'); d.destroy(); load()
+            tk.Button(d,text='Save Engineer',command=save,bg=BLUE,fg='white',bd=0,padx=16,pady=7).pack(pady=14)
+        tk.Button(bar,text='+ New Engineer',command=lambda:edit(),bg=BLUE,fg='white',bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Button(bar,text='Edit Selected',command=lambda:edit(int(tr.selection()[0])) if tr.selection() else None,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        load()
 
     def show_parts_inventory(self):
         metrics=[('Parts Entries',self.q1('SELECT COUNT(*) FROM parts'),BLUE,'Service usage'),('Chargeable Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='Chargeable'"),ORANGE,'Billable'),('FOC Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='FOC'"),GREEN,'No charge'),('Services With Parts',self.q1("SELECT COUNT(DISTINCT service_id) FROM parts"),BLUE,'Recorded jobs')]
-        self._register_screen('Parts / Inventory','Parts Used Across Service Work',metrics,('Service ID','Client','Equipment','Part / Description','Qty','Billing'),(110,190,110,260,70,100),"""SELECT s.code,c.name,e.code,p.part_name,p.qty,p.chargeable FROM parts p JOIN services s ON s.id=p.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY p.id DESC""",'Search service / client / equipment / part',0,self.show_service_detail)
+        self._register_screen('Parts / Inventory','Parts Used Across Service Work',metrics,('Service ID','Client','Equipment','Part / Description','Qty','Billing'),(110,190,110,260,70,100),"""SELECT s.code,c.name,e.code,p.description,p.qty,p.chargeable FROM parts p JOIN services s ON s.id=p.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY p.id DESC""",'Search service / client / equipment / part',0,self.show_service_detail)
 
     def show_documents(self):
-        metrics=[('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE,'Images and PDFs'),('Calibration Certificates',self.q1("SELECT COUNT(*) FROM calibration WHERE certificate_no!=''"),GREEN,'Certificate records'),('Services With Files',self.q1("SELECT COUNT(DISTINCT service_id) FROM attachments"),ORANGE,'Documented jobs'),('PDF Files',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(filename) LIKE '%.pdf'"),BLUE,'Stored documents')]
-        self._register_screen('Documents','Service Images / PDFs / Certificates',metrics,('Service ID','Client','Equipment','File Name','Type','Added'),(110,190,110,300,90,150),"""SELECT s.code,c.name,e.code,a.filename,CASE WHEN lower(a.filename) LIKE '%.pdf' THEN 'PDF' ELSE 'Image' END,a.added_at FROM attachments a JOIN services s ON s.id=a.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY a.id DESC""",'Search service / client / equipment / filename',0,self.show_service_detail)
+        metrics=[('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE,'Images and PDFs'),('Calibration Certificates',self.q1("SELECT COUNT(*) FROM calibration WHERE certificate_no!=''"),GREEN,'Certificate records'),('Services With Files',self.q1("SELECT COUNT(DISTINCT service_id) FROM attachments"),ORANGE,'Documented jobs'),('PDF Files',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(original_name) LIKE '%.pdf'"),BLUE,'Stored documents')]
+        self._register_screen('Documents','Service Images / PDFs / Certificates',metrics,('Service ID','Client','Equipment','File Name','Type','Added'),(110,190,110,300,90,150),"""SELECT s.code,c.name,e.code,a.original_name,CASE WHEN lower(a.original_name) LIKE '%.pdf' THEN 'PDF' ELSE 'Image' END,a.created FROM attachments a JOIN services s ON s.id=a.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY a.id DESC""",'Search service / client / equipment / filename',0,self.show_service_detail)
 
     def show_dashboard(self):
         self.clear()
