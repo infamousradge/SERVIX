@@ -43,7 +43,7 @@ def init_db():
         additions={
             'pending_reason':'TEXT','work_date':'TEXT','root_cause':'TEXT','testing_result':'TEXT',
             'completion_date':'TEXT','closure_date':'TEXT','dispatch_reference':'TEXT',
-            'quote_no':'TEXT','quote_date':'TEXT','po_reference':'TEXT','invoice_no':'TEXT','invoice_date':'TEXT','invoice_amount':'REAL DEFAULT 0','payment_reference':'TEXT'
+            'next_action':'TEXT','cancel_reason':'TEXT','quote_no':'TEXT','quote_date':'TEXT','po_reference':'TEXT','invoice_no':'TEXT','invoice_date':'TEXT','invoice_amount':'REAL DEFAULT 0','payment_reference':'TEXT'
         }
         for name,kind in additions.items():
             if name not in existing: con.execute(f'ALTER TABLE services ADD COLUMN {name} {kind}')
