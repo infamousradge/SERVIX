@@ -383,8 +383,8 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:open_file());load()
 
     def show_dashboard(self):
-        self.clear()
-        kpi=tk.Frame(self.content,bg=BG); kpi.pack(fill='x',padx=10,pady=(10,7))
+        self.clear(); self.section_header('Dashboard','Service Operations / Alerts / Management Overview')
+        kpi=tk.Frame(self.content,bg=BG); kpi.pack(fill='x',padx=10,pady=(8,7))
         data=[
             ('Open Calls',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled')"),'#83BCF4',''),
             ('Overdue',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"),'#FF999B',''),
@@ -450,8 +450,9 @@ class Servix(tk.Tk):
         if item:self.show_service_detail(tree.item(item,'values')[0])
 
     def show_services(self):
-        self.clear(); self.heading('Service Calls','Search, review and update complete service history',self.show_new_service,'+ New Service')
-        bar=self.card(self.content); bar.pack(fill='x',padx=28,pady=(0,12)); tk.Label(bar,text='Status',bg=CARD,fg=MUTED).pack(side='left',padx=(15,5),pady=12); st=ttk.Combobox(bar,width=20,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened']); st.set('All'); st.pack(side='left'); holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=28,pady=(0,22))
+        self.clear(); h=self.section_header('Service Calls','Search / Review / Complete Service History')
+        if self.can_edit(): tk.Button(h,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',font=('Segoe UI',8,'bold'),bd=0,padx=13,pady=4).pack(side='right',padx=10,pady=5)
+        bar=self.card(self.content); bar.pack(fill='x',padx=10,pady=(8,6)); tk.Label(bar,text='Status',bg=CARD,fg=MUTED).pack(side='left',padx=(15,5),pady=12); st=ttk.Combobox(bar,width=20,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened']); st.set('All'); st.pack(side='left'); holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=10,pady=(0,8))
         tree=self.service_tree(holder)
         def filter_it(*_):
             for i in tree.get_children():tree.delete(i)
@@ -1447,9 +1448,7 @@ class Servix(tk.Tk):
     def show_data_management(self):
         if not self.require('data'): return
         self.clear()
-        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
-        tk.Label(h,text='Data Export / Import',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
-        tk.Label(h,text='Backup / Restore / Portable CSV Export',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        self.section_header('Data Export / Import','Backup / Restore / Portable CSV Export')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         def panel(title,desc):
             p=self.card(body); p.pack(fill='x',pady=(0,7))
