@@ -1,5 +1,5 @@
 from pathlib import Path
-import sqlite3, datetime, os, sys
+import sqlite3, datetime, os, sys, hashlib, hmac, secrets
 
 APP_ROOT=Path(__file__).resolve().parent
 if sys.platform == 'win32':
@@ -10,6 +10,32 @@ DATA=DATA_ROOT/'data'; DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'servix.db'
 
 ROLES=('Administrator','Service Manager','Service Coordinator','Commercial / Accounts','Management / View Only')
+ROLE_PERMISSIONS={
+    'Administrator': {'*'},
+    'Service Manager': {'dashboard','services','clients','equipment','warranty','engineers','parts','documents','reports'},
+    'Service Coordinator': {'dashboard','services','clients','equipment','warranty','engineers','parts','documents'},
+    'Commercial / Accounts': {'dashboard','services','clients','equipment','commercial','reports'},
+    'Management / View Only': {'dashboard','services','clients','equipment','warranty','engineers','parts','commercial','documents','reports'},
+}
+PBKDF2_ITERATIONS=310000
+
+def hash_password(password, salt=None):
+    salt=salt or secrets.token_hex(16)
+    digest=hashlib.pbkdf2_hmac('sha256',password.encode('utf-8'),bytes.fromhex(salt),PBKDF2_ITERATIONS).hex()
+    return salt,digest
+
+def verify_password(password,salt,digest):
+    if not salt or not digest:return False
+    _,candidate=hash_password(password,salt)
+    return hmac.compare_digest(candidate,digest)
+
+def authenticate(username,password):
+    with connect() as con: row=con.execute('SELECT * FROM users WHERE lower(username)=lower(?) AND active=1',(username.strip(),)).fetchone()
+    return row if row and verify_password(password,row['password_salt'],row['password_hash']) else None
+
+def can(role,permission):
+    allowed=ROLE_PERMISSIONS.get(role,set())
+    return '*' in allowed or permission in allowed
 
 def ensure_default_user():
     with connect() as con:
@@ -23,7 +49,7 @@ def connect():
 def init_db():
     with connect() as con:
         con.executescript('''
-        CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created TEXT, modified TEXT);
+        CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, display_name TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, password_salt TEXT, password_hash TEXT, must_change_password INTEGER NOT NULL DEFAULT 1, created TEXT, modified TEXT);
         CREATE TABLE IF NOT EXISTS clients(id INTEGER PRIMARY KEY, code TEXT UNIQUE, name TEXT NOT NULL, contact TEXT, mobile TEXT, email TEXT, address TEXT, city TEXT, notes TEXT, created TEXT, modified TEXT);
         CREATE TABLE IF NOT EXISTS equipment(id INTEGER PRIMARY KEY, code TEXT UNIQUE, client_id INTEGER NOT NULL, make TEXT NOT NULL, model TEXT NOT NULL, serial TEXT, stock_id TEXT, equipment_type TEXT, sold_by TEXT, sold_date TEXT, warranty_till TEXT, amc_till TEXT, location TEXT, notes TEXT, created TEXT, modified TEXT);
         CREATE TABLE IF NOT EXISTS services(id INTEGER PRIMARY KEY, code TEXT UNIQUE, client_id INTEGER NOT NULL, equipment_id INTEGER NOT NULL, opened TEXT, request_source TEXT, reason TEXT NOT NULL, complaint TEXT NOT NULL, warranty TEXT NOT NULL, amc TEXT NOT NULL, engineer TEXT, priority TEXT, status TEXT, received_date TEXT, received_condition TEXT, diagnosis TEXT, work_done TEXT, final_result TEXT, foc_chargeable TEXT, service_charge REAL DEFAULT 0, parts_charge REAL DEFAULT 0, quote_status TEXT, quote_amount REAL DEFAULT 0, payment_status TEXT, amount_received REAL DEFAULT 0, dispatch_date TEXT, dispatch_mode TEXT, notes TEXT, modified TEXT);
@@ -47,6 +73,9 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_parts_service ON parts(service_id);
         CREATE INDEX IF NOT EXISTS idx_attachments_service ON attachments(service_id);
         ''')
+        user_existing={r[1] for r in con.execute("PRAGMA table_info(users)")}
+        for name,kind in {'password_salt':'TEXT','password_hash':'TEXT','must_change_password':'INTEGER NOT NULL DEFAULT 1'}.items():
+            if name not in user_existing: con.execute(f'ALTER TABLE users ADD COLUMN {name} {kind}')
         # Safe additive migrations for databases created by earlier SERVIX builds.
         existing={r[1] for r in con.execute("PRAGMA table_info(services)")}
         additions={
@@ -58,6 +87,7 @@ def init_db():
             if name not in existing: con.execute(f'ALTER TABLE services ADD COLUMN {name} {kind}')
         defaults={'service_prefix':'SRV','service_start':'1','service_digits':'6','client_prefix':'CLI','client_start':'1','client_digits':'6','equipment_prefix':'SEQ','equipment_start':'1','equipment_digits':'6','company_short_name':'HAC','company_name':'HAC','system_title':'Service Management System','system_subtitle':'Service   |   Calibration   |   Warranty   |   AMC','company_logo_path':''}
         for key,value in defaults.items(): con.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(key,value))
+    ensure_default_user()
 
 def get_setting(key, default=''):
     with connect() as con:
@@ -68,7 +98,6 @@ def set_setting(key, value):
     with connect() as con:
         con.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(value)))
 
-    ensure_default_user()
 
 def next_code(prefix, table):
     mapping={'services':'service','clients':'client','equipment':'equipment'}
