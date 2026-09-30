@@ -494,7 +494,7 @@ class Servix(tk.Tk):
                 icon='PDF' if str(x['kind']).lower()=='pdf' or str(x['original_name']).lower().endswith('.pdf') else 'PHOTO'
                 tk.Label(tile,text=icon,bg='#EAF4FF',fg=RED if icon=='PDF' else BLUE,font=('Segoe UI',8,'bold')).pack(fill='x',pady=(8,4))
                 tk.Label(tile,text=x['original_name'],bg='#F8FBFE',fg=TEXT,font=('Segoe UI',7),wraplength=100,justify='center').pack(padx=4)
-            add=tk.Button(cards,text='+\nAdd Files',command=attach if 'attach' in locals() else lambda:None,bg='white',fg=BLUE,bd=1,relief='solid',font=('Segoe UI',8,'bold'),width=10,height=4); add.pack(side='left',padx=3)
+            
             for x in docs: atr.insert('','end',values=(x['original_name'],x['kind'],human(x['original_size']),human(x['stored_size']),x['created']))
         def attach():
             path=filedialog.askopenfilename(filetypes=[('Images / PDF','*.jpg *.jpeg *.png *.webp *.pdf'),('All files','*.*')])
@@ -502,7 +502,7 @@ class Servix(tk.Tk):
             try: meta=store_attachment(path,code)
             except Exception as ex:return messagebox.showerror('Attachment',str(ex))
             add_attachment(r['id'],meta); add_history(r['id'],f"Attachment added: {meta['original_name']}"); refresh_att()
-        tk.Button(att_tab,text='+ Add Image / PDF',command=attach,bg=BLUE,fg='white',bd=0,padx=14,pady=6).pack(anchor='e',padx=8,pady=(0,8))
+        tk.Button(cards,text='+\nAdd Files',command=attach,bg='white',fg=BLUE,bd=1,relief='solid',font=('Segoe UI',8,'bold'),width=10,height=4).pack(side='left',padx=3)
         refresh_att()
 
         comm.grid_columnconfigure((0,1,2),weight=1)
