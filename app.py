@@ -6,7 +6,7 @@ import shutil
 import zipfile
 import json
 import datetime
-from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT, ROLES, authenticate, hash_password, can
+from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT, ROLES, authenticate, hash_password, can, audit, repeat_complaints
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
 from service_report import create_service_report
@@ -369,13 +369,15 @@ class Servix(tk.Tk):
                 if not owner or owner[0]!=cid:return messagebox.showwarning('Equipment mismatch','Selected equipment does not belong to the selected client. Refresh the selection and try again.')
                 if reason.get()=='Breakdown / Complaint':
                     serial=con.execute('SELECT serial FROM equipment WHERE id=?',(eid,)).fetchone()[0]
-                    prev=con.execute("""SELECT code,opened,complaint FROM services WHERE equipment_id=? AND reason='Breakdown / Complaint'
-                                        AND id<>(SELECT COALESCE(MAX(id),0)+1 FROM services) ORDER BY id DESC LIMIT 1""",(eid,)).fetchone()
-                    if prev and not messagebox.askyesno('Previous complaint found',f"This device has a previous breakdown: {prev['code']} ({prev['opened']}).\n\nPrevious complaint: {prev['complaint']}\n\nCreate a new Service ID?",parent=self):return
+                    matches=repeat_complaints(eid,text)
+                    if matches:
+                        prev=matches[0]; days=get_setting('repeat_complaint_days','60')
+                        if not messagebox.askyesno('Repeat complaint warning',f"This equipment has a similar complaint within {days} days: {prev['code']} ({prev['opened']}).\n\nPrevious complaint: {prev['complaint']}\n\nCreate a new Service ID anyway?",parent=self):return
                 sc=next_code('SRV','services'); ts=now()
                 cur=con.execute('''INSERT INTO services(code,client_id,equipment_id,opened,request_source,reason,complaint,warranty,amc,engineer,priority,status,payment_status,modified)
                                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(sc,cid,eid,ts,source.get(),reason.get(),text,warranty.get(),amc.get(),engineer.get().strip(),priority.get() or 'Normal',status.get() or 'New','Not Applicable',ts))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(cur.lastrowid,ts,'Service call created from office intake','Office'))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(cur.lastrowid,ts,'Service call created from office intake',self.current_user['username']))
+            audit(self.current_user['username'],'service',sc,'CREATE','Service call created')
             messagebox.showinfo('Service created',f'{sc} created successfully.'); self.show_service_detail(sc)
         tk.Button(actions,text='Create Service ID',command=save,bg=BLUE,fg='white',font=('Segoe UI',10,'bold'),bd=0,padx=22,pady=11).pack(side='right')
 
@@ -1063,6 +1065,8 @@ class Servix(tk.Tk):
                             if p.is_file(): z.write(p,'attachments/'+str(p.relative_to(att)))
                     manifest={'product':'SERVIX','created':datetime.datetime.now().isoformat(timespec='seconds'),'database':'data/servix.db','attachments':True}
                     z.writestr('manifest.json',json.dumps(manifest,indent=2))
+                with connect() as con: con.execute('INSERT INTO backup_history(backup_date,filename,status,notes) VALUES(?,?,?,?)',(now(),dest,'Success','Complete manual backup'))
+                audit(self.current_user['username'],'backup',Path(dest).name,'CREATE','Complete backup created')
                 messagebox.showinfo('Backup complete','SERVIX backup created successfully.\n\n'+dest)
             except Exception as ex: messagebox.showerror('Backup failed',str(ex))
         tk.Button(b,text='Create Complete Backup',command=backup,bg=BLUE,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
@@ -1080,6 +1084,7 @@ class Servix(tk.Tk):
                     for n in z.namelist():
                         if n.startswith('attachments/') and not n.endswith('/'):
                             rel=Path(n).relative_to('attachments'); target=att/rel; target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(z.read(n))
+                audit(self.current_user['username'],'backup',Path(src).name,'RESTORE','Validated SERVIX backup restored')
                 messagebox.showinfo('Restore complete','Backup restored. Please close and reopen SERVIX before continuing.')
             except Exception as ex: messagebox.showerror('Restore failed',str(ex))
         tk.Button(r,text='Restore Backup',command=restore,bg='#EAF2FF',fg=BLUE,bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
@@ -1099,9 +1104,14 @@ class Servix(tk.Tk):
                                 cols=[r[1] for r in con.execute('PRAGMA table_info("'+table.replace('"','""')+'")')]; w.writerow(cols)
                             z.writestr('tables/'+table+'.csv',out.getvalue())
                         z.writestr('manifest.json',json.dumps({'product':'SERVIX','created':datetime.datetime.now().isoformat(timespec='seconds'),'tables':tables},indent=2))
+                audit(self.current_user['username'],'export',Path(dest).name,'CREATE','All database tables exported to CSV ZIP')
                 messagebox.showinfo('Export complete','Portable data export created successfully.\n\n'+dest)
             except Exception as ex: messagebox.showerror('Export failed',str(ex))
-        tk.Button(x,text='Export All Tables (CSV ZIP)',command=export_all,bg=GREEN,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
+        tk.Button(x,text='Export All Tables (CSV ZIP)',command=export_all,bg=GREEN,fg='white',bd=0,padx=14,pady=(0,12))
+        hist=panel('Backup History','Recent successful backup packages recorded by this installation.')
+        with connect() as con: backups=con.execute('SELECT backup_date,filename,status FROM backup_history ORDER BY id DESC LIMIT 5').fetchall()
+        for row in backups: tk.Label(hist,text=f"{row['backup_date']}  •  {row['status']}  •  {Path(row['filename']).name}",bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=2)
+        if not backups: tk.Label(hist,text='No backup history recorded yet.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(2,10))
 
     def show_users(self):
         if not self.require('admin'): return
@@ -1198,6 +1208,15 @@ class Servix(tk.Tk):
             set_setting('service_prefix',p); set_setting('service_start',n); set_setting('service_digits',d)
             messagebox.showinfo('Saved','Service ID numbering saved.')
         tk.Button(card,text='Save Service ID Numbering',command=save_settings,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=16,pady=(0,16))
+        quality=self.card(self.content); quality.pack(fill='x',padx=10,pady=(0,10))
+        tk.Label(quality,text='Data Quality / Repeat Complaint',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=16,pady=(10,4))
+        qr=tk.Frame(quality,bg=CARD); qr.pack(fill='x',padx=16,pady=(4,12)); tk.Label(qr,text='Repeat complaint lookback (days)',bg=CARD,fg=MUTED).pack(side='left')
+        repeat_days=ttk.Entry(qr,width=8); repeat_days.insert(0,get_setting('repeat_complaint_days','60')); repeat_days.pack(side='left',padx=8)
+        def save_quality():
+            try: days=max(1,int(repeat_days.get()))
+            except ValueError: return messagebox.showwarning('Data Quality','Repeat complaint days must be a whole number.')
+            set_setting('repeat_complaint_days',days); audit(self.current_user['username'],'settings','repeat_complaint_days','UPDATE',str(days)); messagebox.showinfo('Saved','Repeat complaint detection window saved.')
+        tk.Button(qr,text='Save',command=save_quality,bg=BLUE,fg='white',bd=0,padx=14,pady=6).pack(side='left')
 
     def global_search(self):
         q=self.search.get().strip()

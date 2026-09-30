@@ -64,6 +64,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sequences(entity TEXT PRIMARY KEY, next_number INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS commercial_discussions(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, discussion_date TEXT NOT NULL, person TEXT, contact TEXT, method TEXT, amount REAL DEFAULT 0, approved TEXT, notes TEXT, user TEXT);
         CREATE TABLE IF NOT EXISTS payments(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, payment_date TEXT NOT NULL, amount REAL NOT NULL DEFAULT 0, mode TEXT, reference TEXT, notes TEXT, user TEXT);
+        CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY, event_date TEXT NOT NULL, username TEXT, entity_type TEXT NOT NULL, entity_id TEXT, action TEXT NOT NULL, details TEXT);
+        CREATE TABLE IF NOT EXISTS backup_history(id INTEGER PRIMARY KEY, backup_date TEXT NOT NULL, filename TEXT NOT NULL, status TEXT NOT NULL, notes TEXT);
         CREATE INDEX IF NOT EXISTS idx_commercial_discussions_service ON commercial_discussions(service_id);
         CREATE INDEX IF NOT EXISTS idx_payments_service ON payments(service_id);
         CREATE INDEX IF NOT EXISTS idx_services_code ON services(code);
@@ -85,7 +87,7 @@ def init_db():
         }
         for name,kind in additions.items():
             if name not in existing: con.execute(f'ALTER TABLE services ADD COLUMN {name} {kind}')
-        defaults={'service_prefix':'SRV','service_start':'1','service_digits':'6','client_prefix':'CLI','client_start':'1','client_digits':'6','equipment_prefix':'SEQ','equipment_start':'1','equipment_digits':'6','company_short_name':'HAC','company_name':'HAC','system_title':'Service Management System','system_subtitle':'Service   |   Calibration   |   Warranty   |   AMC','company_logo_path':''}
+        defaults={'service_prefix':'SRV','service_start':'1','service_digits':'6','client_prefix':'CLI','client_start':'1','client_digits':'6','equipment_prefix':'SEQ','equipment_start':'1','equipment_digits':'6','company_short_name':'HAC','company_name':'HAC','system_title':'Service Management System','system_subtitle':'Service   |   Calibration   |   Warranty   |   AMC','company_logo_path':'','repeat_complaint_days':'60','auto_backup_enabled':'1'}
         for key,value in defaults.items(): con.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(key,value))
     ensure_default_user()
 
@@ -98,6 +100,18 @@ def set_setting(key, value):
     with connect() as con:
         con.execute('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',(key,str(value)))
 
+
+def audit(username,entity_type,entity_id,action,details=''):
+    with connect() as con: con.execute('INSERT INTO audit_log(event_date,username,entity_type,entity_id,action,details) VALUES(?,?,?,?,?,?)',(now(),username or '',entity_type,str(entity_id or ''),action,details))
+
+def repeat_complaints(equipment_id, complaint='', days=None):
+    days=int(days or get_setting('repeat_complaint_days','60') or 60)
+    words={w.lower() for w in complaint.split() if len(w)>3}
+    with connect() as con:
+        rows=con.execute("""SELECT code,opened,complaint,status FROM services WHERE equipment_id=? AND reason='Breakdown / Complaint'
+                            AND date(opened)>=date('now',?) ORDER BY id DESC""",(equipment_id,f'-{days} day')).fetchall()
+    if not words:return rows
+    return [r for r in rows if not words or words.intersection({w.lower() for w in (r['complaint'] or '').split() if len(w)>3})]
 
 def next_code(prefix, table):
     mapping={'services':'service','clients':'client','equipment':'equipment'}
