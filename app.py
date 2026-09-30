@@ -587,11 +587,28 @@ class Servix(tk.Tk):
             for x in con.execute('SELECT event_date,user,note FROM history WHERE service_id=? ORDER BY id DESC',(sid,)):tr.insert('','end',values=tuple(x))
 
     def show_clients(self):
-        self.clear(); self.heading('Clients','Client database created naturally from service activity')
-        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=(0,22)); cols=('Client ID','Name','Contact','Mobile','Email','City'); tr=ttk.Treeview(card,columns=cols,show='headings'); [tr.heading(c,text=c) for c in cols]; tr.pack(fill='both',expand=True,padx=12,pady=12)
-        with connect() as con:
-            for r in con.execute('SELECT code,name,contact,mobile,email,city FROM clients ORDER BY id DESC'):tr.insert('','end',values=tuple(r))
-        tk.Button(card,text='+ Add Client',bg=BLUE,fg='white',bd=0,padx=15,pady=8,command=self.client_dialog).place(relx=1,rely=0,x=-20,y=20,anchor='ne')
+        self.clear()
+        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text='Clients',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text='Client Master / Service Customers',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
+        tk.Label(tools,text='Search Client',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,5),pady=8)
+        q=tk.StringVar(); ent=ttk.Entry(tools,textvariable=q,width=42); ent.pack(side='left',pady=7)
+        tk.Label(tools,text='Name / Contact / Mobile / Email / City',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='left',padx=8)
+        tk.Button(tools,text='+ New Client',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.client_dialog).pack(side='right',padx=8,pady=5)
+        card=self.card(body); card.pack(fill='both',expand=True)
+        cols=('Client ID','Client Name','Contact Person','Mobile','Email','City'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        widths=(90,230,160,120,220,130)
+        for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            for i in tr.get_children(): tr.delete(i)
+            term='%'+q.get().strip()+'%'
+            with connect() as con:
+                rows=con.execute('SELECT code,name,contact,mobile,email,city FROM clients WHERE ?="" OR name LIKE ? OR contact LIKE ? OR mobile LIKE ? OR email LIKE ? OR city LIKE ? ORDER BY id DESC',(q.get().strip(),term,term,term,term,term)).fetchall()
+            for r in rows: tr.insert('','end',values=tuple(r))
+        q.trace_add('write',load); load()
         tr.bind('<Double-1>',lambda e:self.show_client_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_client_360(self,code):
@@ -640,11 +657,28 @@ class Servix(tk.Tk):
         tk.Button(d,text='Save Client',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=20)
 
     def show_equipment(self):
-        self.clear(); self.heading('Equipment','Permanent SERVIX identity for every serviced device')
-        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=(0,22)); cols=('SERVIX ID','Client','Make','Model','Serial','Stock / External ID','Warranty Till','AMC Till'); tr=ttk.Treeview(card,columns=cols,show='headings'); [tr.heading(c,text=c) for c in cols]; tr.pack(fill='both',expand=True,padx=12,pady=12)
-        with connect() as con:
-            for r in con.execute('SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC'):tr.insert('','end',values=tuple(r))
-        tk.Button(card,text='+ Add Equipment',bg=BLUE,fg='white',bd=0,padx=15,pady=8,command=self.equipment_dialog).place(relx=1,rely=0,x=-20,y=20,anchor='ne')
+        self.clear()
+        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text='Equipment',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text='Permanent Equipment Master / Service History',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
+        tk.Label(tools,text='Search Equipment',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,5),pady=8)
+        q=tk.StringVar(); ttk.Entry(tools,textvariable=q,width=42).pack(side='left',pady=7)
+        tk.Label(tools,text='Equipment ID / Client / Make / Model / Serial No.',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='left',padx=8)
+        tk.Button(tools,text='+ New Equipment',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.equipment_dialog).pack(side='right',padx=8,pady=5)
+        card=self.card(body); card.pack(fill='both',expand=True)
+        cols=('Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        widths=(100,220,120,120,140,110,105,105)
+        for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            for i in tr.get_children(): tr.delete(i)
+            term='%'+q.get().strip()+'%'
+            with connect() as con:
+                rows=con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till FROM equipment e LEFT JOIN clients c ON c.id=e.client_id WHERE ?="" OR e.code LIKE ? OR c.name LIKE ? OR e.make LIKE ? OR e.model LIKE ? OR e.serial LIKE ? ORDER BY e.id DESC''',(q.get().strip(),term,term,term,term,term)).fetchall()
+            for r in rows: tr.insert('','end',values=tuple(r))
+        q.trace_add('write',load); load()
         tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_equipment_360(self,code):
