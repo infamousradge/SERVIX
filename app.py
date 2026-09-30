@@ -6,6 +6,7 @@ import shutil
 from database import connect, init_db, next_code, now, today, get_setting, set_setting
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
+from service_report import create_service_report
 
 ROOT=Path(__file__).resolve().parent
 NAVY='#071A3D'; NAVY2='#0C2B5B'; BLUE='#0876D1'; CYAN='#11B6D8'; GREEN='#48C774'; BG='#F3F7FB'; CARD='#FFFFFF'; TEXT='#142033'; MUTED='#6E7B8D'; BORDER='#DDE6F0'; RED='#D9534F'; ORANGE='#F0A23B'
@@ -302,6 +303,18 @@ class Servix(tk.Tk):
         summary=tk.Frame(report_tab,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); summary.pack(fill='x',padx=18,pady=16)
         for label,value in [('Service ID',code),('Client',r['client']),('Equipment',f"{r['make']} {r['model']} / {r['serial'] or 'No serial'}"),('Complaint',r['complaint']),('Work Done',r['work_done'] or 'Pending'),('Final Result',r['final_result'] or 'Pending')]:
             row=tk.Frame(summary,bg='#F7FAFD'); row.pack(fill='x',padx=12,pady=5); tk.Label(row,text=label,width=16,anchor='w',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',8,'bold')).pack(side='left'); tk.Label(row,text=str(value),anchor='w',bg='#F7FAFD',fg=TEXT,font=('Segoe UI',8),wraplength=850,justify='left').pack(side='left',fill='x',expand=True)
+        def export_service_pdf():
+            filename=filedialog.asksaveasfilename(defaultextension='.pdf',initialfile=f"{code}-Service-Report.pdf",filetypes=[('PDF Report','*.pdf')])
+            if not filename:return
+            try:
+                with connect() as con:
+                    report_parts=con.execute('SELECT * FROM parts WHERE service_id=? ORDER BY id',(r['id'],)).fetchall()
+                    report_cal=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
+                create_service_report(filename,r,cli,eq,report_parts,report_cal,{'name':get_setting('company_name','HAC'),'title':get_setting('system_title','Service Management System')})
+                with connect() as con: con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'PDF Service Report generated','Office'))
+                messagebox.showinfo('Service Report','PDF service report generated successfully.')
+            except Exception as ex: messagebox.showerror('Service Report',f'Could not generate report:\n{ex}')
+        tk.Button(report_tab,text='Generate PDF Service Report',command=export_service_pdf,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=18,pady=(0,16))
         tk.Label(close_tab,text='Completion & Closure',bg=CARD,fg=TEXT,font=('Segoe UI',14,'bold')).pack(anchor='w',padx=18,pady=(18,4))
         tk.Label(close_tab,text='Closure is controlled from Work Done & Testing. Required fields are checked before Closed status is accepted.',bg=CARD,fg=MUTED,font=('Segoe UI',9)).pack(anchor='w',padx=18)
         checks=tk.Frame(close_tab,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); checks.pack(fill='x',padx=18,pady=16)
