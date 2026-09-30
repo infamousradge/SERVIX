@@ -323,10 +323,11 @@ class Servix(tk.Tk):
         checks=tk.Frame(close_tab,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); checks.pack(fill='x',padx=18,pady=16)
         closure_checks=[('Engineer assigned',bool(r['engineer'])),('Work date recorded',bool(r['work_date'])),('Work performed recorded',bool(r['work_done'])),('Final result recorded',bool(r['final_result'] and r['final_result']!='Pending')),('Billing decision',bool(r['foc_chargeable'])),('Completion date',bool(r['completion_date']))]
         for label,ok in closure_checks: tk.Label(checks,text=('✓  ' if ok else '○  ')+label,bg='#F7FAFD',fg=GREEN if ok else ORANGE,font=('Segoe UI',9,'bold' if ok else 'normal')).pack(anchor='w',padx=14,pady=5)
-        ov.grid_columnconfigure((0,1,2),weight=1); ov.grid_rowconfigure(0,weight=1)
-        client_box=tk.LabelFrame(ov,text=' 1. Client Information ',bg=CARD,fg=BLUE,font=('Segoe UI',9,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); client_box.grid(row=0,column=0,sticky='nsew',padx=(8,4),pady=8)
-        equip_box=tk.LabelFrame(ov,text=' 2. Equipment Information ',bg=CARD,fg=BLUE,font=('Segoe UI',9,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); equip_box.grid(row=0,column=1,sticky='nsew',padx=4,pady=8)
-        service_box=tk.LabelFrame(ov,text=' 3. Service Details ',bg=CARD,fg=BLUE,font=('Segoe UI',9,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); service_box.grid(row=0,column=2,sticky='nsew',padx=(4,8),pady=8)
+        ov.grid_columnconfigure((0,1,2,3),weight=1); ov.grid_rowconfigure(0,weight=1)
+        client_box=tk.LabelFrame(ov,text=' 1. Client Information ',bg=CARD,fg=BLUE,font=('Segoe UI',8,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); client_box.grid(row=0,column=0,sticky='nsew',padx=(5,2),pady=5)
+        equip_box=tk.LabelFrame(ov,text=' 2. Equipment Information ',bg=CARD,fg=BLUE,font=('Segoe UI',8,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); equip_box.grid(row=0,column=1,sticky='nsew',padx=2,pady=5)
+        service_box=tk.LabelFrame(ov,text=' 3. Service Details ',bg=CARD,fg=BLUE,font=('Segoe UI',8,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); service_box.grid(row=0,column=2,sticky='nsew',padx=2,pady=5)
+        cal_summary=tk.LabelFrame(ov,text=' 4. Calibration Details ',bg=CARD,fg=BLUE,font=('Segoe UI',8,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); cal_summary.grid(row=0,column=3,sticky='nsew',padx=(2,5),pady=5)
         def readonly_row(parent,label,value,row):
             tk.Label(parent,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',7)).grid(row=row,column=0,sticky='w',padx=(10,5),pady=4)
             e=ttk.Entry(parent,font=('Segoe UI',8)); e.grid(row=row,column=1,sticky='ew',padx=(0,10),pady=4); e.insert(0,str(value or '—')); e.configure(state='readonly'); parent.grid_columnconfigure(1,weight=1)
@@ -339,7 +340,14 @@ class Servix(tk.Tk):
         tk.Button(equip_box,text='View Full Equipment History',command=lambda:self.show_equipment_360(eq['code']),bg='#EAF4FF',fg=BLUE,bd=0,padx=10,pady=6).grid(row=9,column=0,columnspan=2,sticky='ew',padx=10,pady=8)
         for rr,(lab,val) in enumerate([('Date of Complaint',r['opened']),('Reason for Service',r['reason']),('Priority',r['priority']),('Assigned Engineer',r['engineer'] or 'Unassigned'),('Current Status',r['status']),('Warranty',r['warranty']),('AMC',r['amc'])]): readonly_row(service_box,lab,val,rr)
         tk.Label(service_box,text='Complaint Details',bg=CARD,fg=MUTED,font=('Segoe UI',7)).grid(row=8,column=0,sticky='nw',padx=(10,5),pady=4)
-        complaint=tk.Text(service_box,height=4,font=('Segoe UI',8),wrap='word'); complaint.grid(row=8,column=1,sticky='ew',padx=(0,10),pady=4); complaint.insert('1.0',r['complaint']); complaint.configure(state='disabled')
+        complaint=tk.Text(service_box,height=4,font=('Segoe UI',8),wrap='word'); complaint.grid(row=8,column=1,sticky='ew',padx=(0,10),pady=4); complaint.insert('1.0',r['complaint']); complaint.configure(state='disabled')        with connect() as con: cal_head=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
+        if r['reason']=='Calibration':
+            cal_rows=[('Received Date',cal_head['received_date'] if cal_head else ''),('Performed Date',cal_head['calibration_date'] if cal_head else ''),('Result',cal_head['result'] if cal_head else 'Pending'),('Certificate No.',cal_head['certificate_no'] if cal_head else ''),('Certificate Date',cal_head['certificate_date'] if cal_head else ''),('Next Due',cal_head['next_due'] if cal_head else ''),('Performed By',cal_head['performed_by'] if cal_head else '')]
+            for rr,(lab,val) in enumerate(cal_rows): readonly_row(cal_summary,lab,val,rr)
+            tk.Button(cal_summary,text='Open Calibration Details',command=lambda:tabs.select(cal_tab),bg='#EAF4FF',fg=BLUE,bd=0,padx=8,pady=5).grid(row=8,column=0,columnspan=2,sticky='ew',padx=8,pady=8)
+        else:
+            tk.Label(cal_summary,text='Shown when Reason for Service is Calibration',bg=CARD,fg=MUTED,font=('Segoe UI',8),wraplength=180,justify='left').pack(anchor='nw',padx=12,pady=14)
+
         tech.grid_columnconfigure((0,1,2),weight=1)
         stage=tk.Frame(tech,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); stage.grid(row=-1,column=0,columnspan=3,sticky='ew',padx=10,pady=(10,4))
         tk.Label(stage,text='WORKFLOW CONTROL',bg='#F7FAFD',fg=BLUE,font=('Segoe UI',8,'bold')).pack(side='left',padx=12,pady=8)
