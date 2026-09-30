@@ -216,6 +216,13 @@ class Servix(tk.Tk):
         source=self.form_field(form,'Request Source (optional)',6,1,['Phone','Email','WhatsApp','Walk-in','Other'])
         status=self.form_field(form,'Status',6,2,['New','Assigned','Received']); status.set('New')
 
+        info=tk.Frame(form,bg='#F7FAFD',highlightthickness=1,highlightbackground='#D6E6F3'); info.grid(row=7,column=0,columnspan=3,sticky='ew',padx=10,pady=(3,3))
+        for i in range(3): info.grid_columnconfigure(i,weight=1)
+        tk.Label(info,text='Client: select an existing customer or use + Quick Add Client',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',7),anchor='w').grid(row=0,column=0,sticky='ew',padx=8,pady=5)
+        tk.Label(info,text='Equipment: filtered to the selected client; serial identity is preserved',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',7),anchor='w').grid(row=0,column=1,sticky='ew',padx=8,pady=5)
+        cal_hint=tk.Label(info,text='Calibration fields become available after the service is created',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',7),anchor='w')
+        cal_hint.grid(row=0,column=2,sticky='ew',padx=8,pady=5)
+
         cmap={}; emap={}
         def refresh_lists(select_client_id=None,select_equipment_id=None):
             nonlocal cmap,emap
@@ -239,7 +246,7 @@ class Servix(tk.Tk):
             refresh_lists()
         client.bind('<<ComboboxSelected>>',on_client)
 
-        quick=tk.Frame(form,bg=CARD); quick.grid(row=6,column=0,columnspan=3,sticky='ew',padx=10,pady=(2,8))
+        quick=tk.Frame(form,bg=CARD); quick.grid(row=8,column=0,columnspan=3,sticky='ew',padx=10,pady=(2,8))
         tk.Label(quick,text='Not in SERVIX yet?',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(side='left',padx=(0,10))
 
         def quick_client():
@@ -297,13 +304,13 @@ class Servix(tk.Tk):
         tk.Button(quick,text='+ Quick Add Equipment',command=quick_equipment,bg='#EAF7F8',fg='#087A84',bd=0,padx=12,pady=7).pack(side='left',padx=4)
         refresh_lists()
 
-        tk.Label(form,text='Complaint / Requirement *',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=7,column=0,sticky='w',padx=10,pady=(8,3))
-        complaint=tk.Text(form,height=5,font=('Segoe UI',10),relief='solid',bd=1); complaint.grid(row=8,column=0,columnspan=3,sticky='ew',padx=10,pady=(0,10))
+        tk.Label(form,text='Complaint / Requirement *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).grid(row=10,column=0,sticky='w',padx=10,pady=(6,3))
+        complaint=tk.Text(form,height=4,font=('Segoe UI',8),relief='solid',bd=1); complaint.grid(row=11,column=0,columnspan=3,sticky='ew',padx=10,pady=(0,8))
 
-        guide=self.card(self.content); guide.pack(fill='x',padx=28,pady=(0,10))
+        guide=self.card(self.content); guide.pack(fill='x',padx=10,pady=(0,6))
         tk.Label(guide,text='* Mandatory   •   Engineer / Priority are important   •   Request Source is optional   •   Quote, charges, payment, work done and dispatch are completed later when relevant.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=10)
 
-        actions=tk.Frame(self.content,bg=BG); actions.pack(fill='x',padx=28)
+        actions=tk.Frame(self.content,bg=BG); actions.pack(fill='x',padx=10)
         def save():
             cid=cmap.get(client.get()); eid=emap.get(equip.get()); text=complaint.get('1.0','end').strip()
             if not cid or not eid or not reason.get() or not warranty.get() or not amc.get() or not text:return messagebox.showwarning('Mandatory information','Complete Client, Equipment, Reason, Complaint, Warranty and AMC.')
