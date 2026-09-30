@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import csv
-from database import connect, init_db, next_code, now, today
+from database import connect, init_db, next_code, now, today, get_setting, set_setting
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
 
