@@ -18,6 +18,9 @@ class Servix(tk.Tk):
         self.style.configure('Treeview.Heading',font=('Segoe UI',10,'bold'),background='#EAF1F8',foreground=TEXT,padding=8)
         self.style.map('Treeview',background=[('selected','#D9ECFF')],foreground=[('selected',TEXT)])
         self.style.configure('TEntry',padding=7); self.style.configure('TCombobox',padding=6)
+        self.style.configure('TNotebook',background=BG,borderwidth=0)
+        self.style.configure('TNotebook.Tab',font=('Segoe UI',9,'bold'),padding=(16,9),background='#EAF1F8',foreground=MUTED)
+        self.style.map('TNotebook.Tab',background=[('selected','white')],foreground=[('selected',BLUE)])
         self.page=None; self.build_shell(); self.show_dashboard()
 
     def build_shell(self):
@@ -59,7 +62,7 @@ class Servix(tk.Tk):
         self.metric(row,'Open Service Calls',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled')"),BLUE,'Active workload')
         self.metric(row,'Awaiting Action',self.q1("SELECT COUNT(*) FROM services WHERE status IN ('Awaiting Customer','Awaiting Approval','Awaiting Parts')"),ORANGE,'Customer / approval / parts')
         self.metric(row,'Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"),RED,'Commercial follow-up')
-        self.metric(row,'Calibration',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration' AND status!='Closed'"),GREEN,'Open calibration jobs')
+        self.metric(row,'Calibration Due / Overdue',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due IS NOT NULL AND next_due!='' AND date(next_due)<=date('now','+30 day')"),GREEN,'Next 30 days + overdue')
         lower=tk.Frame(self.content,bg=BG); lower.pack(fill='both',expand=True,padx=28,pady=18)
         recent=self.card(lower); recent.pack(side='left',fill='both',expand=True,padx=(0,9)); tk.Label(recent,text='Recent Service Calls',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=18,pady=15); self.service_tree(recent,8)
         side=self.card(lower); side.pack(side='left',fill='y',padx=(9,0)); tk.Label(side,text='Quick Assessment',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=18,pady=15)
@@ -539,8 +542,53 @@ class Servix(tk.Tk):
         self.clear(); self.heading(title,subtitle); holder=tk.Frame(self.content,bg=BG); holder.pack(fill='x',padx=22)
         for name,val,color in rows:self.metric(holder,name,val,color)
         box=self.card(self.content); box.pack(fill='both',expand=True,padx=28,pady=18); tk.Label(box,text='Use Service Calls and Equipment records for detailed entries. More dedicated controls will be added in the next build.',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(pady=35)
-    def show_warranty(self):self.simple_summary('Warranty & AMC','Simple coverage overview',[('Under Warranty',self.q1("SELECT COUNT(*) FROM services WHERE warranty='Yes'"),GREEN),('Under AMC',self.q1("SELECT COUNT(*) FROM services WHERE amc='Yes'"),BLUE),('Out of Warranty',self.q1("SELECT COUNT(*) FROM services WHERE warranty='No'"),ORANGE)])
-    def show_calibration(self):self.simple_summary('Calibration','Calibration jobs are separated from breakdown history',[('Open Calibration',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration' AND status!='Closed'"),BLUE),('Completed',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration' AND status='Closed'"),GREEN)])
+    def show_warranty(self):
+        self.clear(); self.heading('Warranty & AMC','Equipment coverage and upcoming expiry alerts')
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
+        self.metric(metrics,'Warranty Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"),ORANGE,'Next 30 days')
+        self.metric(metrics,'AMC Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+30 day')"),BLUE,'Next 30 days')
+        self.metric(metrics,'Warranty Expired',self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)<date('now')"),RED,'Equipment master')
+        self.metric(metrics,'AMC Expired',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)<date('now')"),RED,'Equipment master')
+        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=18)
+        tk.Label(card,text='Coverage Register',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=14,pady=(14,6))
+        cols=('SERVIX ID','Client','Make','Model','Serial','Warranty Till','AMC Till','Location'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        for x,w in zip(cols,[115,210,120,150,130,115,115,160]):tr.heading(x,text=x); tr.column(x,width=w,anchor='w')
+        tr.pack(fill='both',expand=True,padx=14,pady=(4,14))
+        with connect() as con:
+            for r in con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.warranty_till,e.amc_till,e.location FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
+                                    WHERE (e.warranty_till IS NOT NULL AND e.warranty_till!='') OR (e.amc_till IS NOT NULL AND e.amc_till!='')
+                                    ORDER BY CASE WHEN e.amc_till='' OR e.amc_till IS NULL THEN e.warranty_till ELSE e.amc_till END'''):tr.insert('','end',values=tuple(r))
+        tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+    def show_calibration(self):
+        self.clear(); self.heading('Calibration Control','Due dates, overdue certificates and complete calibration service history')
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
+        self.metric(metrics,'Open Jobs',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration' AND status NOT IN ('Closed','Cancelled')"),BLUE,'Active calibration work')
+        self.metric(metrics,'Due in 30 Days',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)>=date('now') AND date(next_due)<=date('now','+30 day')"),ORANGE,'Plan customer follow-up')
+        self.metric(metrics,'Overdue',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<date('now')"),RED,'Requires attention')
+        self.metric(metrics,'Passed',self.q1("SELECT COUNT(*) FROM calibration WHERE result='Pass'"),GREEN,'Recorded calibration results')
+        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=18)
+        head=tk.Frame(card,bg=CARD); head.pack(fill='x',padx=14,pady=(12,4))
+        tk.Label(head,text='Calibration Register',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(side='left')
+        flt=ttk.Combobox(head,state='readonly',width=18,values=['All','Overdue','Due in 30 Days','Open Jobs']); flt.set('All'); flt.pack(side='right')
+        cols=('Service ID','Client','Equipment','Make / Model','Serial','Calibration Date','Result','Certificate','Next Due','Status'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        widths=[115,180,115,180,120,110,80,120,110,120]
+        for x,w in zip(cols,widths):tr.heading(x,text=x); tr.column(x,width=w,anchor='w')
+        tr.pack(fill='both',expand=True,padx=14,pady=(6,14))
+        def load(*_):
+            for i in tr.get_children():tr.delete(i)
+            where="s.reason='Calibration'"; choice=flt.get()
+            if choice=='Overdue': where+=" AND cal.next_due!='' AND date(cal.next_due)<date('now')"
+            elif choice=='Due in 30 Days': where+=" AND cal.next_due!='' AND date(cal.next_due)>=date('now') AND date(cal.next_due)<=date('now','+30 day')"
+            elif choice=='Open Jobs': where+=" AND s.status NOT IN ('Closed','Cancelled')"
+            sql=f'''SELECT s.code,c.name,e.code,e.make,e.model,e.serial,cal.calibration_date,cal.result,cal.certificate_no,cal.next_due,s.status
+                    FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id
+                    LEFT JOIN calibration cal ON cal.service_id=s.id WHERE {where}
+                    ORDER BY CASE WHEN cal.next_due IS NULL OR cal.next_due='' THEN 1 ELSE 0 END, cal.next_due, s.id DESC'''
+            with connect() as con:
+                for r in con.execute(sql):tr.insert('','end',values=(r['code'],r['name'],r['code'] if False else r[2],f"{r['make']} {r['model']}",r['serial'],r['calibration_date'],r['result'],r['certificate_no'],r['next_due'],r['status']))
+        flt.bind('<<ComboboxSelected>>',load); load()
+        tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+
     def show_commercial(self):self.simple_summary('Commercial & Payments','Quotation, verbal discussion, FOC/chargeable and payment tracking',[('Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Pending'"),RED),('Paid',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Paid'"),GREEN),('FOC',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='FOC'"),BLUE),('Chargeable',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='Chargeable'"),ORANGE)])
 
     def show_reports(self):
