@@ -640,7 +640,9 @@ class Servix(tk.Tk):
                     report_parts=con.execute('SELECT * FROM parts WHERE service_id=? ORDER BY id',(r['id'],)).fetchall()
                     report_cal=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
                 create_service_report(filename,r,cli,eq,report_parts,report_cal,{'name':get_setting('company_name','HAC'),'title':get_setting('system_title','Service Management System')})
-                with connect() as con: con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'PDF Service Report generated','Office'))
+                if self.can_edit():
+                    with connect() as con: con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'PDF Service Report generated',self.current_user['username']))
+                    audit(self.current_user['username'],'service',code,'REPORT_GENERATED',Path(filename).name)
                 messagebox.showinfo('Service Report','PDF service report generated successfully.')
             except Exception as ex: messagebox.showerror('Service Report',f'Could not generate report:\n{ex}')
         tk.Button(report_tab,text='Generate PDF Service Report',command=export_service_pdf,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='e',padx=18,pady=(0,16))
@@ -1392,7 +1394,9 @@ class Servix(tk.Tk):
             if not path:return
             with open(path,'w',newline='',encoding='utf-8-sig') as fh:
                 w=csv.writer(fh); w.writerow(cols); w.writerows([tuple(r) for r in current])
-            with connect() as con:con.execute('INSERT INTO exports(export_date,from_date,to_date,filename,record_count) VALUES(?,?,?,?,?)',(now(),from_e.get().strip(),to_e.get().strip(),path,len(current)))
+            if self.can_edit():
+                with connect() as con:con.execute('INSERT INTO exports(export_date,from_date,to_date,filename,record_count) VALUES(?,?,?,?,?)',(now(),from_e.get().strip(),to_e.get().strip(),path,len(current)))
+                audit(self.current_user['username'],'reports','service_csv','EXPORT',f"{len(current)} records; {Path(path).name}")
             messagebox.showinfo('Export complete',f'{len(current)} filtered service records exported.')
         tk.Button(top,text='Export Current View to CSV',command=export,bg=GREEN,fg='white',bd=0,padx=14,pady=7).pack(side='right')
         tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
