@@ -6,7 +6,7 @@ import shutil
 import zipfile
 import json
 import datetime
-from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT, ROLES
+from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT, ROLES, authenticate, hash_password, can
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
 from service_report import create_service_report
@@ -29,7 +29,53 @@ class Servix(tk.Tk):
         self.style.configure('TNotebook',background=BG,borderwidth=0)
         self.style.configure('TNotebook.Tab',font=('Segoe UI',8,'bold'),padding=(9,5),background='#EAF1F8',foreground=MUTED)
         self.style.map('TNotebook.Tab',background=[('selected','white')],foreground=[('selected',BLUE)])
-        self.current_user={'username':'admin','display_name':'Admin','role':'Administrator'}; self.page=None; self.build_shell(); self.show_dashboard()
+        self.current_user=None; self.withdraw()
+        if not self.login(): self.destroy(); return
+        self.deiconify(); self.page=None; self.build_shell(); self.show_dashboard()
+
+    def login(self):
+        with connect() as con:
+            admin=con.execute("SELECT * FROM users WHERE username='admin'").fetchone()
+        if admin and not admin['password_hash']:
+            if not self.set_initial_password(admin['id']): return False
+        result={'ok':False}
+        d=tk.Toplevel(self); d.title('SERVIX Login'); d.geometry('390x300'); d.resizable(False,False); d.configure(bg=CARD)
+        tk.Label(d,text='SERVIX',bg=CARD,fg=NAVY,font=('Segoe UI',22,'bold')).pack(pady=(25,2))
+        tk.Label(d,text='Sign in to Service Management System',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(pady=(0,14))
+        tk.Label(d,text='Username',bg=CARD,fg=TEXT).pack(anchor='w',padx=45); user=ttk.Entry(d); user.pack(fill='x',padx=45,pady=(3,9)); user.insert(0,'admin')
+        tk.Label(d,text='Password',bg=CARD,fg=TEXT).pack(anchor='w',padx=45); pwd=ttk.Entry(d,show='*'); pwd.pack(fill='x',padx=45,pady=(3,10))
+        msg=tk.Label(d,text='',bg=CARD,fg=RED,font=('Segoe UI',7)); msg.pack()
+        def submit(*_):
+            row=authenticate(user.get(),pwd.get())
+            if not row: msg.config(text='Invalid username/password or disabled account.'); return
+            self.current_user={k:row[k] for k in ('id','username','display_name','role')}; result['ok']=True; d.destroy()
+        tk.Button(d,text='Sign In',command=submit,bg=BLUE,fg='white',bd=0,padx=30,pady=7).pack(pady=8)
+        pwd.bind('<Return>',submit); d.grab_set(); user.focus_set(); self.wait_window(d)
+        return result['ok']
+
+    def set_initial_password(self,user_id):
+        result={'ok':False}; d=tk.Toplevel(self); d.title('Create Administrator Password'); d.geometry('430x310'); d.resizable(False,False); d.configure(bg=CARD)
+        tk.Label(d,text='Secure Administrator Account',bg=CARD,fg=NAVY,font=('Segoe UI',14,'bold')).pack(pady=(22,5))
+        tk.Label(d,text='Create the first SERVIX administrator password.\nNo default password is stored in the application.',bg=CARD,fg=MUTED,justify='center').pack(pady=(0,12))
+        tk.Label(d,text='New Password (minimum 8 characters)',bg=CARD,fg=TEXT).pack(anchor='w',padx=45); p1=ttk.Entry(d,show='*'); p1.pack(fill='x',padx=45,pady=(3,9))
+        tk.Label(d,text='Confirm Password',bg=CARD,fg=TEXT).pack(anchor='w',padx=45); p2=ttk.Entry(d,show='*'); p2.pack(fill='x',padx=45,pady=(3,8))
+        msg=tk.Label(d,text='',bg=CARD,fg=RED); msg.pack()
+        def save():
+            if len(p1.get())<8: msg.config(text='Password must be at least 8 characters.'); return
+            if p1.get()!=p2.get(): msg.config(text='Passwords do not match.'); return
+            salt,digest=hash_password(p1.get())
+            with connect() as con: con.execute('UPDATE users SET password_salt=?,password_hash=?,must_change_password=0,modified=? WHERE id=?',(salt,digest,now(),user_id))
+            result['ok']=True; d.destroy()
+        tk.Button(d,text='Create Password',command=save,bg=BLUE,fg='white',bd=0,padx=20,pady=7).pack(pady=10)
+        d.grab_set(); p1.focus_set(); self.wait_window(d); return result['ok']
+
+    def permitted(self,permission):
+        return bool(self.current_user and can(self.current_user['role'],permission))
+
+    def require(self,permission):
+        if self.permitted(permission): return True
+        messagebox.showwarning('Access restricted','Your SERVIX role does not have permission for this area.')
+        return False
 
     def build_shell(self):
         self.sidebar=tk.Frame(self,bg='#063765',width=168); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
@@ -44,8 +90,9 @@ class Servix(tk.Tk):
         else: tk.Label(brand,text=get_setting('company_short_name','HAC'),font=('Segoe UI',25,'bold'),bg='#073A69',fg='white').pack(anchor='w',padx=20,pady=(5,0))
         tk.Label(brand,text='SERVICE MANAGEMENT',font=('Segoe UI',6,'bold'),bg='#073A69',fg='#B9D9F4').pack(anchor='w',padx=21)
         self.nav={}
-        items=[('Dashboard','⌂',self.show_dashboard),('Service Calls','⌕',self.show_services),('Clients','♟',self.show_clients),('Equipment','▣',self.show_equipment),('Warranty & AMC','◆',self.show_warranty),('Engineers','♟',self.show_engineers),('Parts / Inventory','↕',self.show_parts_inventory),('Commercial & Payments','₹',self.show_commercial),('Documents','▧',self.show_documents),('Reports & Analytics','▥',self.show_reports),('Data Export / Import','⇄',self.show_data_management),('Administration','⚙',self.show_settings)]
-        for label,icon,cmd in items:
+        items=[('Dashboard','⌂',self.show_dashboard,'dashboard'),('Service Calls','⌕',self.show_services,'services'),('Clients','♟',self.show_clients,'clients'),('Equipment','▣',self.show_equipment,'equipment'),('Warranty & AMC','◆',self.show_warranty,'warranty'),('Engineers','♟',self.show_engineers,'engineers'),('Parts / Inventory','↕',self.show_parts_inventory,'parts'),('Commercial & Payments','₹',self.show_commercial,'commercial'),('Documents','▧',self.show_documents,'documents'),('Reports & Analytics','▥',self.show_reports,'reports'),('Data Export / Import','⇄',self.show_data_management,'data'),('Administration','⚙',self.show_settings,'admin')]
+        items=[x for x in items if self.permitted(x[3])]
+        for label,icon,cmd,_perm in items:
             btn=tk.Button(self.sidebar,text=f'  {icon}   {label}',font=('Segoe UI',8),anchor='w',bd=0,relief='flat',bg='#063765',fg='white',activebackground='#0876D1',activeforeground='white',cursor='hand2',command=lambda l=label,c=cmd:self.go(l,c)); btn.pack(fill='x',pady=0,ipady=7); self.nav[label]=btn
         right=tk.Frame(self,bg=BG); right.pack(side='left',fill='both',expand=True)
         top=tk.Frame(right,bg='#063765',height=53); top.pack(fill='x'); top.pack_propagate(False)
@@ -57,7 +104,7 @@ class Servix(tk.Tk):
         tk.Button(searchwrap,text='⌕',command=self.global_search,bg='#EEF3F8',fg=NAVY,bd=0,font=('Segoe UI',11),padx=12).pack(side='right',fill='y')
         user=tk.Frame(top,bg='#063765'); user.pack(side='right',padx=20)
         tk.Label(user,text='●',bg='#063765',fg='#8BC8F5',font=('Segoe UI',16)).pack(side='left',padx=6)
-        uf=tk.Frame(user,bg='#063765'); uf.pack(side='left'); tk.Label(uf,text='Admin',bg='#063765',fg='white',font=('Segoe UI',8,'bold')).pack(anchor='w'); tk.Label(uf,text='Administrator',bg='#063765',fg='#D6E8F7',font=('Segoe UI',6)).pack(anchor='w')
+        uf=tk.Frame(user,bg='#063765'); uf.pack(side='left'); tk.Label(uf,text=self.current_user['display_name'],bg='#063765',fg='white',font=('Segoe UI',8,'bold')).pack(anchor='w'); tk.Label(uf,text=self.current_user['role'],bg='#063765',fg='#D6E8F7',font=('Segoe UI',6)).pack(anchor='w')
         self.content=tk.Frame(right,bg=BG); self.content.pack(fill='both',expand=True)
 
     def go(self,label,cmd):
@@ -992,6 +1039,7 @@ class Servix(tk.Tk):
         if not rows: tk.Label(hist,text='No exports recorded yet.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(2,10))
 
     def show_data_management(self):
+        if not self.require('data'): return
         self.clear()
         h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
         tk.Label(h,text='Data Export / Import',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
@@ -1056,6 +1104,7 @@ class Servix(tk.Tk):
         tk.Button(x,text='Export All Tables (CSV ZIP)',command=export_all,bg=GREEN,fg='white',bd=0,padx=14,pady=7).pack(anchor='w',padx=14,pady=(0,12))
 
     def show_users(self):
+        if not self.require('admin'): return
         self.clear()
         h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
         tk.Label(h,text='Users & Roles',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
@@ -1072,21 +1121,29 @@ class Servix(tk.Tk):
             row=None
             if uid:
                 with connect() as con: row=con.execute('SELECT * FROM users WHERE id=?',(uid,)).fetchone()
-            d=tk.Toplevel(self); d.title('User'); d.geometry('470x350'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+            d=tk.Toplevel(self); d.title('User'); d.geometry('470x430'); d.configure(bg=CARD); d.transient(self); d.grab_set()
             vals={}
             for key,label in [('username','Username'),('display_name','Display Name')]:
                 tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=22,pady=(12,3)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=22)
             role=tk.StringVar(value=row['role'] if row else 'Service Coordinator')
             tk.Label(d,text='Role',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=22,pady=(12,3)); ttk.Combobox(d,textvariable=role,values=ROLES,state='readonly').pack(fill='x',padx=22)
-            active=tk.BooleanVar(value=bool(row['active']) if row else True); tk.Checkbutton(d,text='Active user',variable=active,bg=CARD,fg=TEXT,activebackground=CARD).pack(anchor='w',padx=18,pady=12)
+            active=tk.BooleanVar(value=bool(row['active']) if row else True); tk.Checkbutton(d,text='Active user',variable=active,bg=CARD,fg=TEXT,activebackground=CARD).pack(anchor='w',padx=18,pady=(10,4))
+            tk.Label(d,text='Password (leave blank to keep existing)',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=22,pady=(5,3)); password=ttk.Entry(d,show='*'); password.pack(fill='x',padx=22)
             if row: vals['username'].insert(0,row['username']); vals['display_name'].insert(0,row['display_name'])
             def save_user():
                 username=vals['username'].get().strip(); name=vals['display_name'].get().strip()
                 if not username or not name:return messagebox.showwarning('Required','Username and Display Name are required.',parent=d)
                 try:
                     with connect() as con:
-                        if row: con.execute('UPDATE users SET username=?,display_name=?,role=?,active=?,modified=? WHERE id=?',(username,name,role.get(),1 if active.get() else 0,now(),uid))
-                        else: con.execute('INSERT INTO users(username,display_name,role,active,created,modified) VALUES(?,?,?,?,?,?)',(username,name,role.get(),1 if active.get() else 0,now(),now()))
+                        if row:
+                            con.execute('UPDATE users SET username=?,display_name=?,role=?,active=?,modified=? WHERE id=?',(username,name,role.get(),1 if active.get() else 0,now(),uid))
+                            if password.get():
+                                if len(password.get())<8: raise ValueError('Password must be at least 8 characters.')
+                                salt,digest=hash_password(password.get()); con.execute('UPDATE users SET password_salt=?,password_hash=?,must_change_password=0 WHERE id=?',(salt,digest,uid))
+                        else:
+                            if len(password.get())<8: raise ValueError('A password of at least 8 characters is required for a new user.')
+                            salt,digest=hash_password(password.get())
+                            con.execute('INSERT INTO users(username,display_name,role,active,password_salt,password_hash,must_change_password,created,modified) VALUES(?,?,?,?,?,?,0,?,?)',(username,name,role.get(),1 if active.get() else 0,salt,digest,now(),now()))
                     d.destroy(); refresh()
                 except Exception as ex: messagebox.showerror('User not saved',str(ex),parent=d)
             tk.Button(d,text='Save User',command=save_user,bg=BLUE,fg='white',bd=0,padx=16,pady=7).pack(pady=14)
@@ -1096,6 +1153,7 @@ class Servix(tk.Tk):
         refresh()
 
     def show_settings(self):
+        if not self.require('admin'): return
         self.clear()
         h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
         tk.Label(h,text='Administration',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
