@@ -592,17 +592,70 @@ class Servix(tk.Tk):
     def show_commercial(self):self.simple_summary('Commercial & Payments','Quotation, verbal discussion, FOC/chargeable and payment tracking',[('Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Pending'"),RED),('Paid',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Paid'"),GREEN),('FOC',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='FOC'"),BLUE),('Chargeable',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='Chargeable'"),ORANGE)])
 
     def show_reports(self):
-        self.clear(); self.heading('Reports & Export','Filter data and export for reporting or migration')
-        box=self.card(self.content); box.pack(fill='x',padx=28,pady=(0,18)); tk.Label(box,text='Service CSV Export',bg=CARD,fg=TEXT,font=('Segoe UI',13,'bold')).pack(anchor='w',padx=18,pady=(16,5)); tk.Label(box,text='Exports the complete service dataset currently stored in SERVIX. Date/filter controls will expand in the next build.',bg=CARD,fg=MUTED).pack(anchor='w',padx=18)
+        self.clear(); self.heading('Reports & Analytics','Operational filters, management totals and export-ready service data')
+        filters=self.card(self.content); filters.pack(fill='x',padx=28,pady=(0,12))
+        bar=tk.Frame(filters,bg=CARD); bar.pack(fill='x',padx=14,pady=12)
+        tk.Label(bar,text='From',bg=CARD,fg=MUTED).pack(side='left'); from_e=ttk.Entry(bar,width=12); from_e.pack(side='left',padx=(5,12))
+        tk.Label(bar,text='To',bg=CARD,fg=MUTED).pack(side='left'); to_e=ttk.Entry(bar,width=12); to_e.pack(side='left',padx=(5,12))
+        tk.Label(bar,text='Status',bg=CARD,fg=MUTED).pack(side='left'); status=ttk.Combobox(bar,state='readonly',width=17,values=['All','Open','Closed','Awaiting Parts','Awaiting Customer','Dispatched']); status.set('All'); status.pack(side='left',padx=(5,12))
+        tk.Label(bar,text='Coverage',bg=CARD,fg=MUTED).pack(side='left'); coverage=ttk.Combobox(bar,state='readonly',width=15,values=['All','Warranty','AMC','OOW','FOC','Chargeable']); coverage.set('All'); coverage.pack(side='left',padx=(5,12))
+        tk.Label(bar,text='Reason',bg=CARD,fg=MUTED).pack(side='left'); reason=ttk.Combobox(bar,state='readonly',width=18,values=['All','Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up']); reason.set('All'); reason.pack(side='left',padx=(5,8))
+
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22,pady=(0,12))
+        cards=[]
+        for title,accent in [('Records',BLUE),('Open',ORANGE),('Closed',GREEN),('Outstanding ₹',RED)]: cards.append(self.metric(metrics,title,'-',accent,'Current filter'))
+
+        table=self.card(self.content); table.pack(fill='both',expand=True,padx=28,pady=(0,12))
+        top=tk.Frame(table,bg=CARD); top.pack(fill='x',padx=14,pady=(12,4)); tk.Label(top,text='Service Report',bg=CARD,fg=TEXT,font=('Segoe UI',13,'bold')).pack(side='left')
+        cols=('Service ID','Opened','Client','Equipment','Reason','Engineer','Status','Coverage','Billing','Payment','Outstanding'); tr=ttk.Treeview(table,columns=cols,show='headings',height=13)
+        for x,w in zip(cols,[115,105,180,120,155,115,130,95,95,105,105]): tr.heading(x,text=x); tr.column(x,width=w,anchor='w')
+        tr.pack(fill='both',expand=True,padx=14,pady=(4,8))
+        current=[]
+        def query_rows():
+            wh=[]; args=[]
+            if from_e.get().strip(): wh.append('date(s.opened)>=date(?)'); args.append(from_e.get().strip())
+            if to_e.get().strip(): wh.append('date(s.opened)<=date(?)'); args.append(to_e.get().strip())
+            st=status.get()
+            if st=='Open': wh.append("s.status NOT IN ('Closed','Cancelled')")
+            elif st!='All': wh.append('s.status=?'); args.append(st)
+            cov=coverage.get()
+            if cov=='Warranty': wh.append("s.warranty='Yes'")
+            elif cov=='AMC': wh.append("s.amc='Yes'")
+            elif cov=='OOW': wh.append("s.warranty='No' AND s.amc='No'")
+            elif cov in ('FOC','Chargeable'): wh.append('s.foc_chargeable=?'); args.append(cov)
+            if reason.get()!='All': wh.append('s.reason=?'); args.append(reason.get())
+            where=(' WHERE '+' AND '.join(wh)) if wh else ''
+            sql='''SELECT s.code,s.opened,c.name,e.code,s.reason,COALESCE(s.engineer,''),s.status,
+                    CASE WHEN s.warranty='Yes' THEN 'Warranty' WHEN s.amc='Yes' THEN 'AMC' ELSE 'OOW' END coverage,
+                    COALESCE(s.foc_chargeable,''),COALESCE(s.payment_status,''),MAX(0,COALESCE(s.invoice_amount,0)-COALESCE(s.amount_received,0)) outstanding
+                    FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id'''+where+' ORDER BY s.id DESC'
+            with connect() as con:return con.execute(sql,args).fetchall()
+        def apply():
+            nonlocal current; current=query_rows()
+            for i in tr.get_children():tr.delete(i)
+            for r in current:tr.insert('','end',values=tuple(r))
+            vals=[len(current),sum(1 for r in current if r['status'] not in ('Closed','Cancelled')),sum(1 for r in current if r['status']=='Closed'),sum(float(r['outstanding'] or 0) for r in current)]
+            for card,val in zip(cards,vals):
+                labels=[w for w in card.winfo_children() if isinstance(w,tk.Label)]
+                if len(labels)>1: labels[1].config(text=f'{val:,.2f}' if isinstance(val,float) else str(val))
+        tk.Button(bar,text='Apply Filters',command=apply,bg=BLUE,fg='white',bd=0,padx=15,pady=7).pack(side='right')
         def export():
-            path=filedialog.asksaveasfilename(defaultextension='.csv',filetypes=[('CSV','*.csv')],initialfile='SERVIX_Service_Export.csv');
+            if not current: apply()
+            path=filedialog.asksaveasfilename(defaultextension='.csv',filetypes=[('CSV','*.csv')],initialfile='SERVIX_Filtered_Service_Report.csv')
             if not path:return
-            with connect() as con:
-                rows=con.execute('''SELECT s.code,s.opened,c.name,e.code,e.make,e.model,e.serial,s.reason,s.complaint,s.warranty,s.amc,s.engineer,s.priority,s.status,s.diagnosis,s.work_done,s.final_result,s.foc_chargeable,s.service_charge,s.parts_charge,s.quote_status,s.payment_status,s.dispatch_date FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY s.id''').fetchall()
-            headers=['Service ID','Opened','Client','SERVIX Equipment ID','Make','Model','Serial','Reason','Complaint','Warranty','AMC','Engineer','Priority','Status','Diagnosis','Work Done','Final Result','FOC/Chargeable','Service Charge','Parts Charge','Quotation','Payment','Dispatch']
-            with open(path,'w',newline='',encoding='utf-8-sig') as f:w=csv.writer(f); w.writerow(headers); w.writerows([tuple(x) for x in rows])
-            messagebox.showinfo('Export complete',f'{len(rows)} service records exported.')
-        tk.Button(box,text='Export Service Data to CSV',command=export,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(anchor='w',padx=18,pady=16)
+            with open(path,'w',newline='',encoding='utf-8-sig') as fh:
+                w=csv.writer(fh); w.writerow(cols); w.writerows([tuple(r) for r in current])
+            with connect() as con:con.execute('INSERT INTO exports(export_date,from_date,to_date,filename,record_count) VALUES(?,?,?,?,?)',(now(),from_e.get().strip(),to_e.get().strip(),path,len(current)))
+            messagebox.showinfo('Export complete',f'{len(current)} filtered service records exported.')
+        tk.Button(top,text='Export Current View to CSV',command=export,bg=GREEN,fg='white',bd=0,padx=14,pady=7).pack(side='right')
+        tr.bind('<Double-1>',lambda e:self.show_service_detail(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+        apply()
+
+        hist=self.card(self.content); hist.pack(fill='x',padx=28,pady=(0,18))
+        tk.Label(hist,text='Recent Export History',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=14,pady=(10,4))
+        with connect() as con: rows=con.execute('SELECT export_date,from_date,to_date,filename,record_count FROM exports ORDER BY id DESC LIMIT 5').fetchall()
+        for x in rows: tk.Label(hist,text=f"{x['export_date']}  •  {x['record_count']} records  •  {Path(x['filename']).name}",bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=2)
+        if not rows: tk.Label(hist,text='No exports recorded yet.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(2,10))
 
     def show_settings(self):
         self.clear(); self.heading('Administration - Settings','Configure Service ID numbering before go-live')
