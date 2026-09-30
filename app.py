@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import csv
+import shutil
 from database import connect, init_db, next_code, now, today, get_setting, set_setting
 from attachment_utils import store_attachment
 from service_repository import add_history, add_part, upsert_calibration, add_attachment
@@ -26,7 +27,14 @@ class Servix(tk.Tk):
     def build_shell(self):
         self.sidebar=tk.Frame(self,bg='#063765',width=168); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
         brand=tk.Frame(self.sidebar,bg='#073A69',height=62); brand.pack(fill='x'); brand.pack_propagate(False)
-        tk.Label(brand,text='HAC',font=('Segoe UI',25,'bold'),bg='#073A69',fg='white').pack(anchor='w',padx=20,pady=(5,0))
+        logo_path=get_setting('company_logo_path','')
+        self.brand_image=None
+        if logo_path and Path(logo_path).exists():
+            try:
+                self.brand_image=tk.PhotoImage(file=logo_path)
+                tk.Label(brand,image=self.brand_image,bg='#073A69').pack(anchor='w',padx=18,pady=(4,0))
+            except tk.TclError: tk.Label(brand,text=get_setting('company_short_name','HAC'),font=('Segoe UI',25,'bold'),bg='#073A69',fg='white').pack(anchor='w',padx=20,pady=(5,0))
+        else: tk.Label(brand,text=get_setting('company_short_name','HAC'),font=('Segoe UI',25,'bold'),bg='#073A69',fg='white').pack(anchor='w',padx=20,pady=(5,0))
         tk.Label(brand,text='SERVICE MANAGEMENT',font=('Segoe UI',6,'bold'),bg='#073A69',fg='#B9D9F4').pack(anchor='w',padx=21)
         self.nav={}
         items=[('Dashboard','⌂',self.show_dashboard),('Service Calls','⌕',self.show_services),('Clients','♟',self.show_clients),('Equipment','▣',self.show_equipment),('Warranty & AMC','◆',self.show_warranty),('Engineers','♟',self.show_engineers),('Parts / Inventory','↕',self.show_parts_inventory),('Commercial & Payments','₹',self.show_commercial),('Documents','▧',self.show_documents),('Reports & Analytics','▥',self.show_reports),('Data Export / Import','⇄',self.show_reports),('Administration','⚙',self.show_settings)]
@@ -35,8 +43,8 @@ class Servix(tk.Tk):
         right=tk.Frame(self,bg=BG); right.pack(side='left',fill='both',expand=True)
         top=tk.Frame(right,bg='#063765',height=53); top.pack(fill='x'); top.pack_propagate(False)
         title=tk.Frame(top,bg='#063765'); title.pack(side='left',padx=(18,24),pady=5)
-        tk.Label(title,text='Service Management System',font=('Segoe UI',12,'bold'),bg='#063765',fg='white').pack(anchor='w')
-        tk.Label(title,text='Service   |   Calibration   |   Warranty   |   AMC',font=('Segoe UI',7),bg='#063765',fg='#D6E8F7').pack(anchor='w')
+        tk.Label(title,text=get_setting('system_title','Service Management System'),font=('Segoe UI',12,'bold'),bg='#063765',fg='white').pack(anchor='w')
+        tk.Label(title,text=get_setting('system_subtitle','Service   |   Calibration   |   Warranty   |   AMC'),font=('Segoe UI',7),bg='#063765',fg='#D6E8F7').pack(anchor='w')
         searchwrap=tk.Frame(top,bg='white'); searchwrap.pack(side='left',fill='x',expand=True,pady=10)
         self.search=tk.Entry(searchwrap,font=('Segoe UI',9),bd=0,bg='white',fg=MUTED,insertbackground=TEXT); self.search.insert(0,'Search by Service ID, Client, Email, Mobile, Serial No., Equipment ID...'); self.search.pack(side='left',fill='x',expand=True,padx=12,ipady=5); self.search.bind('<Return>',lambda e:self.global_search())
         tk.Button(searchwrap,text='⌕',command=self.global_search,bg='#EEF3F8',fg=NAVY,bd=0,font=('Segoe UI',11),padx=12).pack(side='right',fill='y')
@@ -106,7 +114,14 @@ class Servix(tk.Tk):
         rh=tk.Frame(recent,bg=CARD); rh.pack(fill='x',padx=10,pady=(7,3)); tk.Label(rh,text='Recent / Open Service Calls',font=('Segoe UI',9,'bold'),bg=CARD,fg=TEXT).pack(side='left'); tk.Button(rh,text='View All',command=self.show_services,bg=CARD,fg=BLUE,bd=0,font=('Segoe UI',7,'underline')).pack(side='right')
         self.service_tree(recent,5)
         alerts=self.card(lower); alerts.pack(side='left',fill='both',padx=(4,4)); tk.Label(alerts,text='Alerts & Reminders',font=('Segoe UI',9,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=12,pady=(8,5))
-        alert_rows=[('●',RED,f"{self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')")} service calls overdue"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')")} calibrations due within 30 days"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')")} warranties expiring this month"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')")} AMC expiring in 60 days"),('●',ORANGE,f"{self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')")} invoices pending payment"),('△',RED,f"{self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''")} equipment with missing serial numbers")]
+        alert_rows=[
+            ('●',RED,str(self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"))+' service calls overdue'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"))+' calibrations due within 30 days'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"))+' warranties expiring this month'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"))+' AMC expiring in 60 days'),
+            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"))+' invoices pending payment'),
+            ('△',RED,str(self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''"))+' equipment with missing serial numbers')
+        ]
         for icon,color,msg in alert_rows:
             r=tk.Frame(alerts,bg=CARD); r.pack(fill='x',padx=12,pady=4); tk.Label(r,text=icon,bg=CARD,fg=color,font=('Segoe UI',9,'bold')).pack(side='left'); tk.Label(r,text=msg,bg=CARD,fg=TEXT,font=('Segoe UI',7)).pack(side='left',padx=7)
 
@@ -718,6 +733,29 @@ class Servix(tk.Tk):
         if not rows: tk.Label(hist,text='No exports recorded yet.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(2,10))
 
     def show_settings(self):
+        brand=self.card(self.content); brand.pack(fill='x',padx=28,pady=(0,12)); brand.grid_columnconfigure((0,1,2),weight=1)
+        tk.Label(brand,text='Company Branding / Header',bg=CARD,fg=TEXT,font=('Segoe UI',12,'bold')).grid(row=0,column=0,columnspan=3,sticky='w',padx=14,pady=(12,2))
+        tk.Label(brand,text='Change HAC/company identity later without changing application code.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=1,column=0,columnspan=3,sticky='w',padx=14,pady=(0,8))
+        short=self.form_field(brand,'Header Short Name',2,0); short.insert(0,get_setting('company_short_name','HAC'))
+        cname=self.form_field(brand,'Company Name',2,1); cname.insert(0,get_setting('company_name','HAC'))
+        stitle=self.form_field(brand,'System Title',2,2); stitle.insert(0,get_setting('system_title','Service Management System'))
+        subtitle=self.form_field(brand,'Header Subtitle',4,0); subtitle.insert(0,get_setting('system_subtitle','Service | Calibration | Warranty | AMC'))
+        logo=self.form_field(brand,'Logo File (PNG)',4,1); logo.insert(0,get_setting('company_logo_path',''))
+        def choose_logo():
+            p=filedialog.askopenfilename(filetypes=[('PNG Logo','*.png')])
+            if p: logo.delete(0,'end'); logo.insert(0,p)
+        tk.Button(brand,text='Choose Logo',command=choose_logo,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=7).grid(row=5,column=1,sticky='e',padx=10,pady=(0,8))
+        def save_brand():
+            set_setting('company_short_name',short.get().strip() or 'HAC'); set_setting('company_name',cname.get().strip() or short.get().strip() or 'HAC')
+            set_setting('system_title',stitle.get().strip() or 'Service Management System'); set_setting('system_subtitle',subtitle.get().strip())
+            lp=logo.get().strip()
+            if lp and Path(lp).exists():
+                from database import DATA_ROOT
+                d=DATA_ROOT/'branding'; d.mkdir(parents=True,exist_ok=True); dest=d/'company_logo.png'; shutil.copy2(lp,dest); set_setting('company_logo_path',str(dest))
+            elif not lp:set_setting('company_logo_path','')
+            messagebox.showinfo('Branding saved','Company/header branding saved. Restart SERVIX to refresh the main header.')
+        tk.Button(brand,text='Save Branding',command=save_brand,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=7,column=2,sticky='e',padx=10,pady=10)
+
         self.clear(); self.heading('Administration - Settings','Configure Service ID numbering before go-live')
         card=self.card(self.content); card.pack(fill='x',padx=28,pady=(0,16))
         tk.Label(card,text='Service ID Numbering',bg=CARD,fg=TEXT,font=('Segoe UI',13,'bold')).pack(anchor='w',padx=16,pady=(14,4))
