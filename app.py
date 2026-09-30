@@ -1378,16 +1378,18 @@ class Servix(tk.Tk):
                         return ''
                     rows=list(reader)
                 if not rows:return messagebox.showwarning('Import','CSV contains no data rows.')
-                valid=[]; errors=[]; seen=set()
+                valid=[]; errors=[]; seen_mobile=set(); seen_email=set()
                 with connect() as con:
                     for n,row in enumerate(rows,2):
                         name=col(row,'name','client name','customer name'); mobile=col(row,'mobile','phone','mobile no'); email=col(row,'email','email id').lower()
+                        mobile_key=''.join(ch for ch in mobile if ch.isdigit())
                         contact=col(row,'contact','contact person'); address=col(row,'address'); city=col(row,'city')
                         if not name or (not mobile and not email):errors.append(f'Row {n}: Name and Mobile or Email required');continue
-                        key=(mobile,email)
-                        if key in seen:errors.append(f'Row {n}: duplicate inside CSV');continue
-                        seen.add(key)
-                        dup=con.execute("SELECT code,name FROM clients WHERE (?<>'' AND mobile=?) OR (?<>'' AND lower(email)=?)",(mobile,mobile,email,email)).fetchone()
+                        if mobile_key and mobile_key in seen_mobile:errors.append(f'Row {n}: duplicate mobile inside CSV');continue
+                        if email and email in seen_email:errors.append(f'Row {n}: duplicate email inside CSV');continue
+                        if mobile_key:seen_mobile.add(mobile_key)
+                        if email:seen_email.add(email)
+                        dup=con.execute("SELECT code,name FROM clients WHERE (?<>'' AND REPLACE(REPLACE(REPLACE(REPLACE(mobile,' ',''),'-',''),'(',''),')','')=?) OR (?<>'' AND lower(trim(email))=?)",(mobile_key,mobile_key,email,email)).fetchone()
                         if dup:errors.append(f"Row {n}: matches existing {dup['code']} {dup['name']}");continue
                         valid.append((name,contact,mobile,email,address,city))
                 summary=f'Rows: {len(rows)}\\nReady to import: {len(valid)}\\nSkipped / invalid: {len(errors)}'
