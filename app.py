@@ -73,9 +73,42 @@ class Servix(tk.Tk):
     def q1(self,sql,args=()):
         with connect() as con:return con.execute(sql,args).fetchone()[0]
 
-    def show_engineers(self): self.simple_summary('Engineers','Engineer workload and service assignment',[('Active Services',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status NOT IN ('Closed','Cancelled')"),BLUE),('Unassigned',self.q1("SELECT COUNT(*) FROM services WHERE (engineer IS NULL OR engineer='') AND status NOT IN ('Closed','Cancelled')"),ORANGE)])
-    def show_parts_inventory(self): self.simple_summary('Parts / Inventory','Parts recorded across service work',[('Parts Entries',self.q1('SELECT COUNT(*) FROM parts'),BLUE),('Chargeable Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='Chargeable'"),ORANGE)])
-    def show_documents(self): self.simple_summary('Documents','Service images, PDFs and certificates',[('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE),('Calibration Certificates',self.q1("SELECT COUNT(*) FROM calibration WHERE certificate_no!=''"),GREEN)])
+    def _register_screen(self,title,subtitle,metrics,cols,widths,sql,search_hint,open_col=0,open_fn=None):
+        self.clear(); h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text=title,bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text=subtitle,bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
+        for a,b,color,note in metrics:self.metric(m,a,b,color,note)
+        bar=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); bar.pack(fill='x',pady=(0,6))
+        tk.Label(bar,text=title+' Register',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,8),pady=8)
+        q=tk.StringVar(); ttk.Entry(bar,textvariable=q,width=30).pack(side='left',pady=6)
+        tk.Label(bar,text=search_hint,bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='left',padx=8)
+        card=self.card(body); card.pack(fill='both',expand=True); tr=ttk.Treeview(card,columns=cols,show='headings')
+        for x,w in zip(cols,widths):tr.heading(x,text=x); tr.column(x,width=w,minwidth=65,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            for x in tr.get_children():tr.delete(x)
+            term=q.get().strip().lower()
+            with connect() as con: rows=con.execute(sql).fetchall()
+            for r in rows:
+                vals=tuple(r)
+                if term and term not in ' '.join(str(v or '') for v in vals).lower():continue
+                tr.insert('','end',values=vals)
+        q.trace_add('write',load); load()
+        if open_fn:tr.bind('<Double-1>',lambda e:open_fn(tr.item(tr.focus(),'values')[open_col]) if tr.focus() else None)
+
+    def show_engineers(self):
+        metrics=[('Active Services',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status NOT IN ('Closed','Cancelled')"),BLUE,'Assigned work'),('Unassigned',self.q1("SELECT COUNT(*) FROM services WHERE (engineer IS NULL OR engineer='') AND status NOT IN ('Closed','Cancelled')"),ORANGE,'Needs assignment'),('Engineers',self.q1("SELECT COUNT(DISTINCT engineer) FROM services WHERE engineer!=''"),GREEN,'Recorded names'),('Closed Jobs',self.q1("SELECT COUNT(*) FROM services WHERE engineer!='' AND status='Closed'"),GREEN,'Completed')]
+        self._register_screen('Engineers','Engineer Workload / Assignment Register',metrics,('Engineer','Active Jobs','Closed Jobs','Latest Service','Latest Status'),(210,100,100,130,150),"""SELECT s.engineer,SUM(CASE WHEN s.status NOT IN ('Closed','Cancelled') THEN 1 ELSE 0 END),SUM(CASE WHEN s.status='Closed' THEN 1 ELSE 0 END),MAX(s.code),MAX(s.status) FROM services s WHERE COALESCE(s.engineer,'')!='' GROUP BY s.engineer ORDER BY 2 DESC,s.engineer""",'Search engineer')
+
+    def show_parts_inventory(self):
+        metrics=[('Parts Entries',self.q1('SELECT COUNT(*) FROM parts'),BLUE,'Service usage'),('Chargeable Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='Chargeable'"),ORANGE,'Billable'),('FOC Parts',self.q1("SELECT COUNT(*) FROM parts WHERE chargeable='FOC'"),GREEN,'No charge'),('Services With Parts',self.q1("SELECT COUNT(DISTINCT service_id) FROM parts"),BLUE,'Recorded jobs')]
+        self._register_screen('Parts / Inventory','Parts Used Across Service Work',metrics,('Service ID','Client','Equipment','Part / Description','Qty','Billing'),(110,190,110,260,70,100),"""SELECT s.code,c.name,e.code,p.part_name,p.qty,p.chargeable FROM parts p JOIN services s ON s.id=p.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY p.id DESC""",'Search service / client / equipment / part',0,self.show_service_detail)
+
+    def show_documents(self):
+        metrics=[('Attachments',self.q1('SELECT COUNT(*) FROM attachments'),BLUE,'Images and PDFs'),('Calibration Certificates',self.q1("SELECT COUNT(*) FROM calibration WHERE certificate_no!=''"),GREEN,'Certificate records'),('Services With Files',self.q1("SELECT COUNT(DISTINCT service_id) FROM attachments"),ORANGE,'Documented jobs'),('PDF Files',self.q1("SELECT COUNT(*) FROM attachments WHERE lower(filename) LIKE '%.pdf'"),BLUE,'Stored documents')]
+        self._register_screen('Documents','Service Images / PDFs / Certificates',metrics,('Service ID','Client','Equipment','File Name','Type','Added'),(110,190,110,300,90,150),"""SELECT s.code,c.name,e.code,a.filename,CASE WHEN lower(a.filename) LIKE '%.pdf' THEN 'PDF' ELSE 'Image' END,a.added_at FROM attachments a JOIN services s ON s.id=a.service_id LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id ORDER BY a.id DESC""",'Search service / client / equipment / filename',0,self.show_service_detail)
 
     def show_dashboard(self):
         self.clear()
@@ -939,8 +972,12 @@ class Servix(tk.Tk):
         if not rows: tk.Label(hist,text='No exports recorded yet.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(2,10))
 
     def show_settings(self):
-        brand=self.card(self.content); brand.pack(fill='x',padx=28,pady=(0,12)); brand.grid_columnconfigure((0,1,2),weight=1)
-        tk.Label(brand,text='Company Branding / Header',bg=CARD,fg=TEXT,font=('Segoe UI',12,'bold')).grid(row=0,column=0,columnspan=3,sticky='w',padx=14,pady=(12,2))
+        self.clear()
+        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text='Administration',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text='Branding / Identity / Numbering Settings',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        brand=self.card(self.content); brand.pack(fill='x',padx=10,pady=(8,6)); brand.grid_columnconfigure((0,1,2),weight=1)
+        tk.Label(brand,text='Company Branding / Header',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).grid(row=0,column=0,columnspan=3,sticky='w',padx=14,pady=(12,2))
         tk.Label(brand,text='Change HAC/company identity later without changing application code.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=1,column=0,columnspan=3,sticky='w',padx=14,pady=(0,8))
         short=self.form_field(brand,'Header Short Name',2,0); short.insert(0,get_setting('company_short_name','HAC'))
         cname=self.form_field(brand,'Company Name',2,1); cname.insert(0,get_setting('company_name','HAC'))
@@ -962,9 +999,8 @@ class Servix(tk.Tk):
             messagebox.showinfo('Branding saved','Company/header branding saved. Restart SERVIX to refresh the main header.')
         tk.Button(brand,text='Save Branding',command=save_brand,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=7,column=2,sticky='e',padx=10,pady=10)
 
-        self.clear(); self.heading('Administration - Settings','Configure Service ID numbering before go-live')
-        card=self.card(self.content); card.pack(fill='x',padx=28,pady=(0,16))
-        tk.Label(card,text='Service ID Numbering',bg=CARD,fg=TEXT,font=('Segoe UI',13,'bold')).pack(anchor='w',padx=16,pady=(14,4))
+        card=self.card(self.content); card.pack(fill='x',padx=10,pady=(0,10))
+        tk.Label(card,text='Service ID Numbering',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=16,pady=(10,4))
         row=tk.Frame(card,bg=CARD); row.pack(fill='x',padx=16,pady=12)
         prefix=ttk.Entry(row,width=10); prefix.insert(0,get_setting('service_prefix','SRV')); prefix.pack(side='left',padx=5)
         start=ttk.Entry(row,width=15); start.insert(0,get_setting('service_start','1')); start.pack(side='left',padx=5)
