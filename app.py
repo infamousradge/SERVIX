@@ -972,8 +972,12 @@ class Servix(tk.Tk):
         if not rows: tk.Label(hist,text='No exports recorded yet.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=(2,10))
 
     def show_settings(self):
-        brand=self.card(self.content); brand.pack(fill='x',padx=28,pady=(0,12)); brand.grid_columnconfigure((0,1,2),weight=1)
-        tk.Label(brand,text='Company Branding / Header',bg=CARD,fg=TEXT,font=('Segoe UI',12,'bold')).grid(row=0,column=0,columnspan=3,sticky='w',padx=14,pady=(12,2))
+        self.clear()
+        h=tk.Frame(self.content,bg='#164F7C',height=38); h.pack(fill='x'); h.pack_propagate(False)
+        tk.Label(h,text='Administration',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(h,text='Branding / Identity / Numbering Settings',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        brand=self.card(self.content); brand.pack(fill='x',padx=10,pady=(8,6)); brand.grid_columnconfigure((0,1,2),weight=1)
+        tk.Label(brand,text='Company Branding / Header',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).grid(row=0,column=0,columnspan=3,sticky='w',padx=14,pady=(12,2))
         tk.Label(brand,text='Change HAC/company identity later without changing application code.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=1,column=0,columnspan=3,sticky='w',padx=14,pady=(0,8))
         short=self.form_field(brand,'Header Short Name',2,0); short.insert(0,get_setting('company_short_name','HAC'))
         cname=self.form_field(brand,'Company Name',2,1); cname.insert(0,get_setting('company_name','HAC'))
@@ -995,9 +999,8 @@ class Servix(tk.Tk):
             messagebox.showinfo('Branding saved','Company/header branding saved. Restart SERVIX to refresh the main header.')
         tk.Button(brand,text='Save Branding',command=save_brand,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=7,column=2,sticky='e',padx=10,pady=10)
 
-        self.clear(); self.heading('Administration - Settings','Configure Service ID numbering before go-live')
-        card=self.card(self.content); card.pack(fill='x',padx=28,pady=(0,16))
-        tk.Label(card,text='Service ID Numbering',bg=CARD,fg=TEXT,font=('Segoe UI',13,'bold')).pack(anchor='w',padx=16,pady=(14,4))
+        card=self.card(self.content); card.pack(fill='x',padx=10,pady=(0,10))
+        tk.Label(card,text='Service ID Numbering',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=16,pady=(10,4))
         row=tk.Frame(card,bg=CARD); row.pack(fill='x',padx=16,pady=12)
         prefix=ttk.Entry(row,width=10); prefix.insert(0,get_setting('service_prefix','SRV')); prefix.pack(side='left',padx=5)
         start=ttk.Entry(row,width=15); start.insert(0,get_setting('service_start','1')); start.pack(side='left',padx=5)
