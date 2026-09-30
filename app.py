@@ -97,21 +97,122 @@ class Servix(tk.Tk):
         tk.Label(parent,text=label+(' *' if required else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=row,column=col,sticky='w',padx=10,pady=(8,3)); w=ttk.Combobox(parent,values=values,width=width,state='readonly') if values is not None else ttk.Entry(parent,width=width); w.grid(row=row+1,column=col,sticky='ew',padx=10,pady=(0,8)); return w
 
     def show_new_service(self):
-        self.clear(); self.heading('Create Service Call','Only essential information is mandatory at opening')
-        form=self.card(self.content); form.pack(fill='x',padx=28,pady=(0,18)); form.grid_columnconfigure((0,1,2),weight=1)
-        with connect() as con:
-            clients=[(r['id'],f"{r['code']} — {r['name']}") for r in con.execute('SELECT id,code,name FROM clients ORDER BY name')]; eq=[(r['id'],f"{r['code']} — {r['make']} {r['model']} — {r['serial'] or 'No S/N'}") for r in con.execute('SELECT id,code,make,model,serial FROM equipment ORDER BY id DESC')]
-        cmap={v:k for k,v in clients}; emap={v:k for k,v in eq}
-        client=self.form_field(form,'Client',0,0,list(cmap),required=True); equip=self.form_field(form,'SERVIX Equipment ID',0,1,list(emap),required=True); reason=self.form_field(form,'Reason for Service',0,2,['Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up','Performance Verification','Software/Firmware Update','Part Replacement','Other'],required=True)
-        warranty=self.form_field(form,'Under Warranty?',2,0,['Yes','No'],required=True); amc=self.form_field(form,'Under AMC?',2,1,['Yes','No'],required=True); engineer=self.form_field(form,'Assigned Engineer',2,2,None)
-        priority=self.form_field(form,'Priority',4,0,['Normal','Urgent','Critical']); priority.set('Normal'); source=self.form_field(form,'Request Source',4,1,['Phone','Email (manual entry)','WhatsApp','Walk-in','Engineer Update','Other']); status=self.form_field(form,'Status',4,2,['New','Assigned','Received']); status.set('New')
-        tk.Label(form,text='Complaint / Requirement *',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=6,column=0,sticky='w',padx=10,pady=(8,3)); complaint=tk.Text(form,height=5,font=('Segoe UI',10),relief='solid',bd=1); complaint.grid(row=7,column=0,columnspan=3,sticky='ew',padx=10,pady=(0,10))
+        self.clear(); self.heading('Create Service Call','Fast office entry • create missing client/equipment here • only genuine essentials block creation')
+        form=self.card(self.content); form.pack(fill='x',padx=28,pady=(0,12)); form.grid_columnconfigure((0,1,2),weight=1)
+
+        client=self.form_field(form,'Client',0,0,[],required=True)
+        equip=self.form_field(form,'SERVIX Equipment ID',0,1,[],required=True)
+        reason=self.form_field(form,'Reason for Service',0,2,['Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up','Performance Verification','Software/Firmware Update','Accessory Replacement','Part Replacement','Customer Requested Service','Other'],required=True)
+        warranty=self.form_field(form,'Under Warranty?',2,0,['Yes','No'],required=True)
+        amc=self.form_field(form,'Under AMC?',2,1,['Yes','No'],required=True)
+        engineer=self.form_field(form,'Assigned Engineer (important)',2,2,None)
+        priority=self.form_field(form,'Priority',4,0,['Normal','Urgent','Critical']); priority.set('Normal')
+        source=self.form_field(form,'Request Source (optional)',4,1,['Phone','Email','WhatsApp','Walk-in','Other'])
+        status=self.form_field(form,'Status',4,2,['New','Assigned','Received']); status.set('New')
+
+        cmap={}; emap={}
+        def refresh_lists(select_client_id=None,select_equipment_id=None):
+            nonlocal cmap,emap
+            with connect() as con:
+                clients=[(x['id'],f"{x['code']} — {x['name']}") for x in con.execute('SELECT id,code,name FROM clients ORDER BY name')]
+                equipment=[(x['id'],x['client_id'],f"{x['code']} — {x['make']} {x['model']} — {x['serial'] or 'Serial not available'}") for x in con.execute('SELECT id,client_id,code,make,model,serial FROM equipment ORDER BY id DESC')]
+            cmap={v:k for k,v in clients}
+            chosen_client=select_client_id or cmap.get(client.get())
+            client['values']=list(cmap)
+            if chosen_client:
+                for label,cid in cmap.items():
+                    if cid==chosen_client: client.set(label); break
+            emap={label:eid for eid,cid,label in equipment if not chosen_client or cid==chosen_client}
+            equip['values']=list(emap)
+            if select_equipment_id:
+                for label,eid in emap.items():
+                    if eid==select_equipment_id: equip.set(label); break
+            elif equip.get() not in emap: equip.set('')
+
+        def on_client(*_):
+            refresh_lists()
+        client.bind('<<ComboboxSelected>>',on_client)
+
+        quick=tk.Frame(form,bg=CARD); quick.grid(row=6,column=0,columnspan=3,sticky='ew',padx=10,pady=(2,8))
+        tk.Label(quick,text='Not in SERVIX yet?',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(side='left',padx=(0,10))
+
+        def quick_client():
+            d=tk.Toplevel(self); d.title('Quick Add Client'); d.geometry('520x430'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+            vals={}
+            for key,label in [('name','Client / Company *'),('contact','Contact Person'),('mobile','Mobile'),('email','Email'),('city','City'),('address','Address')]:
+                tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=24,pady=(8,2)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=24)
+            def save_client():
+                name=vals['name'].get().strip(); mobile=vals['mobile'].get().strip(); email=vals['email'].get().strip()
+                if not name or (not mobile and not email): return messagebox.showwarning('Required','Client name and at least Mobile or Email are required.',parent=d)
+                with connect() as con:
+                    dup=con.execute("""SELECT id,code,name FROM clients WHERE
+                        (?<>'' AND REPLACE(REPLACE(mobile,' ',''),'-','')=REPLACE(REPLACE(?,' ',''),'-',''))
+                        OR (?<>'' AND LOWER(email)=LOWER(?))""",(mobile,mobile,email,email)).fetchone()
+                    if dup:
+                        if messagebox.askyesno('Existing client found',f"{dup['code']} — {dup['name']} already matches this mobile/email.\n\nUse the existing client?",parent=d):
+                            cid=dup['id']; d.destroy(); refresh_lists(select_client_id=cid); return
+                        return messagebox.showwarning('Duplicate protected','Create Anyway is intentionally blocked in quick entry. Use the Clients screen for an authorized duplicate override.',parent=d)
+                    ts=now(); code=next_code('CLI','clients')
+                    cur=con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(code,name,vals['contact'].get().strip(),mobile,email,vals['address'].get().strip(),vals['city'].get().strip(),'Created during service entry',ts,ts)); cid=cur.lastrowid
+                d.destroy(); refresh_lists(select_client_id=cid)
+            tk.Button(d,text='Create & Select Client',command=save_client,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=18)
+
+        def quick_equipment():
+            cid=cmap.get(client.get())
+            if not cid:return messagebox.showwarning('Select client','Select or create the client first.')
+            d=tk.Toplevel(self); d.title('Quick Add Equipment'); d.geometry('540x520'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+            vals={}
+            for key,label in [('make','Make *'),('model','Model *'),('serial','Serial Number'),('stock','Stock / External ID'),('type','Equipment Type'),('location','Location / Department')]:
+                tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=24,pady=(8,2)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=24)
+            no_serial=tk.BooleanVar(value=False)
+            tk.Checkbutton(d,text='Serial number not available',variable=no_serial,bg=CARD,fg=TEXT,activebackground=CARD).pack(anchor='w',padx=20,pady=8)
+            sold=tk.StringVar(value='Unknown'); row=tk.Frame(d,bg=CARD); row.pack(fill='x',padx=24); tk.Label(row,text='Sold By',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(side='left'); ttk.Combobox(row,textvariable=sold,values=['Us','Other','Unknown'],state='readonly',width=15).pack(side='right')
+            def save_equipment():
+                make=vals['make'].get().strip(); model=vals['model'].get().strip(); serial=vals['serial'].get().strip()
+                if not make or not model:return messagebox.showwarning('Required','Make and Model are mandatory.',parent=d)
+                if not serial and not no_serial.get():return messagebox.showwarning('Serial','Enter the serial number or tick “Serial number not available”.',parent=d)
+                with connect() as con:
+                    if serial:
+                        dup=con.execute('''SELECT e.id,e.code,e.make,e.model,e.serial,c.name client_name FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
+                                           WHERE LOWER(TRIM(e.serial))=LOWER(TRIM(?))''',(serial,)).fetchone()
+                        if dup:
+                            if messagebox.askyesno('Existing equipment found',f"{dup['code']} — {dup['make']} {dup['model']}\nS/N {dup['serial']}\nClient: {dup['client_name']}\n\nUse this existing SERVIX Equipment ID?",parent=d):
+                                eid=dup['id']; d.destroy()
+                                with connect() as c2: owner=c2.execute('SELECT client_id FROM equipment WHERE id=?',(eid,)).fetchone()[0]
+                                refresh_lists(select_client_id=owner,select_equipment_id=eid); return
+                            return messagebox.showwarning('Duplicate protected','The same physical serial should keep one SERVIX Equipment ID. Resolve ownership/history from Equipment before creating another record.',parent=d)
+                    ts=now(); code=next_code('SEQ','equipment')
+                    cur=con.execute('''INSERT INTO equipment(code,client_id,make,model,serial,stock_id,equipment_type,sold_by,location,notes,created,modified)
+                                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',(code,cid,make,model,serial,vals['stock'].get().strip(),vals['type'].get().strip(),sold.get(),vals['location'].get().strip(),'Serial explicitly unavailable' if no_serial.get() else '',ts,ts)); eid=cur.lastrowid
+                d.destroy(); refresh_lists(select_client_id=cid,select_equipment_id=eid)
+            tk.Button(d,text='Create & Select Equipment',command=save_equipment,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=18)
+
+        tk.Button(quick,text='+ Quick Add Client',command=quick_client,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=7).pack(side='left',padx=4)
+        tk.Button(quick,text='+ Quick Add Equipment',command=quick_equipment,bg='#EAF7F8',fg='#087A84',bd=0,padx=12,pady=7).pack(side='left',padx=4)
+        refresh_lists()
+
+        tk.Label(form,text='Complaint / Requirement *',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=7,column=0,sticky='w',padx=10,pady=(8,3))
+        complaint=tk.Text(form,height=5,font=('Segoe UI',10),relief='solid',bd=1); complaint.grid(row=8,column=0,columnspan=3,sticky='ew',padx=10,pady=(0,10))
+
+        guide=self.card(self.content); guide.pack(fill='x',padx=28,pady=(0,10))
+        tk.Label(guide,text='* Mandatory   •   Engineer / Priority are important   •   Request Source is optional   •   Quote, charges, payment, work done and dispatch are completed later when relevant.',bg=CARD,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',padx=14,pady=10)
+
         actions=tk.Frame(self.content,bg=BG); actions.pack(fill='x',padx=28)
         def save():
-            if not client.get() or not equip.get() or not reason.get() or not warranty.get() or not amc.get() or not complaint.get('1.0','end').strip(): return messagebox.showwarning('Mandatory information','Please complete all fields marked *.')
-            sc=next_code('SRV','services'); ts=now()
+            cid=cmap.get(client.get()); eid=emap.get(equip.get()); text=complaint.get('1.0','end').strip()
+            if not cid or not eid or not reason.get() or not warranty.get() or not amc.get() or not text:return messagebox.showwarning('Mandatory information','Complete Client, Equipment, Reason, Complaint, Warranty and AMC.')
             with connect() as con:
-                cur=con.execute('''INSERT INTO services(code,client_id,equipment_id,opened,request_source,reason,complaint,warranty,amc,engineer,priority,status,payment_status,modified) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(sc,cmap[client.get()],emap[equip.get()],ts,source.get(),reason.get(),complaint.get('1.0','end').strip(),warranty.get(),amc.get(),engineer.get(),priority.get() or 'Normal',status.get() or 'New','Not Applicable',ts)); con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(cur.lastrowid,ts,'Service call created','Office'))
+                owner=con.execute('SELECT client_id FROM equipment WHERE id=?',(eid,)).fetchone()
+                if not owner or owner[0]!=cid:return messagebox.showwarning('Equipment mismatch','Selected equipment does not belong to the selected client. Refresh the selection and try again.')
+                if reason.get()=='Breakdown / Complaint':
+                    serial=con.execute('SELECT serial FROM equipment WHERE id=?',(eid,)).fetchone()[0]
+                    prev=con.execute("""SELECT code,opened,complaint FROM services WHERE equipment_id=? AND reason='Breakdown / Complaint'
+                                        AND id<>(SELECT COALESCE(MAX(id),0)+1 FROM services) ORDER BY id DESC LIMIT 1""",(eid,)).fetchone()
+                    if prev and not messagebox.askyesno('Previous complaint found',f"This device has a previous breakdown: {prev['code']} ({prev['opened']}).\n\nPrevious complaint: {prev['complaint']}\n\nCreate a new Service ID?",parent=self):return
+                sc=next_code('SRV','services'); ts=now()
+                cur=con.execute('''INSERT INTO services(code,client_id,equipment_id,opened,request_source,reason,complaint,warranty,amc,engineer,priority,status,payment_status,modified)
+                                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(sc,cid,eid,ts,source.get(),reason.get(),text,warranty.get(),amc.get(),engineer.get().strip(),priority.get() or 'Normal',status.get() or 'New','Not Applicable',ts))
+                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(cur.lastrowid,ts,'Service call created from office intake','Office'))
             messagebox.showinfo('Service created',f'{sc} created successfully.'); self.show_service_detail(sc)
         tk.Button(actions,text='Create Service ID',command=save,bg=BLUE,fg='white',font=('Segoe UI',10,'bold'),bd=0,padx=22,pady=11).pack(side='right')
 
@@ -251,9 +352,10 @@ class Servix(tk.Tk):
         def save():
             if not vals['name'].get() or (not vals['mobile'].get() and not vals['email'].get()):return messagebox.showwarning('Required','Client name and at least Mobile or Email are required.',parent=d)
             with connect() as con:
-                dup=con.execute('SELECT code,name FROM clients WHERE (mobile<>"" AND mobile=?) OR (email<>"" AND email=?)',(vals['mobile'].get(),vals['email'].get())).fetchone()
-                if dup and not messagebox.askyesno('Possible duplicate',f"Possible duplicate: {dup['code']} — {dup['name']}\nCreate anyway?",parent=d):return
-                ts=now(); con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(next_code('CLI','clients'),*[vals[k].get() for k in ('name','contact','mobile','email','address','city','notes')],ts,ts))
+                dup=con.execute('SELECT code,name FROM clients WHERE (mobile<>"" AND mobile=?) OR (email<>"" AND LOWER(email)=LOWER(?))',(vals['mobile'].get().strip(),vals['email'].get().strip())).fetchone()
+                if dup:
+                    return messagebox.showwarning('Possible duplicate',f"Possible duplicate: {dup['code']} — {dup['name']}\n\nOpen/review the existing client before creating another. Duplicate override will be added under Administration with authorization and audit.",parent=d)
+                ts=now(); con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(next_code('CLI','clients'),*[vals[k].get().strip() for k in ('name','contact','mobile','email','address','city','notes')],ts,ts))
             d.destroy(); self.show_clients()
         tk.Button(d,text='Save Client',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=20)
 
@@ -303,8 +405,8 @@ class Servix(tk.Tk):
             if not vals['client'].get() or not vals['make'].get() or not vals['model'].get():return messagebox.showwarning('Required','Client, Make and Model are mandatory.',parent=d)
             with connect() as con:
                 if vals['serial'].get():
-                    dup=con.execute('SELECT code FROM equipment WHERE serial=?',(vals['serial'].get(),)).fetchone()
-                    if dup and not messagebox.askyesno('Possible duplicate',f"Serial already exists as {dup['code']}. Create anyway?",parent=d):return
+                    dup=con.execute('SELECT code FROM equipment WHERE LOWER(TRIM(serial))=LOWER(TRIM(?))',(vals['serial'].get(),)).fetchone()
+                    if dup:return messagebox.showwarning('Existing equipment',f"Serial already exists as {dup['code']}. Reuse that permanent SERVIX Equipment ID instead of creating a duplicate.",parent=d)
                 ts=now(); con.execute('''INSERT INTO equipment(code,client_id,make,model,serial,stock_id,equipment_type,sold_by,warranty_till,amc_till,location,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)''',(next_code('SEQ','equipment'),cmap[vals['client'].get()],vals['make'].get(),vals['model'].get(),vals['serial'].get(),vals['stock'].get(),vals['type'].get(),vals['sold'].get(),vals['warranty'].get(),vals['amc'].get(),vals['location'].get(),ts,ts))
             d.destroy(); self.show_equipment()
         tk.Button(d,text='Save Equipment',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=18)
