@@ -750,29 +750,47 @@ class Servix(tk.Tk):
             messagebox.showinfo('Saved','Location and movement details saved.')
         tk.Button(location_tab,text='Save Location Details',command=save_location,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=6,column=1,sticky='e',padx=10,pady=12)
 
-        # Parts: office entry only; add rows as the engineer reports work.
+        # Parts Used is integrated with Inventory. Stock issues are linked to this Service ID.
         pcols=('Part No.','Description','Qty','FOC / Chargeable','Amount','Remarks'); ptr=ttk.Treeview(parts_tab,columns=pcols,show='headings',height=10)
         for pc in pcols: ptr.heading(pc,text=pc)
         ptr.pack(fill='both',expand=True,padx=12,pady=(12,6))
         pform=tk.Frame(parts_tab,bg=CARD); pform.pack(fill='x',padx=12,pady=8)
+        with connect() as con:
+            inv=con.execute("""SELECT i.id,i.code,i.part_name,i.part_number,i.unit,
+                COALESCE(SUM(CASE WHEN m.movement_type IN ('Opening','Receipt','Return','Adjustment +') THEN m.qty
+                                  WHEN m.movement_type IN ('Issue','Adjustment -') THEN -m.qty ELSE 0 END),0) stock
+                FROM inventory_items i LEFT JOIN inventory_movements m ON m.item_id=i.id
+                WHERE i.active=1 GROUP BY i.id ORDER BY i.part_name""").fetchall()
+        invmap={f"{x['code']} — {x['part_name']} ({x['stock']:g} {x['unit']})":x for x in inv}
+        tk.Label(pform,text='Inventory Part',bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=0,sticky='w',padx=4)
+        partsel=ttk.Combobox(pform,state='readonly',values=list(invmap),width=38); partsel.grid(row=1,column=0,padx=4,sticky='ew')
         pent={}
-        for i,(key,label,width) in enumerate([('no','Part No.',14),('desc','Description',28),('qty','Qty',8),('amount','Amount',10),('remarks','Remarks',22)]):
+        for i,(key,label,width) in enumerate([('qty','Qty',8),('amount','Amount',10),('remarks','Remarks',22)],1):
             tk.Label(pform,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=4)
             pent[key]=ttk.Entry(pform,width=width); pent[key].grid(row=1,column=i,padx=4,sticky='ew')
-        pcharge=ttk.Combobox(pform,width=15,state='readonly',values=['FOC','Chargeable']); pcharge.set('Chargeable'); pcharge.grid(row=1,column=5,padx=4)
+        pcharge=ttk.Combobox(pform,width=15,state='readonly',values=['FOC','Chargeable']); pcharge.set('Chargeable'); pcharge.grid(row=1,column=4,padx=4)
         def refresh_parts():
-            for x in ptr.get_children(): ptr.delete(x)
+            ptr.delete(*ptr.get_children())
             with connect() as con:
                 for x in con.execute('SELECT part_no,description,qty,chargeable,amount,remarks FROM parts WHERE service_id=? ORDER BY id DESC',(r['id'],)): ptr.insert('','end',values=tuple(x))
         def save_part():
+            item=invmap.get(partsel.get())
+            if not item:return messagebox.showwarning('Required','Select an active Inventory Part.')
             try: qty=float(pent['qty'].get() or 1); amount=float(pent['amount'].get() or 0)
-            except ValueError: return messagebox.showwarning('Check values','Quantity and amount must be numeric.')
-            if not pent['desc'].get().strip(): return messagebox.showwarning('Required','Part description is required.')
-            add_part(r['id'],pent['no'].get(),pent['desc'].get(),qty,pcharge.get(),amount,pent['remarks'].get())
-            add_history(r['id'],f"Part recorded: {pent['desc'].get()} x {qty}")
-            for x in pent.values(): x.delete(0,'end')
-            refresh_parts()
-        tk.Button(pform,text='+ Add Part',command=save_part,bg=BLUE,fg='white',bd=0,padx=14,pady=8).grid(row=1,column=6,padx=8)
+            except ValueError:return messagebox.showwarning('Check values','Quantity and amount must be numeric.')
+            if qty<=0:return messagebox.showwarning('Check quantity','Quantity must be greater than zero.')
+            with connect() as con:
+                stock=con.execute("""SELECT COALESCE(SUM(CASE WHEN movement_type IN ('Opening','Receipt','Return','Adjustment +') THEN qty
+                    WHEN movement_type IN ('Issue','Adjustment -') THEN -qty ELSE 0 END),0) FROM inventory_movements WHERE item_id=?""",(item['id'],)).fetchone()[0]
+                if qty>stock:return messagebox.showwarning('Insufficient stock',f"Available stock is {stock:g} {item['unit']}. Receive or adjust stock before issuing this quantity.")
+                cur=con.execute('INSERT INTO parts(service_id,part_no,description,qty,chargeable,amount,remarks) VALUES(?,?,?,?,?,?,?)',(r['id'],item['part_number'] or item['code'],item['part_name'],qty,pcharge.get(),amount,pent['remarks'].get().strip()))
+                con.execute('INSERT INTO inventory_movements(item_id,movement_date,movement_type,qty,service_id,reference,notes,username) VALUES(?,?,?,?,?,?,?,?)',(item['id'],now(),'Issue',qty,r['id'],r['code'],f"Service part row {cur.lastrowid}",self.current_user['username']))
+            add_history(r['id'],f"Inventory issued: {item['part_name']} x {qty}",self.current_user['username'])
+            audit(self.current_user['username'],'service',r['code'],'PART_ISSUE',f"{item['code']} {item['part_name']} x {qty}")
+            partsel.set('')
+            for x in pent.values():x.delete(0,'end')
+            refresh_parts(); messagebox.showinfo('Part issued','Part recorded against the service and deducted from inventory.')
+        tk.Button(pform,text='+ Issue Part',command=save_part,bg=BLUE,fg='white',bd=0,padx=14,pady=8).grid(row=1,column=5,padx=8)
         refresh_parts()
 
         # Calibration fields only matter when the service reason is Calibration.
