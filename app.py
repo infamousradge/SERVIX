@@ -469,7 +469,7 @@ class Servix(tk.Tk):
         reason=self.form_field(form,'Reason for Service',2,2,['Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up','Performance Verification','Software/Firmware Update','Accessory Replacement','Part Replacement','Customer Requested Service','Other'],required=True)
         warranty=self.form_field(form,'Under Warranty?',4,0,['Yes','No'],required=True)
         amc=self.form_field(form,'Under AMC?',4,1,['Yes','No'],required=True)
-        engineer=self.form_field(form,'Assigned Engineer (important)',4,2,None)
+        engineer=self.form_field(form,'Assigned Engineer (important)',4,2,[])
         priority=self.form_field(form,'Priority',6,0,['Normal','Urgent','Critical']); priority.set('Normal')
         source=self.form_field(form,'Request Source (optional)',6,1,['Phone','Email','WhatsApp','Walk-in','Other'])
         status=self.form_field(form,'Status',6,2,['New','Assigned','Received']); status.set('New')
@@ -485,8 +485,10 @@ class Servix(tk.Tk):
         def refresh_lists(select_client_id=None,select_equipment_id=None):
             nonlocal cmap,emap
             with connect() as con:
+                engineer_names=[x['name'] for x in con.execute('SELECT name FROM engineers WHERE active=1 ORDER BY name')]
                 clients=[(x['id'],f"{x['code']} — {x['name']}") for x in con.execute('SELECT id,code,name FROM clients ORDER BY name')]
                 equipment=[(x['id'],x['client_id'],f"{x['code']} — {x['make']} {x['model']} — {x['serial'] or 'Serial not available'}") for x in con.execute('SELECT id,client_id,code,make,model,serial FROM equipment ORDER BY id DESC')]
+            engineer['values']=engineer_names
             cmap={v:k for k,v in clients}
             chosen_client=select_client_id or cmap.get(client.get())
             client['values']=list(cmap)
@@ -586,6 +588,7 @@ class Servix(tk.Tk):
                                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(sc,cid,eid,ts,source.get(),reason.get(),text,warranty.get(),amc.get(),engineer.get().strip(),priority.get() or 'Normal',status.get() or 'New','Not Applicable',ts))
                 con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(cur.lastrowid,ts,'Service call created from office intake',self.current_user['username']))
             audit(self.current_user['username'],'service',sc,'CREATE','Service call created')
+            if engineer.get().strip(): audit(self.current_user['username'],'service',sc,'ENGINEER_ASSIGN',f"Assigned to {engineer.get().strip()}")
             messagebox.showinfo('Service created',f'{sc} created successfully.'); self.show_service_detail(sc)
         tk.Button(actions,text='Create Service ID',command=save,bg=BLUE,fg='white',font=('Segoe UI',10,'bold'),bd=0,padx=22,pady=11).pack(side='right')
 
@@ -665,7 +668,10 @@ class Servix(tk.Tk):
         tk.Label(stage,text=f"Current: {r['status']}   •   Complete only the fields required for the stage you are moving to.",bg='#F7FAFD',fg=MUTED,font=('Segoe UI',8)).pack(side='left',padx=8)
         stat=self.form_field(tech,'Status',2,0,['New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Reopened','Cancelled']); stat.set(r['status'])
         pending=self.form_field(tech,'Pending Reason',2,1,['','Awaiting Customer','Awaiting Parts','Awaiting Approval','Awaiting Payment','Awaiting Engineer','Other']); pending.set(r['pending_reason'] or '')
-        eng=self.form_field(tech,'Engineer',2,2); eng.insert(0,r['engineer'] or '')
+        eng=self.form_field(tech,'Engineer',2,2,[])
+        with connect() as con: active_engineers=[x['name'] for x in con.execute('SELECT name FROM engineers WHERE active=1 ORDER BY name')]
+        if r['engineer'] and r['engineer'] not in active_engineers: active_engineers.append(r['engineer'])
+        eng['values']=active_engineers; eng.set(r['engineer'] or '')
         received=self.form_field(tech,'Equipment Received Date',4,0); received.insert(0,r['received_date'] or '')
         condition=self.form_field(tech,'Received Condition / Accessories',4,1); condition.insert(0,r['received_condition'] or '')
         work_date=self.form_field(tech,'Engineer Visit / Work Date',4,2); work_date.insert(0,r['work_date'] or '')
@@ -686,7 +692,7 @@ class Servix(tk.Tk):
         update_box.grid(row=14,column=0,columnspan=3,sticky='ew',padx=10,pady=10); update_box.grid_columnconfigure((0,1,2),weight=1)
         upd_type=self.form_field(update_box,'Update Type',0,0,['Engineer Update','Technical','Customer Communication','Follow-up','Management']); upd_type.set('Engineer Update')
         upd_date=self.form_field(update_box,'Date / Time',0,1); upd_date.insert(0,now())
-        upd_eng=self.form_field(update_box,'Engineer',0,2); upd_eng.insert(0,r['engineer'] or '')
+        upd_eng=self.form_field(update_box,'Engineer',0,2,active_engineers); upd_eng.set(r['engineer'] or '')
         upd_diag=self.form_field(update_box,'Diagnosis / Update',2,0); upd_work=self.form_field(update_box,'Work Done',2,1); upd_next=self.form_field(update_box,'Next Action',2,2)
         def add_update():
             if not upd_date.get().strip() or not (upd_diag.get().strip() or upd_work.get().strip()):return messagebox.showwarning('Update required','Enter the update date/time and Diagnosis/Update or Work Done.')
