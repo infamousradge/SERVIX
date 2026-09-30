@@ -587,11 +587,28 @@ class Servix(tk.Tk):
             for x in con.execute('SELECT event_date,user,note FROM history WHERE service_id=? ORDER BY id DESC',(sid,)):tr.insert('','end',values=tuple(x))
 
     def show_clients(self):
-        self.clear(); self.heading('Clients','Client database created naturally from service activity')
-        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=(0,22)); cols=('Client ID','Name','Contact','Mobile','Email','City'); tr=ttk.Treeview(card,columns=cols,show='headings'); [tr.heading(c,text=c) for c in cols]; tr.pack(fill='both',expand=True,padx=12,pady=12)
-        with connect() as con:
-            for r in con.execute('SELECT code,name,contact,mobile,email,city FROM clients ORDER BY id DESC'):tr.insert('','end',values=tuple(r))
-        tk.Button(card,text='+ Add Client',bg=BLUE,fg='white',bd=0,padx=15,pady=8,command=self.client_dialog).place(relx=1,rely=0,x=-20,y=20,anchor='ne')
+        self.clear()
+        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text='Clients',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text='Client Master / Service Customers',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
+        tk.Label(tools,text='Search Client',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,5),pady=8)
+        q=tk.StringVar(); ent=ttk.Entry(tools,textvariable=q,width=42); ent.pack(side='left',pady=7)
+        tk.Label(tools,text='Name / Contact / Mobile / Email / City',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='left',padx=8)
+        tk.Button(tools,text='+ New Client',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.client_dialog).pack(side='right',padx=8,pady=5)
+        card=self.card(body); card.pack(fill='both',expand=True)
+        cols=('Client ID','Client Name','Contact Person','Mobile','Email','City'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        widths=(90,230,160,120,220,130)
+        for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            for i in tr.get_children(): tr.delete(i)
+            term='%'+q.get().strip()+'%'
+            with connect() as con:
+                rows=con.execute('SELECT code,name,contact,mobile,email,city FROM clients WHERE ?="" OR name LIKE ? OR contact LIKE ? OR mobile LIKE ? OR email LIKE ? OR city LIKE ? ORDER BY id DESC',(q.get().strip(),term,term,term,term,term)).fetchall()
+            for r in rows: tr.insert('','end',values=tuple(r))
+        q.trace_add('write',load); load()
         tr.bind('<Double-1>',lambda e:self.show_client_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_client_360(self,code):
@@ -602,18 +619,21 @@ class Servix(tk.Tk):
             eq=con.execute('SELECT * FROM equipment WHERE client_id=? ORDER BY id DESC',(r['id'],)).fetchall()
             svc=con.execute('''SELECT s.code,s.opened,e.code equipment,e.make,e.model,e.serial,s.reason,s.status,s.warranty,s.amc,s.foc_chargeable,s.payment_status
                                FROM services s LEFT JOIN equipment e ON e.id=s.equipment_id WHERE s.client_id=? ORDER BY s.id DESC''',(r['id'],)).fetchall()
-        self.heading(f"{r['code']} — {r['name']}",'Client 360 • contacts, equipment and complete service activity')
-        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
+        head=tk.Frame(self.content,bg='#164F7C',height=42); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text=f"Client Details  •  {r['code']}",bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text=r['name'],bg='#164F7C',fg='#DCECF8',font=('Segoe UI',9,'bold')).pack(side='left',padx=10)
+        tk.Button(head,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',bd=0,padx=12,pady=5).pack(side='right',padx=10,pady=6)
+        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=10,pady=(8,0))
         self.metric(metrics,'Equipment',len(eq),BLUE); self.metric(metrics,'Total Services',len(svc),GREEN)
         self.metric(metrics,'Open Calls',sum(1 for x in svc if x['status'] not in ('Closed','Cancelled')),ORANGE)
         self.metric(metrics,'Payment Pending',sum(1 for x in svc if x['payment_status'] in ('Pending','Part Paid')),RED)
-        info=self.card(self.content); info.pack(fill='x',padx=28,pady=14)
+        info=self.card(self.content); info.pack(fill='x',padx=10,pady=7)
         details=[('Contact',r['contact']),('Mobile',r['mobile']),('Email',r['email']),('City',r['city']),('Address',r['address'])]
         for i,(k,v) in enumerate(details):
             tk.Label(info,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=12,pady=(10,2))
             tk.Label(info,text=v or '—',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=1,column=i,sticky='w',padx=12,pady=(0,10))
             info.grid_columnconfigure(i,weight=1)
-        tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
+        tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=10,pady=(0,10))
         et=tk.Frame(tabs,bg=CARD); st=tk.Frame(tabs,bg=CARD); tabs.add(et,text=' Equipment '); tabs.add(st,text=' Service History ')
         ecols=('SERVIX ID','Make','Model','Serial','Stock / External ID','Warranty Till','AMC Till'); etr=ttk.Treeview(et,columns=ecols,show='headings')
         for x in ecols:etr.heading(x,text=x)
@@ -640,11 +660,28 @@ class Servix(tk.Tk):
         tk.Button(d,text='Save Client',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=20)
 
     def show_equipment(self):
-        self.clear(); self.heading('Equipment','Permanent SERVIX identity for every serviced device')
-        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=(0,22)); cols=('SERVIX ID','Client','Make','Model','Serial','Stock / External ID','Warranty Till','AMC Till'); tr=ttk.Treeview(card,columns=cols,show='headings'); [tr.heading(c,text=c) for c in cols]; tr.pack(fill='both',expand=True,padx=12,pady=12)
-        with connect() as con:
-            for r in con.execute('SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC'):tr.insert('','end',values=tuple(r))
-        tk.Button(card,text='+ Add Equipment',bg=BLUE,fg='white',bd=0,padx=15,pady=8,command=self.equipment_dialog).place(relx=1,rely=0,x=-20,y=20,anchor='ne')
+        self.clear()
+        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text='Equipment',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text='Permanent Equipment Master / Service History',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
+        tk.Label(tools,text='Search Equipment',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,5),pady=8)
+        q=tk.StringVar(); ttk.Entry(tools,textvariable=q,width=42).pack(side='left',pady=7)
+        tk.Label(tools,text='Equipment ID / Client / Make / Model / Serial No.',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='left',padx=8)
+        tk.Button(tools,text='+ New Equipment',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.equipment_dialog).pack(side='right',padx=8,pady=5)
+        card=self.card(body); card.pack(fill='both',expand=True)
+        cols=('Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        widths=(100,220,120,120,140,110,105,105)
+        for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def load(*_):
+            for i in tr.get_children(): tr.delete(i)
+            term='%'+q.get().strip()+'%'
+            with connect() as con:
+                rows=con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till FROM equipment e LEFT JOIN clients c ON c.id=e.client_id WHERE ?="" OR e.code LIKE ? OR c.name LIKE ? OR e.make LIKE ? OR e.model LIKE ? OR e.serial LIKE ? ORDER BY e.id DESC''',(q.get().strip(),term,term,term,term,term)).fetchall()
+            for r in rows: tr.insert('','end',values=tuple(r))
+        q.trace_add('write',load); load()
         tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
     def show_equipment_360(self,code):
@@ -656,7 +693,10 @@ class Servix(tk.Tk):
                                FROM services WHERE equipment_id=? ORDER BY id DESC''',(r['id'],)).fetchall()
             parts=con.execute('''SELECT p.part_no,p.description,p.qty,p.chargeable,p.amount,s.code service_code
                                  FROM parts p JOIN services s ON s.id=p.service_id WHERE s.equipment_id=? ORDER BY p.id DESC''',(r['id'],)).fetchall()
-        self.heading(r['code'],f"{r['make']} {r['model']} • S/N {r['serial'] or 'Not available'} • Device 360")
+        head=tk.Frame(self.content,bg='#164F7C',height=42); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text=f"Equipment Details  •  {r['code']}",bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text=f"{r['make']} {r['model']}  •  S/N {r['serial'] or 'Not Available'}",bg='#164F7C',fg='#DCECF8',font=('Segoe UI',9,'bold')).pack(side='left',padx=10)
+        tk.Button(head,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',bd=0,padx=12,pady=5).pack(side='right',padx=10,pady=6)
         metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
         self.metric(metrics,'Lifetime Services',len(svc),BLUE); self.metric(metrics,'Warranty Calls',sum(1 for x in svc if x['warranty']=='Yes'),GREEN)
         self.metric(metrics,'AMC Calls',sum(1 for x in svc if x['amc']=='Yes'),CYAN); self.metric(metrics,'Parts Recorded',len(parts),ORANGE)
