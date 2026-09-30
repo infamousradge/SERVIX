@@ -58,7 +58,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, event_date TEXT NOT NULL, note TEXT NOT NULL, user TEXT);
         CREATE TABLE IF NOT EXISTS service_updates(id INTEGER PRIMARY KEY, service_id INTEGER NOT NULL, update_date TEXT NOT NULL, engineer TEXT, update_type TEXT, diagnosis TEXT, work_done TEXT, result TEXT, next_action TEXT, user TEXT);
         CREATE INDEX IF NOT EXISTS idx_service_updates_service ON service_updates(service_id);
-        CREATE TABLE IF NOT EXISTS calibration(id INTEGER PRIMARY KEY, service_id INTEGER UNIQUE, calibration_date TEXT, result TEXT, certificate_no TEXT, next_due TEXT, remarks TEXT);
+        CREATE TABLE IF NOT EXISTS calibration(id INTEGER PRIMARY KEY, service_id INTEGER UNIQUE, received_date TEXT, calibration_date TEXT, result TEXT, certificate_no TEXT, certificate_date TEXT, next_due TEXT, performed_by TEXT, standards_reference TEXT, remarks TEXT);
         CREATE TABLE IF NOT EXISTS parts(id INTEGER PRIMARY KEY, service_id INTEGER, part_no TEXT, description TEXT, qty REAL, chargeable TEXT, amount REAL DEFAULT 0, remarks TEXT);
         CREATE TABLE IF NOT EXISTS attachments(id INTEGER PRIMARY KEY, service_id INTEGER, original_name TEXT, stored_path TEXT, kind TEXT, original_size INTEGER, stored_size INTEGER, created TEXT);
         CREATE TABLE IF NOT EXISTS exports(id INTEGER PRIMARY KEY, export_date TEXT, from_date TEXT, to_date TEXT, filename TEXT, record_count INTEGER);
@@ -92,6 +92,9 @@ def init_db():
         }
         for name,kind in additions.items():
             if name not in existing: con.execute(f'ALTER TABLE services ADD COLUMN {name} {kind}')
+        cal_existing={r[1] for r in con.execute("PRAGMA table_info(calibration)")}
+        for name,kind in {'received_date':'TEXT','certificate_date':'TEXT','performed_by':'TEXT','standards_reference':'TEXT'}.items():
+            if name not in cal_existing: con.execute(f'ALTER TABLE calibration ADD COLUMN {name} {kind}')
         defaults={'service_prefix':'SRV','service_start':'1','service_digits':'6','client_prefix':'CLI','client_start':'1','client_digits':'6','equipment_prefix':'SEQ','equipment_start':'1','equipment_digits':'6','company_short_name':'HAC','company_name':'HAC','system_title':'Service Management System','system_subtitle':'Service   |   Calibration   |   Warranty   |   AMC','company_logo_path':'','repeat_complaint_days':'60','auto_backup_enabled':'1','auto_backup_days':'1','auto_backup_keep':'14'}
         for key,value in defaults.items(): con.execute('INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)',(key,value))
     ensure_default_user()
