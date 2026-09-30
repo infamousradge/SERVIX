@@ -1036,10 +1036,21 @@ class Servix(tk.Tk):
             if not vals['name'].get() or (not vals['mobile'].get() and not vals['email'].get()):return messagebox.showwarning('Required','Client name and at least Mobile or Email are required.',parent=d)
             with connect() as con:
                 dup=con.execute('SELECT code,name FROM clients WHERE (mobile<>"" AND mobile=?) OR (email<>"" AND LOWER(email)=LOWER(?))',(vals['mobile'].get().strip(),vals['email'].get().strip())).fetchone()
+                override_reason=''
                 if dup:
-                    return messagebox.showwarning('Possible duplicate',f"Possible duplicate: {dup['code']} — {dup['name']}\n\nOpen/review the existing client before creating another. Duplicate override will be added under Administration with authorization and audit.",parent=d)
-                ts=now(); con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(next_code('CLI','clients'),*[vals[k].get().strip() for k in ('name','contact','mobile','email','address','city','notes')],ts,ts))
-            d.destroy(); self.show_clients()
+                    choice=messagebox.askyesnocancel('Possible duplicate',f"Possible duplicate: {dup['code']} — {dup['name']}\n\nYES = View / use existing client\nNO = Request Create Anyway\nCANCEL = Return to this form",parent=d)
+                    if choice is None:return
+                    if choice:
+                        d.destroy(); return self.show_client_360(dup['code'])
+                    if self.current_user['role']!='Administrator':
+                        return messagebox.showwarning('Administrator required','Only an Administrator can create a Client when Mobile or Email already matches an existing Client.\n\nUse the existing Client or ask an Administrator to review the duplicate.',parent=d)
+                    override_reason=simpledialog.askstring('Duplicate override','Reason for creating a separate Client despite the duplicate match:',parent=d)
+                    if not override_reason or not override_reason.strip():
+                        return messagebox.showwarning('Reason required','A duplicate override reason is mandatory.',parent=d)
+                    if not messagebox.askyesno('Confirm duplicate override',f"Create a separate Client even though {dup['code']} — {dup['name']} has the same Mobile or Email?\n\nReason: {override_reason.strip()}",parent=d):return
+                ts=now(); code=next_code('CLI','clients'); con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(code,*[vals[k].get().strip() for k in ('name','contact','mobile','email','address','city','notes')],ts,ts))
+            audit(self.current_user['username'],'client',code,'DUPLICATE_OVERRIDE' if override_reason else 'CREATE',f"Matched {dup['code']} — {dup['name']}; reason: {override_reason.strip()}" if override_reason else 'Client created')
+            d.destroy(); self.show_client_360(code)
         tk.Button(d,text='Save Client',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=20)
 
     def show_equipment(self):
