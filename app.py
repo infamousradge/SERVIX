@@ -736,22 +736,54 @@ class Servix(tk.Tk):
         for name,val,color in rows:self.metric(holder,name,val,color)
         box=self.card(self.content); box.pack(fill='both',expand=True,padx=28,pady=18); tk.Label(box,text='Use Service Calls and Equipment records for detailed entries. More dedicated controls will be added in the next build.',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(pady=35)
     def show_warranty(self):
-        self.clear(); self.heading('Warranty & AMC','Equipment coverage and upcoming expiry alerts')
-        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
+        self.clear()
+        head=tk.Frame(self.content,bg='#164F7C',height=38); head.pack(fill='x'); head.pack_propagate(False)
+        tk.Label(head,text='Warranty & AMC',bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
+        tk.Label(head,text='Equipment Coverage / Expiry Control',bg='#164F7C',fg='#DCECF8',font=('Segoe UI',7)).pack(side='left',padx=8)
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
+        metrics=tk.Frame(body,bg=BG); metrics.pack(fill='x',pady=(0,6))
         self.metric(metrics,'Warranty Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"),ORANGE,'Next 30 days')
-        self.metric(metrics,'AMC Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+30 day')"),BLUE,'Next 30 days')
-        self.metric(metrics,'Warranty Expired',self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)<date('now')"),RED,'Equipment master')
-        self.metric(metrics,'AMC Expired',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)<date('now')"),RED,'Equipment master')
-        card=self.card(self.content); card.pack(fill='both',expand=True,padx=28,pady=18)
-        tk.Label(card,text='Coverage Register',font=('Segoe UI',13,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=14,pady=(14,6))
-        cols=('SERVIX ID','Client','Make','Model','Serial','Warranty Till','AMC Till','Location'); tr=ttk.Treeview(card,columns=cols,show='headings')
-        for x,w in zip(cols,[115,210,120,150,130,115,115,160]):tr.heading(x,text=x); tr.column(x,width=w,anchor='w')
-        tr.pack(fill='both',expand=True,padx=14,pady=(4,14))
-        with connect() as con:
-            for r in con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.warranty_till,e.amc_till,e.location FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
-                                    WHERE (e.warranty_till IS NOT NULL AND e.warranty_till!='') OR (e.amc_till IS NOT NULL AND e.amc_till!='')
-                                    ORDER BY CASE WHEN e.amc_till='' OR e.amc_till IS NULL THEN e.warranty_till ELSE e.amc_till END'''):tr.insert('','end',values=tuple(r))
+        self.metric(metrics,'AMC Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"),BLUE,'Next 60 days')
+        self.metric(metrics,'Warranty Expired',self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)<date('now')"),RED,'Needs review')
+        self.metric(metrics,'AMC Expired',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)<date('now')"),RED,'Needs review')
+        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
+        tk.Label(tools,text='Coverage Register',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(side='left',padx=(10,8),pady=8)
+        q=tk.StringVar(); ttk.Entry(tools,textvariable=q,width=30).pack(side='left',pady=6)
+        mode=tk.StringVar(value='All Coverage'); cb=ttk.Combobox(tools,textvariable=mode,state='readonly',width=18,values=['All Coverage','Active','Expiring','Expired','Warranty','AMC']); cb.pack(side='left',padx=7,pady=6)
+        tk.Label(tools,text='Double-click equipment to open full history',bg=CARD,fg=MUTED,font=('Segoe UI',7)).pack(side='right',padx=10)
+        card=self.card(body); card.pack(fill='both',expand=True)
+        cols=('Equipment ID','Client','Make / Model','Serial No.','Warranty Till','Warranty Status','AMC Till','AMC Status','Location'); tr=ttk.Treeview(card,columns=cols,show='headings')
+        widths=(95,190,180,120,95,95,95,90,130)
+        for x,w in zip(cols,widths):tr.heading(x,text=x); tr.column(x,width=w,minwidth=65,anchor='w')
+        tr.tag_configure('expired',foreground='#B42318'); tr.tag_configure('expiring',foreground='#B54708'); tr.tag_configure('active',foreground='#16794A')
+        tr.pack(fill='both',expand=True,padx=7,pady=7)
+        def state(date_text,days):
+            if not date_text:return 'Not Set'
+            try:
+                from datetime import datetime,date
+                d=datetime.strptime(date_text,'%Y-%m-%d').date(); delta=(d-date.today()).days
+                if delta<0:return 'Expired'
+                if delta<=days:return 'Expiring'
+                return 'Active'
+            except:return 'Check Date'
+        def load(*_):
+            for x in tr.get_children():tr.delete(x)
+            term=q.get().strip().lower(); filt=mode.get()
+            with connect() as con: rows=con.execute("""SELECT e.code,c.name,e.make,e.model,e.serial,e.warranty_till,e.amc_till,e.location FROM equipment e LEFT JOIN clients c ON c.id=e.client_id WHERE COALESCE(e.warranty_till,'')!='' OR COALESCE(e.amc_till,'')!='' ORDER BY c.name,e.make,e.model""").fetchall()
+            for r in rows:
+                ws=state(r['warranty_till'],30); ams=state(r['amc_till'],60)
+                hay=' '.join(str(r[k] or '') for k in r.keys()).lower()
+                if term and term not in hay:continue
+                if filt=='Active' and not (ws=='Active' or ams=='Active'):continue
+                if filt=='Expiring' and not (ws=='Expiring' or ams=='Expiring'):continue
+                if filt=='Expired' and not (ws=='Expired' or ams=='Expired'):continue
+                if filt=='Warranty' and not r['warranty_till']:continue
+                if filt=='AMC' and not r['amc_till']:continue
+                tag='expired' if 'Expired' in (ws,ams) else ('expiring' if 'Expiring' in (ws,ams) else 'active')
+                tr.insert('','end',values=(r['code'],r['name'],f"{r['make']} / {r['model']}",r['serial'] or 'Not Available',r['warranty_till'],ws,r['amc_till'],ams,r['location']),tags=(tag,))
+        q.trace_add('write',load); cb.bind('<<ComboboxSelected>>',load); load()
         tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+
     def show_calibration(self):
         self.clear(); self.heading('Calibration Control','Due dates, overdue certificates and complete calibration service history')
         metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
