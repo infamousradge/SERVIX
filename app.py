@@ -1007,6 +1007,7 @@ class Servix(tk.Tk):
         tk.Label(head,text=f"Client Details  •  {r['code']}",bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
         tk.Label(head,text=r['name'],bg='#164F7C',fg='#DCECF8',font=('Segoe UI',9,'bold')).pack(side='left',padx=10)
         tk.Button(head,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',bd=0,padx=12,pady=5).pack(side='right',padx=10,pady=6)
+        if self.can_edit(): tk.Button(head,text='Transfer Ownership',command=lambda:self.transfer_equipment_ownership(r['code']),bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=5).pack(side='right',padx=3,pady=6)
         metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=10,pady=(8,0))
         self.metric(metrics,'Equipment',len(eq),BLUE); self.metric(metrics,'Total Services',len(svc),GREEN)
         self.metric(metrics,'Open Calls',sum(1 for x in svc if x['status'] not in ('Closed','Cancelled')),ORANGE)
@@ -1107,6 +1108,33 @@ class Servix(tk.Tk):
         q.trace_add('write',load); load()
         tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
 
+    def transfer_equipment_ownership(self,code):
+        if not self.require_edit(): return
+        with connect() as con:
+            eq=con.execute('SELECT e.*,c.code client_code,c.name client_name FROM equipment e JOIN clients c ON c.id=e.client_id WHERE e.code=?',(code,)).fetchone()
+            clients=con.execute('SELECT id,code,name FROM clients WHERE id<>? ORDER BY name,code',(eq['client_id'],)).fetchall() if eq else []
+        if not eq:return
+        if not clients:return messagebox.showinfo('Transfer Ownership','No other Client is available for transfer.')
+        labels=[f"{x['code']} — {x['name']}" for x in clients]; lookup={v:x for v,x in zip(labels,clients)}
+        d=tk.Toplevel(self); d.title('Transfer Equipment Ownership'); d.geometry('600x360'); d.configure(bg=CARD); d.transient(self); d.grab_set()
+        tk.Label(d,text=f"Transfer Ownership • {eq['code']}",bg=CARD,fg=NAVY,font=('Segoe UI',12,'bold')).pack(anchor='w',padx=24,pady=(20,5))
+        tk.Label(d,text=f"Current owner: {eq['client_code']} — {eq['client_name']}",bg=CARD,fg=MUTED,font=('Segoe UI',9)).pack(anchor='w',padx=24,pady=(0,12))
+        tk.Label(d,text='New Client *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); new=ttk.Combobox(d,values=labels,state='readonly'); new.pack(fill='x',padx=24,pady=(2,10))
+        tk.Label(d,text='Effective Date (YYYY-MM-DD) *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); date_e=ttk.Entry(d); date_e.insert(0,today()); date_e.pack(fill='x',padx=24,pady=(2,10))
+        tk.Label(d,text='Transfer Reason *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
+        def save():
+            if not new.get() or not date_e.get().strip() or not reason.get().strip():return messagebox.showwarning('Required','New Client, effective date and transfer reason are required.',parent=d)
+            try: datetime.datetime.strptime(date_e.get().strip(),'%Y-%m-%d')
+            except ValueError:return messagebox.showwarning('Date','Effective date must be YYYY-MM-DD.',parent=d)
+            dest=lookup[new.get()]
+            if not messagebox.askyesno('Confirm Ownership Transfer',f"Equipment {eq['code']} will move from\n{eq['client_code']} — {eq['client_name']}\nto\n{dest['code']} — {dest['name']}\n\nExisting Service Requests will keep their original Client history.\nEffective: {date_e.get().strip()}\nReason: {reason.get().strip()}",parent=d):return
+            with connect() as con:
+                con.execute('INSERT INTO equipment_ownership_history(equipment_id,from_client_id,to_client_id,effective_date,reason,username,created) VALUES(?,?,?,?,?,?,?)',(eq['id'],eq['client_id'],dest['id'],date_e.get().strip(),reason.get().strip(),self.current_user['username'],now()))
+                con.execute('UPDATE equipment SET client_id=?,modified=? WHERE id=?',(dest['id'],now(),eq['id']))
+            audit(self.current_user['username'],'equipment',eq['code'],'OWNERSHIP_TRANSFER',f"{eq['client_code']} -> {dest['code']}; effective={date_e.get().strip()}; reason={reason.get().strip()}")
+            d.destroy(); self.show_equipment_360(eq['code'])
+        tk.Button(d,text='Transfer Ownership',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=8).pack(pady=10)
+
     def show_equipment_360(self,code):
         self.clear()
         with connect() as con:
@@ -1116,6 +1144,9 @@ class Servix(tk.Tk):
                                FROM services WHERE equipment_id=? ORDER BY id DESC''',(r['id'],)).fetchall()
             parts=con.execute('''SELECT p.part_no,p.description,p.qty,p.chargeable,p.amount,s.code service_code
                                  FROM parts p JOIN services s ON s.id=p.service_id WHERE s.equipment_id=? ORDER BY p.id DESC''',(r['id'],)).fetchall()
+            owners=con.execute('''SELECT h.effective_date,fc.code from_code,fc.name from_name,tc.code to_code,tc.name to_name,h.reason,h.username
+                                  FROM equipment_ownership_history h LEFT JOIN clients fc ON fc.id=h.from_client_id LEFT JOIN clients tc ON tc.id=h.to_client_id
+                                  WHERE h.equipment_id=? ORDER BY h.id DESC''',(r['id'],)).fetchall()
         head=tk.Frame(self.content,bg='#164F7C',height=42); head.pack(fill='x'); head.pack_propagate(False)
         tk.Label(head,text=f"Equipment Details  •  {r['code']}",bg='#164F7C',fg='white',font=('Segoe UI',10,'bold')).pack(side='left',padx=14)
         tk.Label(head,text=f"{r['make']} {r['model']}  •  S/N {r['serial'] or 'Not Available'}",bg='#164F7C',fg='#DCECF8',font=('Segoe UI',9,'bold')).pack(side='left',padx=10)
@@ -1128,7 +1159,7 @@ class Servix(tk.Tk):
         for i,(k,v) in enumerate(vals):
             tk.Label(info,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=10,pady=(10,2)); tk.Label(info,text=v or '—',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=1,column=i,sticky='w',padx=10,pady=(0,10)); info.grid_columnconfigure(i,weight=1)
         tabs=ttk.Notebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
-        ht=tk.Frame(tabs,bg=CARD); pt=tk.Frame(tabs,bg=CARD); tabs.add(ht,text=' Lifetime Service History '); tabs.add(pt,text=' Parts History ')
+        ht=tk.Frame(tabs,bg=CARD); pt=tk.Frame(tabs,bg=CARD); ot=tk.Frame(tabs,bg=CARD); tabs.add(ht,text=' Lifetime Service History '); tabs.add(pt,text=' Parts History '); tabs.add(ot,text=' Ownership History ')
         hcols=('Service ID','Opened','Reason','Complaint','Warranty','AMC','Engineer','Status','Work Done','Result','Billing','Payment','Dispatch'); htr=ttk.Treeview(ht,columns=hcols,show='headings')
         for x in hcols:htr.heading(x,text=x)
         htr.pack(fill='both',expand=True,padx=12,pady=12)
@@ -1138,6 +1169,10 @@ class Servix(tk.Tk):
         for x in pcols:ptr.heading(x,text=x)
         ptr.pack(fill='both',expand=True,padx=12,pady=12)
         for x in parts:ptr.insert('','end',values=(x['service_code'],x['part_no'],x['description'],x['qty'],x['chargeable'],x['amount']))
+        ocols=('Effective Date','Previous Owner','New Owner','Reason','Changed By'); otr=ttk.Treeview(ot,columns=ocols,show='headings')
+        for x in ocols:otr.heading(x,text=x)
+        otr.pack(fill='both',expand=True,padx=12,pady=12)
+        for x in owners:otr.insert('','end',values=(x['effective_date'],f"{x['from_code'] or '—'} — {x['from_name'] or '—'}",f"{x['to_code']} — {x['to_name']}",x['reason'],x['username']))
 
     def equipment_dialog(self):
         if not self.require_edit(): return
