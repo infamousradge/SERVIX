@@ -18,7 +18,7 @@ PrivilegesRequired=lowest
 Name: "desktopicon"; Description: "Create a desktop shortcut"
 
 [Files]
-Source: "dist\SERVIX\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\SERVIX\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\SERVIX"; Filename: "{app}\{#MyAppExeName}"
