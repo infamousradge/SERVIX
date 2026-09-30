@@ -726,6 +726,14 @@ class Servix(tk.Tk):
         def save_tech():
             if not self.require_edit(): return
             target=stat.get(); missing=[]
+            workflow=['New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed']
+            old_status=r['status']
+            if old_status=='Cancelled' and target!='Reopened':return messagebox.showwarning('Reopen required','A Cancelled Service Request must be Reopened before moving to another workflow stage.')
+            if old_status=='Closed' and target not in ('Closed','Reopened'):return messagebox.showwarning('Reopen required','A Closed Service Request must be Reopened before further workflow changes.')
+            if target=='Reopened' and old_status not in ('Closed','Cancelled'):return messagebox.showwarning('Invalid transition','Reopened is only valid for a Closed or Cancelled Service Request.')
+            if target=='Cancelled' and old_status in ('Closed','Cancelled'):return messagebox.showwarning('Invalid transition','This Service Request cannot be cancelled from its current status.')
+            if target in workflow and old_status in workflow and workflow.index(target)<workflow.index(old_status):
+                return messagebox.showwarning('Invalid transition','Use Reopened for a completed Service Request. Earlier workflow stages cannot overwrite the recorded service progression.')
             if target=='Received' and not received.get().strip():missing.append('Equipment Received Date')
             if target in ('Under Diagnosis','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed') and not eng.get().strip():missing.append('Engineer')
             if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and not work.get().strip():missing.append('Work Performed')
@@ -743,7 +751,6 @@ class Servix(tk.Tk):
                 if not cal or not cal['calibration_date'] or not cal['result']:missing.append('Calibration Date + Result')
             if missing:return messagebox.showwarning('Cannot complete this stage','Complete these required items first:\n\n• '+'\n• '.join(missing))
             if target.startswith('Awaiting') and not pending.get():return messagebox.showwarning('Pending reason','Select a Pending Reason for an Awaiting status.')
-            old_status=r['status']
             with connect() as con:
                 con.execute('''UPDATE services SET diagnosis=?,root_cause=?,work_done=?,testing_result=?,final_result=?,status=?,pending_reason=?,engineer=?,received_date=?,received_condition=?,work_date=?,dispatch_date=?,dispatch_mode=?,dispatch_reference=?,completion_date=?,closure_date=?,next_action=?,cancel_reason=?,modified=? WHERE code=?''',(diag.get().strip(),root.get().strip(),work.get().strip(),testing.get().strip(),result.get(),target,pending.get(),eng.get().strip(),received.get().strip(),condition.get().strip(),work_date.get().strip(),dispatch.get().strip(),dispatch_mode.get(),dispatch_ref.get().strip(),completion.get().strip(),closure.get().strip(),next_action.get().strip(),cancel_reason.get().strip(),now(),code))
                 note=f"Status {old_status} → {target}" if old_status!=target else f"Technical record updated — {target}"
