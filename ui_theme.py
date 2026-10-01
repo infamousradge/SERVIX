@@ -187,7 +187,10 @@ class SidebarPill(tk.Canvas):
 
     def _draw(self, _event=None):
         self.delete('all')
-        width = max(1, self.winfo_width())
+        # Tk can call this before pack assigns the sidebar's real width. Keep
+        # the temporary first paint wide enough for valid rounded rectangles;
+        # the following Configure event redraws it at the actual width.
+        width = max(64, self.winfo_width())
         scale = 3
         surface = Image.new('RGBA', (width * scale, 52 * scale), (0, 0, 0, 0))
         painter = ImageDraw.Draw(surface)
