@@ -42,6 +42,7 @@ SetupWindowTitle=SERVIX Setup
 WelcomeLabel1=Install SERVIX
 WelcomeLabel2=Your service workspace, ready on this PC.%n%nManage service calls, equipment, calibration and AMC in one place.%n%nChoose Continue to set up SERVIX for your Windows account.
 ButtonNext=&Continue
+ClickNext=Choose Continue to proceed, or Cancel to exit.
 ButtonBack=&Back
 ButtonInstall=&Install SERVIX
 FinishedHeadingLabel=SERVIX is ready
