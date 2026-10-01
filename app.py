@@ -7,7 +7,12 @@ import zipfile
 import json
 import datetime
 import sys
-from PIL import Image, ImageTk
+import os
+from PIL import Image, ImageDraw, ImageTk
+# The installer supplies --demo only for its Demo Workspace shortcut. Set this
+# before importing database or attachment modules so every write is isolated.
+DEMO_MODE='--demo' in sys.argv[1:]
+if DEMO_MODE: os.environ['SERVIX_DEMO_WORKSPACE']='1'
 from ui_theme import configure_theme, center_window, CapsuleNotebook, SidebarPill, PremiumCombobox
 from database import connect, init_db, next_code, now, today, get_setting, set_setting, DB, DATA_ROOT, ROLES, authenticate, hash_password, can, audit, repeat_complaints
 from attachment_utils import store_attachment
@@ -21,7 +26,7 @@ class Servix(tk.Tk):
     def __init__(self):
         if sys.platform=='win32':
             import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('SERVIX.Desktop')
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('SERVIX.Demo' if DEMO_MODE else 'SERVIX.Desktop')
             # Opt into Windows per-monitor DPI so Tk controls and the fixed
             # sidebar render sharply on high-resolution and mixed-DPI screens.
             try:
@@ -33,7 +38,10 @@ class Servix(tk.Tk):
                 try: ctypes.windll.shcore.SetProcessDpiAwareness(2)
                 except (AttributeError,OSError): pass
         super().__init__(); init_db()
-        self.title('SERVIX — Service Management'); self.geometry('1536x960'); self.minsize(1280,760); self.configure(bg=BG)
+        if DEMO_MODE:
+            from demo_data import seed_demo_data
+            seed_demo_data()
+        self.title('SERVIX Demo Workspace — Sample Data' if DEMO_MODE else 'SERVIX — Service Management'); self.geometry('1536x960'); self.minsize(1280,760); self.configure(bg=BG)
         self.style=ttk.Style(self); self.style.theme_use('clam')
         configure_theme(self)
         asset_root=Path(getattr(sys, '_MEIPASS', ROOT))
@@ -83,11 +91,15 @@ class Servix(tk.Tk):
         if admin and not admin['password_hash']:
             if not self.set_initial_password(admin['id']): return False
         result={'ok':False}
-        d=tk.Toplevel(self); d.title('SERVIX Login'); center_window(d, 520, 440); d.resizable(False,False); d.configure(bg=CARD)
+        d=tk.Toplevel(self); d.title('SERVIX Demo Workspace Login' if DEMO_MODE else 'SERVIX Login'); center_window(d, 520, 480 if DEMO_MODE else 440); d.resizable(False,False); d.configure(bg=CARD)
         tk.Label(d,text='SERVIX',bg=CARD,fg=NAVY,font=('Segoe UI',30,'bold')).pack(pady=(38,8))
-        tk.Label(d,text='Sign in to Service Management System',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(pady=(0,14))
+        tk.Label(d,text='Demo workspace — safely separate sample data' if DEMO_MODE else 'Sign in to Service Management System',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(pady=(0,14))
         tk.Label(d,text='Username',bg=CARD,fg=TEXT).pack(anchor='w',padx=45); user=ttk.Entry(d); user.pack(fill='x',padx=45,pady=(3,9)); user.insert(0,'admin')
         tk.Label(d,text='Password',bg=CARD,fg=TEXT).pack(anchor='w',padx=45); pwd=ttk.Entry(d,show='*'); pwd.pack(fill='x',padx=45,pady=(3,10))
+        if DEMO_MODE:
+            pwd.insert(0,'Demo@1234')
+            tk.Label(d,text='Demo sign-in:  admin  /  Demo@1234',bg='#F1F7FC',fg='#31546F',font=('Segoe UI',10,'bold'),padx=10,pady=7).pack(pady=(0,7))
+            tk.Label(d,text='Changes in this workspace never touch your real SERVIX records.',bg=CARD,fg=MUTED,font=('Segoe UI',9)).pack(pady=(0,3))
         msg=tk.Label(d,text='',bg=CARD,fg=RED,font=('Segoe UI',10)); msg.pack()
         def submit(*_):
             row=authenticate(user.get(),pwd.get())
@@ -180,26 +192,58 @@ class Servix(tk.Tk):
             btn.set_active(label=='Dashboard')
         right=tk.Frame(self,bg=BG); right.pack(side='left',fill='both',expand=True)
         top=tk.Frame(right,bg='#063765',height=88); top.pack(fill='x'); top.pack_propagate(False)
-        profile=tk.Frame(top,bg='#0A426F',highlightthickness=1,highlightbackground='#2B628A')
-        profile.pack(side='right',padx=(12,20),pady=12)
-        avatar=tk.Canvas(profile,width=34,height=34,bg='#0A426F',highlightthickness=0)
-        avatar.pack(side='left',padx=(10,8),pady=5)
-        avatar.create_oval(1,1,33,33,fill='#D8ECFC',outline='')
+        def rounded_surface(width,height,fill,outline,radius,shadow=None):
+            scale=4; image=Image.new('RGBA',(width*scale,height*scale),(0,0,0,0)); draw=ImageDraw.Draw(image)
+            if shadow: draw.rounded_rectangle((1*scale,3*scale,(width-2)*scale,(height-1)*scale),radius=radius*scale,fill=shadow)
+            draw.rounded_rectangle((1*scale,1*scale,(width-2)*scale,(height-4)*scale),radius=radius*scale,fill=fill,outline=outline,width=scale)
+            return ImageTk.PhotoImage(image.resize((width,height),Image.Resampling.LANCZOS),master=self)
+        profile_width=336
+        profile=tk.Canvas(top,width=profile_width,height=52,bg='#063765',highlightthickness=0)
+        profile.pack(side='right',padx=(10,20),pady=18)
+        self._profile_image=rounded_surface(profile_width,52,'#0A426F','#2B628A',24,'#052F53')
+        profile.create_image(0,0,anchor='nw',image=self._profile_image)
+        avatar=Image.new('RGBA',(44*4,44*4),(0,0,0,0)); ad=ImageDraw.Draw(avatar)
+        ad.ellipse((2,2,42*4-2,42*4-2),fill='#D8ECFC',outline='#B9DDF7',width=4)
+        self._profile_avatar=ImageTk.PhotoImage(avatar.resize((44,44),Image.Resampling.LANCZOS),master=self)
+        profile.create_image(25,26,anchor='center',image=self._profile_avatar)
         initials=''.join(part[0] for part in self.current_user['display_name'].split()[:2]).upper() or 'U'
-        avatar.create_text(17,17,text=initials,fill='#07518A',font=('Segoe UI',10,'bold'))
-        userinfo=tk.Frame(profile,bg='#0A426F')
-        userinfo.pack(side='left',padx=(0,13),pady=6)
-        tk.Label(userinfo,text=self.current_user['display_name'],bg='#0A426F',fg='white',font=('Segoe UI',10,'bold')).pack(anchor='w')
-        tk.Label(userinfo,text=self.current_user['role'],bg='#0A426F',fg='#C5DCEF',font=('Segoe UI',9)).pack(anchor='w',pady=(1,0))
-        tk.Button(profile,text='Sign Out',command=self.logout,bg='#155687',fg='white',activebackground='#21699A',activeforeground='white',bd=0,relief='flat',font=('Segoe UI',9,'bold'),padx=13,pady=7,cursor='hand2').pack(side='left',padx=(0,7),pady=6)
-        searchwrap=tk.Frame(top,bg='white',width=560,height=46,highlightthickness=1,highlightbackground='#CFE0F0')
-        searchwrap.pack(side='left',padx=(20,0),pady=14)
-        searchwrap.pack_propagate(False)
-        self.search=tk.Entry(searchwrap,font=('Segoe UI',11),bd=0,bg='white',fg=MUTED,insertbackground=TEXT); self.search.insert(0,'Search services, clients, equipment…'); self.search.pack(side='left',fill='both',expand=True,padx=(15,8),pady=2); self.search.bind('<Return>',lambda e:self.global_search())
-        search_icon=tk.Canvas(searchwrap,width=36,height=36,bg='white',highlightthickness=0,cursor='hand2'); search_icon.pack(side='right',padx=5,pady=4)
-        search_icon.create_oval(2,2,34,34,fill='#EAF3FC',outline='')
-        search_icon.create_text(18,17,text='⌕',font=('Segoe UI Symbol',16,'bold'),fill=BLUE)
-        search_icon.bind('<Button-1>',lambda _e:self.global_search())
+        profile.create_text(25,26,text=initials,fill='#07518A',font=('Segoe UI',11,'bold'))
+        profile.create_text(53,18,text=self.current_user['display_name'],anchor='w',fill='white',font=('Segoe UI',11,'bold'))
+        profile.create_text(53,36,text=self.current_user['role'],anchor='w',fill='#C5DCEF',font=('Segoe UI',9))
+        def draw_signout(button,fill='#155687',focused=False):
+            button.delete('all'); image=rounded_surface(90,36,fill,'#3E7BA5' if focused else fill,17)
+            button.surface_image=image; button.create_image(0,0,anchor='nw',image=image)
+            button.create_text(45,18,text='Sign Out',fill='white',font=('Segoe UI',10,'bold'))
+        signout=tk.Canvas(profile,width=90,height=36,bg='#0A426F',highlightthickness=0,takefocus=True,cursor='hand2')
+        draw_signout(signout)
+        signout.bind('<Button-1>',lambda _e:self.logout())
+        signout.bind('<Return>',lambda _e:self.logout()); signout.bind('<space>',lambda _e:self.logout())
+        signout.bind('<Enter>',lambda _e:draw_signout(signout,'#21699A',signout.focus_get()==signout))
+        signout.bind('<Leave>',lambda _e:draw_signout(signout))
+        signout.bind('<FocusIn>',lambda _e:draw_signout(signout,'#155687',True))
+        signout.bind('<FocusOut>',lambda _e:draw_signout(signout))
+        profile.create_window(profile_width-55,26,window=signout,width=90,height=36)
+        search_width=520 if DEMO_MODE else 560
+        searchwrap=tk.Canvas(top,width=search_width,height=50,bg='#063765',highlightthickness=0)
+        searchwrap.pack(side='left',padx=(20,0),pady=19)
+        self._search_surface=rounded_surface(search_width,48,'#FFFFFF','#D5E1ED',24,'#B8C9D9')
+        searchwrap.create_image(0,0,anchor='nw',image=self._search_surface)
+        icon_width=38; search_icon=Image.new('RGBA',(icon_width*4,icon_width*4),(0,0,0,0)); sd=ImageDraw.Draw(search_icon)
+        sd.rounded_rectangle((4*4,4*4,34*4,34*4),radius=12*4,fill='#EEF5FC')
+        sd.ellipse((12*4,10*4,23*4,21*4),outline='#0876D1',width=2*4)
+        sd.line((21*4,20*4,27*4,26*4),fill='#0876D1',width=2*4)
+        self._search_icon=ImageTk.PhotoImage(search_icon.resize((icon_width,icon_width),Image.Resampling.LANCZOS),master=self)
+        icon_x=search_width-22; searchwrap.create_image(icon_x,24,anchor='center',image=self._search_icon,tags=('search_button',))
+        self._search_placeholder='Search services, clients, equipment…'
+        self.search=tk.Entry(searchwrap,font=('Segoe UI',11),bd=0,highlightthickness=0,bg='white',fg=MUTED,insertbackground=TEXT)
+        self.search.insert(0,self._search_placeholder)
+        searchwrap.create_window(22,24,anchor='w',window=self.search,width=search_width-100,height=30)
+        self.search.bind('<Return>',lambda e:self.global_search())
+        self.search.bind('<FocusIn>',self._search_focus_in); self.search.bind('<FocusOut>',self._search_focus_out)
+        searchwrap.tag_bind('search_button','<Button-1>',lambda _e:self.global_search())
+        if DEMO_MODE:
+            demo=tk.Label(top,text='DEMO',bg='#F1A84A',fg='#3B2A10',font=('Segoe UI',8,'bold'),padx=9,pady=4)
+            demo.pack(side='right',padx=(0,4),pady=28)
         viewport=tk.Frame(right,bg=BG); viewport.pack(fill='both',expand=True)
         self.page_canvas=tk.Canvas(viewport,bg=BG,highlightthickness=0)
         scroll=ttk.Scrollbar(viewport,orient='vertical',command=self.page_canvas.yview)
@@ -246,6 +290,14 @@ class Servix(tk.Tk):
         if horizontal:self.page_canvas.xview_scroll(units,'units')
         else:self.page_canvas.yview_scroll(units,'units')
         return 'break'
+
+    def _search_focus_in(self,_event=None):
+        if self.search.get()==self._search_placeholder:
+            self.search.delete(0,'end'); self.search.configure(fg=TEXT)
+
+    def _search_focus_out(self,_event=None):
+        if not self.search.get().strip():
+            self.search.delete(0,'end'); self.search.insert(0,self._search_placeholder); self.search.configure(fg=MUTED)
 
     def go(self,label,cmd):
         for k,b in self.nav.items(): b.set_active(k==label)
@@ -477,6 +529,10 @@ class Servix(tk.Tk):
 
     def show_dashboard(self):
         self.clear(); self.section_header('Dashboard','Service Operations / Alerts / Management Overview')
+        if DEMO_MODE:
+            sample=self.card(self.content); sample.pack(fill='x',padx=10,pady=(0,6))
+            tk.Label(sample,text='DEMO DATA — SEPARATE FROM YOUR REAL SERVIX WORKSPACE',bg=CARD,fg=BLUE,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=14,pady=(9,3))
+            tk.Label(sample,text='Duplicate tests: Client mobile 9000010001 or bluewave.demo@servix.local; equipment serial DEMO-SN-001; create another Breakdown / Complaint for that equipment with “intermittent feedback”. Review sample notes and timeline under service SRV-DEMO-0001.',bg=CARD,fg=MUTED,font=('Segoe UI',10),wraplength=920,justify='left').pack(anchor='w',padx=14,pady=(0,9))
         kpi=tk.Frame(self.content,bg=BG); kpi.pack(fill='x',padx=10,pady=(8,7))
         data=[
             ('Open Calls',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled')"),'#83BCF4',''),
@@ -1810,7 +1866,7 @@ class Servix(tk.Tk):
 
     def global_search(self):
         q=self.search.get().strip()
-        if not q or q.startswith('Search Service ID'):return
+        if not q or q==getattr(self,'_search_placeholder','') or q.startswith('Search Service ID'):return
         self.clear(); self.heading('Search Results',q); like=f'%{q}%'
         tabs=CapsuleNotebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
         services=tk.Frame(tabs,bg=CARD); clients=tk.Frame(tabs,bg=CARD); equipment=tk.Frame(tabs,bg=CARD)

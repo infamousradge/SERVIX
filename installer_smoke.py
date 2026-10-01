@@ -4,6 +4,8 @@ from tempfile import TemporaryDirectory
 import struct
 import subprocess
 import time
+import os
+import sqlite3
 import pefile
 import ctypes
 from ctypes import wintypes
@@ -86,6 +88,8 @@ def main():
     expected = icon_payloads(ROOT / 'assets' / 'servix.ico')
     verify_icon(setup, expected)
     verify_icon(ROOT / 'dist' / 'SERVIX' / 'SERVIX.exe', expected)
+    installer_script=(ROOT/'installer'/'SERVIX.iss').read_text(encoding='utf-8')
+    assert 'SERVIX Demo Workspace' in installer_script and 'Parameters: "--demo"' in installer_script, 'Demo Workspace Start menu shortcut missing'
     capture_welcome(setup, dark=False)
     capture_welcome(setup, dark=True)
     with TemporaryDirectory(prefix='servix-installed-') as folder:
@@ -105,10 +109,26 @@ def main():
             if process.poll() is None:
                 process.terminate()
             process.wait(timeout=30)
+        demo_process = subprocess.Popen([str(installed), '--demo'])
+        try:
+            time.sleep(8)
+            assert demo_process.poll() is None, f'Demo Workspace exited with {demo_process.returncode}'
+            local = Path(os.environ['LOCALAPPDATA'])
+            demo_db = local / 'SERVIX Demo Workspace' / 'data' / 'servix.db'
+            live_db = local / 'SERVIX' / 'data' / 'servix.db'
+            assert demo_db.exists(), 'Demo Workspace database missing'
+            assert not demo_db.samefile(live_db), 'Demo Workspace points to the live database'
+            with sqlite3.connect(demo_db) as con:
+                assert con.execute("SELECT COUNT(*) FROM clients WHERE code LIKE 'CLI-DEMO-%'").fetchone()[0] == 2
+                assert con.execute("SELECT COUNT(*) FROM history h JOIN services s ON s.id=h.service_id WHERE s.code='SRV-DEMO-0001'").fetchone()[0] >= 3
+        finally:
+            if demo_process.poll() is None:
+                demo_process.terminate()
+            demo_process.wait(timeout=30)
         subprocess.run([str(target / 'unins000.exe'), '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'],
                        check=True, timeout=180)
         assert not installed.exists(), 'Uninstall did not remove executable'
-    print('Custom EXE/setup icons, exact logo, install, app startup, and uninstall passed')
+    print('Custom icons, exact logo, install, app startup, isolated demo data, and uninstall passed')
 
 
 if __name__ == '__main__':

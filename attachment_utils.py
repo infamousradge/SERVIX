@@ -4,10 +4,11 @@ import shutil
 import uuid, os, sys
 
 APP_ROOT = Path(__file__).resolve().parent
+_DEMO_SUFFIX = " Demo Workspace" if os.environ.get("SERVIX_DEMO_WORKSPACE") == "1" else ""
 if sys.platform == "win32":
-    DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home()/"AppData"/"Local"))/"SERVIX"
+    DATA_ROOT = Path(os.environ.get("LOCALAPPDATA", Path.home()/"AppData"/"Local"))/('SERVIX' + _DEMO_SUFFIX)
 else:
-    DATA_ROOT = Path.home()/".servix"
+    DATA_ROOT = Path.home()/(".servix-demo" if _DEMO_SUFFIX else ".servix")
 ATTACHMENTS = DATA_ROOT / "attachments"
 ATTACHMENTS.mkdir(parents=True, exist_ok=True)
 

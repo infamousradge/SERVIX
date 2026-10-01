@@ -26,7 +26,7 @@ jobs:
           pip install pyinstaller
 
       - name: Check database transactions and file release
-        run: python -m unittest test_database -v
+        run: python -m unittest test_database test_demo_data -v
 
       - name: Prepare SERVIX branding and Windows icons
         run: python branding_assets.py

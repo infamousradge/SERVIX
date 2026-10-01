@@ -57,6 +57,7 @@ Source: "..\dist\SERVIX\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 
 [Icons]
 Name: "{group}\SERVIX"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; AppUserModelID: "SERVIX.Desktop"
+Name: "{group}\SERVIX Demo Workspace"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--demo"; IconFilename: "{app}\{#MyAppExeName}"; AppUserModelID: "SERVIX.Demo"
 Name: "{autodesktop}\SERVIX"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; AppUserModelID: "SERVIX.Desktop"; Tasks: desktopicon
 
 [Run]
