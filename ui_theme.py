@@ -159,6 +159,7 @@ class SidebarPill(tk.Canvas):
         self.active = False
         self.hover = False
         self._surface_image = None
+        self._icon_image = None
         self.bind('<Configure>', self._draw)
         self.bind('<Button-1>', self._activate)
         self.bind('<Return>', self._activate)
@@ -217,7 +218,8 @@ class SidebarPill(tk.Canvas):
         self._surface_image = ImageTk.PhotoImage(
             surface.resize((width, 52), Image.Resampling.LANCZOS), master=self)
         self.create_image(0, 0, anchor='nw', image=self._surface_image)
-        self._draw_icon(27, 26)
+        self._icon_image = self._draw_icon()
+        self.create_image(27, 26, image=self._icon_image)
         self.create_text(54, 26, text=self.label, anchor='w', fill='white' if self.active else '#DDE9F7',
                          font=('Segoe UI', 11, 'bold' if self.active else 'normal'))
         if self.focus_get() == self:
@@ -229,8 +231,8 @@ class SidebarPill(tk.Canvas):
         self.create_oval(left, top, left + radius * 2, bottom, fill=color, outline='')
         self.create_oval(right - radius * 2, top, right, bottom, fill=color, outline='')
 
-    def _draw_icon(self, x, y):
-        """Draw matching outline icons instead of platform-dependent text glyphs."""
+    def _draw_icon(self):
+        """Render a consistent, antialiased outline icon for the sidebar badge."""
         icon = {
             'Dashboard': 'home', 'Service Calls': 'wrench', 'Clients': 'users',
             'Equipment': 'box', 'Warranty & AMC': 'shield', 'Engineers': 'user',
@@ -238,47 +240,57 @@ class SidebarPill(tk.Canvas):
             'Documents': 'file', 'Reports & Analytics': 'chart',
             'Data Export / Import': 'transfer', 'Administration': 'settings',
         }.get(self.label, 'dot')
-        c, w = 'white', 2
+        scale, x, y = 4, 12, 12
+        color, stroke = '#FFFFFF', 7
+        image = Image.new('RGBA', (24 * scale, 24 * scale), (0, 0, 0, 0))
+        painter = ImageDraw.Draw(image)
+        def xy(points):
+            return [(int(round(a * scale)), int(round(b * scale))) for a, b in points]
         def line(points):
-            self.create_line(*points, fill=c, width=w, capstyle='round', joinstyle='round')
+            painter.line(xy(points), fill=color, width=stroke, joint='curve')
+        def ellipse(box, fill=None):
+            coords = tuple(int(round(v * scale)) for v in box)
+            painter.ellipse(coords, fill=fill, outline=None if fill else color,
+                            width=stroke)
         if icon == 'home':
-            line((x-8,y-1,x,y-8,x+8,y-1)); line((x-6,y-2,x-6,y+7,x+6,y+7,x+6,y-2))
-            line((x-2,y+7,x-2,y+2,x+2,y+2,x+2,y+7))
+            line(((x-8,y-1),(x,y-8),(x+8,y-1))); line(((x-6,y-2),(x-6,y+7),(x+6,y+7),(x+6,y-2)))
+            line(((x-2,y+7),(x-2,y+2),(x+2,y+2),(x+2,y+7)))
         elif icon == 'wrench':
-            line((x-5,y+6,x+4,y-3)); self.create_oval(x-7,y+4,x-3,y+8,outline=c,width=w)
-            line((x+2,y-5,x+5,y-7,x+8,y-4,x+6,y-1,x+3,y-2))
+            line(((x-5,y+6),(x+4,y-3))); ellipse((x-7,y+4,x-3,y+8))
+            line(((x+2,y-5),(x+5,y-7),(x+8,y-4),(x+6,y-1),(x+3,y-2)))
         elif icon in ('users','user'):
-            self.create_oval(x-3,y-8,x+3,y-2,outline=c,width=w)
-            line((x-7,y+7,x-7,y+4,x-5,y+1,x-2,y,x+2,y,x+5,y+1,x+7,y+4,x+7,y+7))
+            ellipse((x-3,y-8,x+3,y-2))
+            line(((x-7,y+7),(x-7,y+4),(x-5,y+1),(x-2,y),(x+2,y),(x+5,y+1),(x+7,y+4),(x+7,y+7)))
             if icon == 'users':
-                self.create_arc(x-10,y-6,x-5,y-1,start=80,extent=210,style='arc',outline=c,width=w)
-                self.create_arc(x+5,y-6,x+10,y-1,start=250,extent=210,style='arc',outline=c,width=w)
+                ellipse((x-10,y-6,x-6,y-2)); ellipse((x+6,y-6,x+10,y-2))
+                line(((x-10,y+6),(x-10,y+4),(x-8,y+2))); line(((x+10,y+6),(x+10,y+4),(x+8,y+2)))
         elif icon == 'box':
-            line((x-8,y-5,x,y-9,x+8,y-5,x+8,y+5,x,y+9,x-8,y+5,x-8,y-5))
-            line((x-8,y-5,x,y-1,x+8,y-5)); line((x,y-1,x,y+9))
+            line(((x-8,y-5),(x,y-9),(x+8,y-5),(x+8,y+5),(x,y+9),(x-8,y+5),(x-8,y-5)))
+            line(((x-8,y-5),(x,y-1),(x+8,y-5))); line(((x,y-1),(x,y+9)))
         elif icon == 'shield':
-            line((x,y-9,x+7,y-6,x+6,y+1,x+3,y+6,x,y+9,x-3,y+6,x-6,y+1,x-7,y-6,x,y-9))
-            line((x-3,y,x-1,y+2,x+4,y-3))
+            line(((x,y-9),(x+7,y-6),(x+6,y+1),(x+3,y+6),(x,y+9),(x-3,y+6),(x-6,y+1),(x-7,y-6),(x,y-9)))
+            line(((x-3,y),(x-1,y+2),(x+4,y-3)))
         elif icon == 'layers':
-            line((x,y-8,x+8,y-4,x,y,x-8,y-4,x,y-8)); line((x-8,y,x,y+4,x+8,y)); line((x-8,y+4,x,y+8,x+8,y+4))
+            line(((x,y-8),(x+8,y-4),(x,y),(x-8,y-4),(x,y-8))); line(((x-8,y),(x,y+4),(x+8,y)))
+            line(((x-8,y+4),(x,y+8),(x+8,y+4)))
         elif icon == 'coin':
-            self.create_oval(x-8,y-8,x+8,y+8,outline=c,width=w)
-            line((x+3,y-4,x-2,y-4,x-4,y-2,x+3,y+1,x+2,y+4,x-3,y+4)); line((x,y-6,x,y+6))
+            ellipse((x-8,y-8,x+8,y+8))
+            line(((x+3,y-4),(x-2,y-4),(x-4,y-2),(x+3,y+1),(x+2,y+4),(x-3,y+4))); line(((x,y-6),(x,y+6)))
         elif icon == 'file':
-            line((x-6,y-8,x+2,y-8,x+7,y-3,x+7,y+8,x-6,y+8,x-6,y-8))
-            line((x+2,y-8,x+2,y-3,x+7,y-3)); line((x-3,y+1,x+4,y+1)); line((x-3,y+4,x+4,y+4))
+            line(((x-6,y-8),(x+2,y-8),(x+7,y-3),(x+7,y+8),(x-6,y+8),(x-6,y-8)))
+            line(((x+2,y-8),(x+2,y-3),(x+7,y-3))); line(((x-3,y+1),(x+4,y+1))); line(((x-3,y+4),(x+4,y+4)))
         elif icon == 'chart':
-            line((x-8,y+7,x-8,y-7)); line((x-8,y+7,x+8,y+7)); line((x-5,y+3,x-1,y-1,x+2,y+2,x+7,y-5))
+            line(((x-8,y+7),(x-8,y-7))); line(((x-8,y+7),(x+8,y+7))); line(((x-5,y+3),(x-1,y-1),(x+2,y+2),(x+7,y-5)))
         elif icon == 'transfer':
-            line((x-7,y-4,x+7,y-4,x+4,y-7)); line((x+7,y-4,x+4,y-1))
-            line((x+7,y+4,x-7,y+4,x-4,y+1)); line((x-7,y+4,x-4,y+7))
+            line(((x-7,y-4),(x+7,y-4),(x+4,y-7))); line(((x+7,y-4),(x+4,y-1)))
+            line(((x+7,y+4),(x-7,y+4),(x-4,y+1))); line(((x-7,y+4),(x-4,y+7)))
         elif icon == 'settings':
-            self.create_oval(x-7,y-7,x+7,y+7,outline=c,width=w)
-            self.create_oval(x-2,y-2,x+2,y+2,outline=c,width=w)
+            ellipse((x-7,y-7,x+7,y+7)); ellipse((x-2,y-2,x+2,y+2))
             for dx,dy in ((0,-9),(0,9),(-9,0),(9,0),(-6,-6),(6,-6),(-6,6),(6,6)):
-                line((x+dx*.78,y+dy*.78,x+dx,y+dy))
+                line(((x+dx*.78,y+dy*.78),(x+dx,y+dy)))
         else:
-            self.create_oval(x-3,y-3,x+3,y+3,fill=c,outline='')
+            ellipse((x-3,y-3,x+3,y+3), fill=color)
+        return ImageTk.PhotoImage(image.resize((24, 24), Image.Resampling.LANCZOS), master=self)
 
 
 class PremiumCombobox(tk.Canvas):
