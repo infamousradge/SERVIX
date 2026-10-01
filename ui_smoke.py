@@ -50,6 +50,9 @@ def main():
                     window.update()
                     assert window.sidebar.winfo_width() == 288
                     assert window.content.winfo_width() > 900
+                window.search.delete(0,'end'); window.search.insert(0,'SRV-TEST')
+                window.global_search(); window.update()
+                assert any(hasattr(w,'get_children') and w.get_children() for w in walk(window.content)), 'Live search should show matching rows'
                 for method, code in (('show_service_detail', 'SRV-TEST'),
                                      ('show_client_360', 'CLI-TEST'),
                                      ('show_equipment_360', 'SEQ-TEST')):
@@ -70,9 +73,8 @@ def main():
                 selector._show_popup()
                 window.update()
                 assert selector.popup is not None and selector.popup.winfo_viewable()
-                selector._popup_listbox.selection_clear(0, 'end')
-                selector._popup_listbox.selection_set(1)
-                selector._choose(selector._popup_listbox)
+                selector._popup_index=1
+                selector._choose()
                 window.update()
                 assert selector.get() == 'Two'
                 selector.destroy()

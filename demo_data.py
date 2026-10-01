@@ -14,7 +14,11 @@ def seed_demo_data():
     ts = now()
     with connect() as con:
         seeded = con.execute("SELECT value FROM settings WHERE key='demo_seeded'").fetchone()
+        if seeded and seeded['value'] == '2':
+            return
         if seeded and seeded['value'] == '1':
+            _expand_demo_data(con, today, ts)
+            con.execute("UPDATE settings SET value='2' WHERE key='demo_seeded'")
             return
 
         con.execute("""UPDATE users SET display_name='Demo Admin', role='Administrator', active=1,
@@ -117,10 +121,75 @@ def seed_demo_data():
         con.execute('''INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)''', (
             active_service, ts, 'DEMO: Calibration request opened; certificate review is pending.', 'demo.admin'
         ))
-        con.execute("""INSERT INTO settings(key,value) VALUES('demo_seeded','1')
-                     ON CONFLICT(key) DO UPDATE SET value='1'""")
+        _expand_demo_data(con, today, ts)
+        con.execute("""INSERT INTO settings(key,value) VALUES('demo_seeded','2')
+                     ON CONFLICT(key) DO UPDATE SET value='2'""")
         con.execute("""INSERT INTO settings(key,value) VALUES('auto_backup_enabled','0')
                      ON CONFLICT(key) DO UPDATE SET value='0'""")
         con.execute("""INSERT INTO settings(key,value) VALUES('company_name','SERVIX Demo Workspace')
                      ON CONFLICT(key) DO UPDATE SET value='SERVIX Demo Workspace'""")
 
+
+def _expand_demo_data(con, today, ts):
+    """Add a varied, versioned sample set for dashboard and report previews."""
+    clients = list(con.execute("SELECT id,code FROM clients WHERE code LIKE 'CLI-DEMO-%' ORDER BY code"))
+    equipment = list(con.execute("SELECT id,client_id,code FROM equipment WHERE code LIKE 'SEQ-DEMO-%' ORDER BY code"))
+    engineers = list(con.execute("SELECT name FROM engineers WHERE code LIKE 'ENG-DEMO-%' ORDER BY code"))
+    for i, (name, contact) in enumerate((
+        ('Harbor Hearing Clinic [DEMO]', 'Leena Shah'),
+        ('Cedar Audiology Group [DEMO]', 'Dev Patel'),
+        ('Riverside ENT Centre [DEMO]', 'Nina Das'),
+        ('Meadow Hearing Studio [DEMO]', 'Omar Khan'),
+    ), start=3):
+        code = f'CLI-DEMO-{i:03d}'
+        con.execute("""INSERT OR IGNORE INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified)
+            VALUES(?,?,?,?,?,?,?,?,?,?)""", (code, name, contact, f'90000 10{i:03d}',
+            f'demo{i}@servix.local', f'{i} Sample Lane', 'Chennai', 'Fictional SERVIX demo client.', ts, ts))
+    clients = list(con.execute("SELECT id,code FROM clients WHERE code LIKE 'CLI-DEMO-%' ORDER BY code"))
+    makes = [('MAICO','MA 25'),('Interacoustics','AD226'),('PATH MEDICAL','Sentiero'),('Inventis','Clarinet'),('GSI','P  Audioscreener'),('MAICO','Ero Scan')]
+    for i, (make, model) in enumerate(makes, start=3):
+        code = f'SEQ-DEMO-{i:03d}'
+        client_id = clients[(i-1) % len(clients)]['id']
+        con.execute("""INSERT OR IGNORE INTO equipment(code,client_id,make,model,serial,stock_id,equipment_type,
+            sold_by,sold_date,warranty_till,amc_till,location,notes,created,modified)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (code, client_id, make, model, f'DEMO-SN-{i:03d}',
+            f'DEMO-ASSET-{i:03d}', 'Audiology Diagnostic System', 'Us', today.isoformat(),
+            (today + timedelta(days=(i-4)*20)).isoformat(),
+            (today + timedelta(days=(i-2)*35)).isoformat(), f'Room {i}',
+            'Fictional equipment for preview and workflow testing.', ts, ts))
+    con.execute("""INSERT OR IGNORE INTO engineers(code,name,mobile,email,specialization,active,notes,created,modified)
+        VALUES(?,?,?,?,?,1,?,?,?)""", ('ENG-DEMO-002','Priya Menon [DEMO]','90000 20002',
+        'priya.demo@servix.local','Calibration and diagnostics','Sample engineer account.',ts,ts))
+    con.execute("""INSERT OR IGNORE INTO engineers(code,name,mobile,email,specialization,active,notes,created,modified)
+        VALUES(?,?,?,?,?,1,?,?,?)""", ('ENG-DEMO-003','Rohan Iyer [DEMO]','90000 20003',
+        'rohan.demo@servix.local','Field service and repairs','Sample engineer account.',ts,ts))
+    equipment = list(con.execute("SELECT id,client_id,code FROM equipment WHERE code LIKE 'SEQ-DEMO-%' ORDER BY code"))
+    engineers = [r['name'] for r in con.execute("SELECT name FROM engineers WHERE code LIKE 'ENG-DEMO-%' ORDER BY code")]
+    statuses = ['New','Assigned','Received','Under Diagnosis','Awaiting Parts','Awaiting Customer',
+                'Repair in Progress','Testing','Ready for Dispatch','Closed','Dispatched','Cancelled']
+    reasons = ['Breakdown / Complaint','Calibration','Preventive Maintenance','Installation / Commissioning']
+    for i in range(1, 25):
+        code = f'SRV-DEMO-{i+2:04d}'
+        if con.execute('SELECT 1 FROM services WHERE code=?',(code,)).fetchone():
+            continue
+        eq = equipment[(i-1) % len(equipment)]
+        status = statuses[(i-1) % len(statuses)]
+        reason = reasons[(i-1) % len(reasons)]
+        opened = (today - timedelta(days=(i * 3) % 75)).isoformat()
+        paid = 'Paid' if status == 'Closed' and i % 2 else ('Pending' if i % 3 == 0 else 'Not Applicable')
+        note = f'DEMO NOTE: Sample {reason.lower()} workflow. Review engineer updates, customer follow-up and service history.'
+        service_id = con.execute("""INSERT INTO services(code,client_id,equipment_id,opened,request_source,reason,complaint,
+            warranty,amc,engineer,priority,status,diagnosis,work_done,final_result,foc_chargeable,service_charge,
+            quote_status,payment_status,amount_received,notes,modified)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+            code, eq['client_id'], eq['id'], opened, ('Phone','Email','WhatsApp','Walk-in')[i%4], reason,
+            f'{reason} reported for demo equipment {eq["code"]}.', 'Yes' if i%4==0 else 'No', 'Yes' if i%5==0 else 'No',
+            engineers[i%len(engineers)], ('Normal','High','Urgent')[i%3], status,
+            'Initial inspection recorded for demo review.', 'Bench checks and visual inspection logged.' if i%2 else '',
+            'Successful' if status=='Closed' else 'Pending', 'FOC' if i%4==0 else 'Chargeable',
+            850 + i*75, 'Approved' if i%3==0 else 'Pending Decision', paid,
+            850 + i*75 if paid=='Paid' else 0, note, opened + ' 12:00')).lastrowid
+        con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',
+            (service_id, opened+' 09:15', f'DEMO: {reason} request received and logged.', 'demo.admin'))
+        con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',
+            (service_id, opened+' 12:00', f'DEMO: Status updated to {status}; next action documented.', 'demo.admin'))

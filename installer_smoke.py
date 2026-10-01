@@ -119,7 +119,8 @@ def main():
             assert demo_db.exists(), 'Demo Workspace database missing'
             assert not demo_db.samefile(live_db), 'Demo Workspace points to the live database'
             with sqlite3.connect(demo_db) as con:
-                assert con.execute("SELECT COUNT(*) FROM clients WHERE code LIKE 'CLI-DEMO-%'").fetchone()[0] == 2
+                assert con.execute("SELECT COUNT(*) FROM clients WHERE code LIKE 'CLI-DEMO-%'").fetchone()[0] >= 6
+                assert con.execute("SELECT COUNT(*) FROM services WHERE code LIKE 'SRV-DEMO-%'").fetchone()[0] >= 26
                 assert con.execute("SELECT COUNT(*) FROM history h JOIN services s ON s.id=h.service_id WHERE s.code='SRV-DEMO-0001'").fetchone()[0] >= 3
         finally:
             if demo_process.poll() is None:

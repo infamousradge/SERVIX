@@ -39,6 +39,14 @@ def configure_theme(root):
                     borderwidth=0, relief='flat')
     style.map('Treeview', background=[('selected', '#D9ECFF')],
               foreground=[('selected', TEXT)])
+    style.configure('Search.Treeview', font=('Segoe UI', 10), rowheight=36,
+                    background='white', fieldbackground='white', borderwidth=0,
+                    relief='flat')
+    style.configure('Search.Treeview.Heading', font=('Segoe UI', 10, 'bold'),
+                    background='#EAF3FC', foreground='#294B6B', padding=(12, 10),
+                    borderwidth=0, relief='flat')
+    style.map('Search.Treeview', background=[('selected', '#D9ECFF')],
+              foreground=[('selected', NAVY)])
     style.configure('TLabel', font=('Segoe UI', 11))
     style.configure('TButton', font=('Segoe UI', 11, 'bold'), padding=(14, 9),
                     background='#EAF3FC', foreground=NAVY, borderwidth=0)
@@ -148,8 +156,18 @@ class CapsuleNotebook(tk.Frame):
                                text=button.label, fill='white' if active else TEXT,
                                font=('Segoe UI', 11, 'bold'))
             if self.focus_get() == button:
-                button.create_rectangle(18, 8, int(button.cget('width')) - 18, 34,
-                                        outline='white' if active else BLUE, dash=(2, 2))
+                left, top, right, bottom, radius = 7, 2, int(button.cget('width')) - 7, 48, 23
+                color = '#FFFFFF' if active else BLUE
+                button.create_line(left + radius, top, right - radius, top,
+                                   fill=color, dash=(2, 2))
+                button.create_line(left + radius, bottom, right - radius, bottom,
+                                   fill=color, dash=(2, 2))
+                for x1, y1, x2, y2, start in ((left, top, left + 2*radius, top + 2*radius, 90),
+                                              (right - 2*radius, top, right, top + 2*radius, 0),
+                                              (right - 2*radius, bottom - 2*radius, right, bottom, 270),
+                                              (left, bottom - 2*radius, left + 2*radius, bottom, 180)):
+                    button.create_arc(x1, y1, x2, y2, start=start, extent=90,
+                                      style='arc', outline=color, dash=(2, 2))
 
 
 class SidebarPill(tk.Canvas):
@@ -444,36 +462,41 @@ class PremiumCombobox(tk.Canvas):
         popup.withdraw()
         popup.overrideredirect(True)
         popup.transient(self.winfo_toplevel())
-        popup.configure(bg='white')
-        shell = tk.Frame(popup, bg='white', highlightthickness=1,
-                         highlightbackground='#D7E3F0', bd=0)
-        shell.pack(fill='both', expand=True)
+        popup.configure(bg='#E8EEF5')
         visible = min(8, max(1, len(self.values)))
-        longest = max((len(str(value)) for value in self.values), default=16)
-        listing = tk.Listbox(shell, height=visible, width=min(60, max(18, longest)), font=('Segoe UI', 11),
-                             bg='white', fg=TEXT, selectbackground='#DCEEFF',
-                             selectforeground=NAVY, activestyle='none', bd=0,
-                             highlightthickness=0, exportselection=False)
-        listing.pack(side='left', fill='both', expand=True, padx=(5, 0), pady=5)
-        if len(self.values) > visible:
-            scrollbar = ttk.Scrollbar(shell, orient='vertical', command=listing.yview)
-            scrollbar.pack(side='right', fill='y', padx=(0, 4), pady=5)
-            listing.configure(yscrollcommand=scrollbar.set)
-        for value in self.values:
-            listing.insert('end', value)
-        current = self.get()
-        if current in self.values:
-            index = self.values.index(current)
-            listing.selection_set(index)
-            listing.activate(index)
-            listing.see(index)
-        listing.bind('<ButtonRelease-1>', lambda _e: self._choose(listing))
-        listing.bind('<Return>', lambda _e: self._choose(listing))
-        listing.bind('<Escape>', lambda _e: self._close_popup())
-        listing.bind('<FocusOut>', self._popup_focus_out)
+        row_height=36; font_obj=font.Font(family='Segoe UI',size=10)
+        longest=max((font_obj.measure(str(value)) for value in self.values),default=150)
+        desired_width=max(self.winfo_width(),min(480,max(190,longest+48)))
+        desired_height=visible*row_height+18
+        shell=tk.Frame(popup,bg='#E8EEF5'); shell.pack(fill='both',expand=True,padx=1,pady=1)
+        self._popup_canvas=tk.Canvas(shell,width=desired_width-2,height=desired_height-2,
+                                     bg='white',highlightthickness=0,takefocus=True)
+        self._popup_canvas.pack(side='left',fill='both',expand=True)
+        # Supersampled rounded popup surface with a soft lift shadow.
+        scale=3; surface=Image.new('RGBA',(desired_width*scale,desired_height*scale),(0,0,0,0)); painter=ImageDraw.Draw(surface)
+        painter.rounded_rectangle((3*scale,5*scale,(desired_width-3)*scale,(desired_height-2)*scale),radius=13*scale,fill='#D3DFEB')
+        painter.rounded_rectangle((2*scale,2*scale,(desired_width-4)*scale,(desired_height-6)*scale),radius=13*scale,fill='white',outline='#D8E4F0',width=scale)
+        self._popup_surface=ImageTk.PhotoImage(surface.resize((desired_width,desired_height),Image.Resampling.LANCZOS),master=self)
+        self._popup_canvas.create_image(0,0,anchor='nw',image=self._popup_surface,tags=('surface',))
+        self._popup_canvas.configure(scrollregion=(0,0,desired_width-12,len(self.values)*row_height+18))
+        self._popup_index=self.values.index(self.get()) if self.get() in self.values else 0
+        self._popup_draw_options()
+        if len(self.values)>visible:
+            scrollbar=ttk.Scrollbar(shell,orient='vertical',command=self._popup_canvas.yview)
+            scrollbar.pack(side='right',fill='y',padx=(1,3),pady=6)
+            self._popup_canvas.configure(yscrollcommand=scrollbar.set)
+        self._popup_canvas.bind('<Button-1>',self._popup_click)
+        self._popup_canvas.bind('<Motion>',self._popup_motion)
+        self._popup_canvas.bind('<Leave>',lambda _e:self._popup_draw_options())
+        self._popup_canvas.bind('<MouseWheel>',self._popup_wheel)
+        self._popup_canvas.bind('<Button-4>',lambda _e:self._popup_scroll(-1))
+        self._popup_canvas.bind('<Button-5>',lambda _e:self._popup_scroll(1))
+        self._popup_canvas.bind('<Up>',lambda _e:self._popup_move(-1))
+        self._popup_canvas.bind('<Down>',lambda _e:self._popup_move(1))
+        self._popup_canvas.bind('<Return>',lambda _e:self._choose())
+        self._popup_canvas.bind('<Escape>',lambda _e:self._close_popup())
+        self._popup_canvas.bind('<FocusOut>',self._popup_focus_out)
         popup.update_idletasks()
-        desired_height = min(8, max(1, len(self.values))) * 28 + 12
-        desired_width = max(self.winfo_width(), min(480, max(180, listing.winfo_reqwidth() + 14)))
         x = min(self.winfo_rootx(), self.winfo_screenwidth() - desired_width - 8)
         y = self.winfo_rooty() + self.winfo_height() - 2
         screen_bottom = self.winfo_screenheight()
@@ -482,14 +505,42 @@ class PremiumCombobox(tk.Canvas):
         popup.geometry(f'{desired_width}x{desired_height}+{x}+{y}')
         popup.deiconify()
         popup.lift()
-        listing.focus_set()
-        self._popup_listbox = listing
+        self._popup_canvas.focus_set()
+        self._popup_canvas.yview_moveto(max(0,self._popup_index-visible+1)/max(1,len(self.values)))
         self._draw()
 
-    def _choose(self, listing):
-        selected = listing.curselection()
-        if selected:
-            self.variable.set(self.values[selected[0]])
+    def _popup_draw_options(self):
+        if not self.popup or not getattr(self,'_popup_canvas',None):return
+        canvas=self._popup_canvas; canvas.delete('option')
+        width=max(100,canvas.winfo_width()-18); hover=getattr(self,'_popup_hover',-1)
+        for index,value in enumerate(self.values):
+            top=9+index*36; bottom=top+31
+            if index==self._popup_index or index==hover:
+                fill='#EAF4FE' if index==self._popup_index else '#F4F8FC'
+                canvas.create_rectangle(22,top,width-14,bottom,fill=fill,outline='',tags=('option',))
+                canvas.create_oval(7,top,37,bottom,fill=fill,outline='',tags=('option',))
+                canvas.create_oval(width-29,top,width+1,bottom,fill=fill,outline='',tags=('option',))
+            text=str(value); max_width=width-34; f=font.Font(family='Segoe UI',size=10)
+            while text and f.measure(text)>max_width:text=text[:-2]+'…' if len(text)>2 else '…'
+            canvas.create_text(20,top+15,text=text,anchor='w',fill=NAVY if index==self._popup_index else TEXT,
+                              font=('Segoe UI',10,'bold' if index==self._popup_index else 'normal'),tags=('option',f'index:{index}'))
+
+    def _popup_click(self,event):
+        index=(int(self._popup_canvas.canvasy(event.y))-9)//36
+        if 0<=index<len(self.values):self._popup_index=index;self._choose()
+    def _popup_motion(self,event):
+        index=(int(self._popup_canvas.canvasy(event.y))-9)//36
+        self._popup_hover=index if 0<=index<len(self.values) else -1;self._popup_draw_options()
+    def _popup_move(self,step):
+        self._popup_index=max(0,min(len(self.values)-1,self._popup_index+step));self._popup_draw_options()
+        self._popup_canvas.yview_moveto(max(0,self._popup_index-5)/max(1,len(self.values)));return 'break'
+    def _popup_scroll(self,step):
+        self._popup_canvas.yview_scroll(step,'units');return 'break'
+    def _popup_wheel(self,event):
+        self._popup_scroll(-1 if event.delta>0 else 1);return 'break'
+    def _choose(self):
+        if self.popup and self.values:
+            self.variable.set(self.values[self._popup_index])
             self._close_popup()
             self.event_generate('<<ComboboxSelected>>')
         return 'break'

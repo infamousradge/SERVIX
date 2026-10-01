@@ -239,6 +239,7 @@ class Servix(tk.Tk):
         self.search.insert(0,self._search_placeholder)
         searchwrap.create_window(22,24,anchor='w',window=self.search,width=search_width-100,height=30)
         self.search.bind('<Return>',lambda e:self.global_search())
+        self.search.bind('<KeyRelease>',self._schedule_live_search,add='+')
         self.search.bind('<FocusIn>',self._search_focus_in); self.search.bind('<FocusOut>',self._search_focus_out)
         searchwrap.tag_bind('search_button','<Button-1>',lambda _e:self.global_search())
         if DEMO_MODE:
@@ -522,9 +523,11 @@ class Servix(tk.Tk):
             except OSError:pass
             audit(self.current_user['username'],'attachment',r['id'],'DELETE',r['original_name'] or '');load()
         tk.Button(bar,text='Open File',command=open_file,bg=BLUE,fg='white',bd=0,padx=12,pady=6).pack(side='left',padx=4)
-        tk.Button(bar,text='Open Folder',command=folder,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Button(bar,text='Show in Folder',command=folder,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='left',padx=4)
         tk.Button(bar,text='Open Service',command=service,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='left',padx=4)
         tk.Button(bar,text='Remove',command=remove,bg='#FDECEC',fg=RED,bd=0,padx=12,pady=6).pack(side='left',padx=4)
+        tk.Label(bar,text='Select a row first. “Show in Folder” opens the saved attachment’s folder.',bg=CARD,fg=MUTED,font=('Segoe UI',9)).pack(side='left',padx=10)
+        tk.Button(bar,text='Export CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Documents.csv'),bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='right',padx=8)
         tr.bind('<Double-1>',lambda e:open_file());load()
 
     def show_dashboard(self):
@@ -579,31 +582,91 @@ class Servix(tk.Tk):
 
         lower=tk.Frame(self.content,bg=BG); lower.pack(fill='both',expand=True,padx=10,pady=(0,8))
         lower.columnconfigure(0,weight=2); lower.columnconfigure(1,weight=1); recent=self.card(lower); recent.grid(row=0,column=0,sticky='nsew',padx=6)
-        rh=tk.Frame(recent,bg=CARD); rh.pack(fill='x',padx=10,pady=(7,3)); tk.Label(rh,text='Recent / Open Service Calls',font=('Segoe UI',11,'bold'),bg=CARD,fg=TEXT).pack(side='left'); tk.Button(rh,text='View All',command=self.show_services,bg=CARD,fg=BLUE,bd=0,font=('Segoe UI',10,'underline')).pack(side='right')
-        self.service_tree(recent,5)
+        rh=tk.Frame(recent,bg=CARD); rh.pack(fill='x',padx=10,pady=(7,3)); tk.Label(rh,text='Recent Service Calls',font=('Segoe UI',11,'bold'),bg=CARD,fg=TEXT).pack(side='left')
+        tk.Button(rh,text='View All',command=self.show_services,bg=CARD,fg=BLUE,bd=0,font=('Segoe UI',10,'underline')).pack(side='right')
+        dashboard_filters=tk.Frame(recent,bg=CARD); dashboard_filters.pack(fill='x',padx=10,pady=(1,5))
+        tk.Label(dashboard_filters,text='Show',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold')).pack(side='left',padx=(0,5))
+        dash_status=PremiumCombobox(dashboard_filters,width=17,state='readonly',values=['All','Open','Closed','Pending']); dash_status.set('All'); dash_status.pack(side='left')
+        dash_sort=PremiumCombobox(dashboard_filters,width=18,state='readonly',values=['Newest entry first','Oldest entry first']); dash_sort.set('Newest entry first'); dash_sort.pack(side='left',padx=6)
+        recent_tree=self.service_tree(recent,5)
+        def refresh_recent(*_):
+            recent_tree.delete(*recent_tree.get_children())
+            filters={'Open':"s.status NOT IN ('Closed','Cancelled')",'Closed':"s.status='Closed'",
+                     'Pending':"s.status IN ('New','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch')"}
+            where=filters.get(dash_status.get(),'')
+            order='ASC' if dash_sort.get()=='Oldest entry first' else 'DESC'
+            sql='''SELECT s.code,s.opened,c.name,e.code,s.reason,COALESCE(s.engineer,''),s.status,COALESCE(s.payment_status,'')
+                   FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id'''
+            if where: sql+=' WHERE '+where
+            sql+=f' ORDER BY date(s.opened) {order},s.id {order} LIMIT 5'
+            with connect() as con:
+                for row in con.execute(sql): recent_tree.insert('','end',values=tuple(row))
+        dash_status.bind('<<ComboboxSelected>>',refresh_recent); dash_sort.bind('<<ComboboxSelected>>',refresh_recent); refresh_recent()
         alerts=self.card(lower); alerts.grid(row=0,column=1,sticky='nsew',padx=6); tk.Label(alerts,text='Alerts & Reminders',font=('Segoe UI',11,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=12,pady=(8,5))
         alert_rows=[
-            ('●',RED,str(self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"))+' service calls overdue'),
-            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"))+' calibrations due within 30 days'),
-            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"))+' warranties expiring this month'),
-            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"))+' AMC expiring in 60 days'),
-            ('●',ORANGE,str(self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"))+' invoices pending payment'),
-            ('△',RED,str(self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''"))+' equipment with missing serial numbers')
+            ('clock',RED,str(self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"))+' service calls overdue'),
+            ('calendar',ORANGE,str(self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"))+' calibrations due within 30 days'),
+            ('calendar',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"))+' warranties expiring this month'),
+            ('calendar',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"))+' AMC expiring in 60 days'),
+            ('invoice',ORANGE,str(self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"))+' invoices pending payment'),
+            ('warning',RED,str(self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''"))+' equipment with missing serial numbers')
         ]
         for icon,color,msg in alert_rows:
-            r=tk.Frame(alerts,bg=CARD); r.pack(fill='x',padx=12,pady=4); tk.Label(r,text=icon,bg=CARD,fg=color,font=('Segoe UI',11,'bold')).pack(side='left'); tk.Label(r,text=msg,bg=CARD,fg=TEXT,font=('Segoe UI',10),wraplength=260,justify='left').pack(side='left',padx=7)
+            r=tk.Frame(alerts,bg=CARD); r.pack(fill='x',padx=12,pady=4); self._alert_icon(r,icon,color); tk.Label(r,text=msg,bg=CARD,fg=TEXT,font=('Segoe UI',10),wraplength=260,justify='left').pack(side='left',padx=8)
 
-    def service_tree(self,parent,limit=None,where='',args=()):
+    def _alert_icon(self,parent,kind,color):
+        icon=tk.Canvas(parent,width=32,height=32,bg=CARD,highlightthickness=0)
+        icon.pack(side='left',anchor='n')
+        icon.create_oval(2,2,30,30,fill='#F2F7FC',outline='#E0EAF4')
+        if kind=='clock':
+            icon.create_oval(9,9,23,23,outline=color,width=2); icon.create_line(16,11,16,16,20,18,fill=color,width=2,capstyle='round')
+        elif kind=='calendar':
+            icon.create_rectangle(9,10,23,23,outline=color,width=2); icon.create_line(9,14,23,14,fill=color,width=2); icon.create_line(12,8,12,12,fill=color,width=2); icon.create_line(20,8,20,12,fill=color,width=2); icon.create_oval(12,16,14,18,fill=color,outline=color); icon.create_oval(18,16,20,18,fill=color,outline=color)
+        elif kind=='invoice':
+            icon.create_rectangle(10,8,22,24,outline=color,width=2); icon.create_line(13,12,19,12,fill=color,width=2); icon.create_line(13,16,19,16,fill=color,width=2); icon.create_text(16,21,text='$',fill=color,font=('Segoe UI',7,'bold'))
+        else:
+            icon.create_polygon(16,8,24,23,8,23,fill='#FFF2E9',outline=color,width=2); icon.create_line(16,13,16,18,fill=color,width=2); icon.create_oval(15,20,17,22,fill=color,outline=color)
+        return icon
+
+    def service_tree(self,parent,limit=None,where='',args=(),order='s.id DESC'):
         wrap=tk.Frame(parent,bg=CARD); wrap.pack(fill='both',expand=True,padx=14,pady=(0,14)); cols=('Service ID','Opened','Client','SERVIX Equipment','Reason','Engineer','Status','Payment'); tree=ttk.Treeview(wrap,columns=cols,show='headings');
         widths=[115,125,190,135,150,120,140,110]
         for c,w in zip(cols,widths): tree.heading(c,text=c); tree.column(c,width=w,anchor='w')
         tree.grid(row=0,column=0,sticky='nsew'); wrap.columnconfigure(0,weight=1); wrap.rowconfigure(0,weight=1); sb=ttk.Scrollbar(wrap,orient='vertical',command=tree.yview); sb.grid(row=0,column=1,sticky='ns'); hs=ttk.Scrollbar(wrap,orient='horizontal',command=tree.xview); hs.grid(row=1,column=0,sticky='ew'); tree.configure(yscrollcommand=sb.set,xscrollcommand=hs.set)
         sql='''SELECT s.code,s.opened,c.name,e.code,s.reason,COALESCE(s.engineer,''),s.status,COALESCE(s.payment_status,'') FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id '''
         if where: sql+=' WHERE '+where
-        sql+=' ORDER BY s.id DESC'+(f' LIMIT {limit}' if limit else '')
+        sql+=f' ORDER BY {order}'+(f' LIMIT {limit}' if limit else '')
         with connect() as con:
             for r in con.execute(sql,args): tree.insert('','end',values=tuple(r))
         tree.bind('<Double-1>',lambda e:self.open_selected_service(tree)); return tree
+
+    def export_tree_csv(self,tree,filename):
+        rows=[tree.item(item,'values') for item in tree.get_children()]
+        if not rows:
+            messagebox.showinfo('Export CSV','There are no rows in the current view to export.'); return
+        path=filedialog.asksaveasfilename(defaultextension='.csv',initialfile=filename,filetypes=[('CSV file','*.csv')])
+        if not path:return
+        with open(path,'w',newline='',encoding='utf-8-sig') as fh:
+            writer=csv.writer(fh); writer.writerow([tree.heading(col,'text') for col in tree['columns']]); writer.writerows(rows)
+        messagebox.showinfo('Export complete',f'{len(rows)} rows exported to CSV.')
+
+    def export_service_pdf(self,code):
+        with connect() as con:
+            row=con.execute('''SELECT s.*,c.name client,e.code equipment,e.make,e.model,e.serial
+                FROM services s LEFT JOIN clients c ON c.id=s.client_id
+                LEFT JOIN equipment e ON e.id=s.equipment_id WHERE s.code=?''',(code,)).fetchone()
+            if not row:return messagebox.showerror('Service Report','The selected service call could not be found.')
+            client=con.execute('SELECT * FROM clients WHERE id=?',(row['client_id'],)).fetchone()
+            equipment=con.execute('SELECT * FROM equipment WHERE id=?',(row['equipment_id'],)).fetchone()
+            parts=con.execute('SELECT * FROM parts WHERE service_id=? ORDER BY id',(row['id'],)).fetchall()
+            calibration=con.execute('SELECT * FROM calibration WHERE service_id=?',(row['id'],)).fetchone()
+        path=filedialog.asksaveasfilename(defaultextension='.pdf',initialfile=f'{code}-Service-Report.pdf',filetypes=[('PDF Report','*.pdf')])
+        if not path:return
+        try:
+            create_service_report(path,row,client,equipment,parts,calibration,{'name':get_setting('company_name','SERVIX'),'title':get_setting('system_title','Service Management System')})
+            messagebox.showinfo('Service Report',f'PDF report saved:\n{path}')
+        except Exception as ex:messagebox.showerror('Service Report',f'Could not generate report:\n{ex}')
+
     def open_selected_service(self,tree):
         item=tree.focus();
         if item:self.show_service_detail(tree.item(item,'values')[0])
@@ -611,15 +674,24 @@ class Servix(tk.Tk):
     def show_services(self):
         self.clear(); h=self.section_header('Service Calls','Search / Review / Complete Service History')
         if self.can_edit(): tk.Button(h,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',font=('Segoe UI',11,'bold'),bd=0,padx=13,pady=4).pack(side='right',padx=10,pady=5)
-        bar=self.card(self.content); bar.pack(fill='x',padx=10,pady=(8,6)); tk.Label(bar,text='Status',bg=CARD,fg=MUTED).pack(side='left',padx=(15,5),pady=12); st=PremiumCombobox(bar,width=20,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened']); st.set('All'); st.pack(side='left'); holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=10,pady=(0,8))
-        tree=self.service_tree(holder)
+        bar=self.card(self.content); bar.pack(fill='x',padx=10,pady=(8,6)); tk.Label(bar,text='Status',bg=CARD,fg=MUTED).pack(side='left',padx=(15,5),pady=12); st=PremiumCombobox(bar,width=20,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened']); st.set('All'); st.pack(side='left')
+        tk.Label(bar,text='Entry date',bg=CARD,fg=MUTED).pack(side='left',padx=(15,5)); order=PremiumCombobox(bar,width=19,state='readonly',values=['Newest first','Oldest first']); order.set('Newest first'); order.pack(side='left')
+        holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=10,pady=(0,8))
+        tree=self.service_tree(holder,order='date(s.opened) DESC,s.id DESC')
         def filter_it(*_):
             for i in tree.get_children():tree.delete(i)
             where='' if st.get()=='All' else 's.status=?'; args=() if not where else (st.get(),)
-            sql='''SELECT s.code,s.opened,c.name,e.code,s.reason,COALESCE(s.engineer,''),s.status,COALESCE(s.payment_status,'') FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id'''+((' WHERE '+where) if where else '')+' ORDER BY s.id DESC'
+            direction='ASC' if order.get()=='Oldest first' else 'DESC'
+            sql='''SELECT s.code,s.opened,c.name,e.code,s.reason,COALESCE(s.engineer,''),s.status,COALESCE(s.payment_status,'') FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id'''+((' WHERE '+where) if where else '')+f' ORDER BY date(s.opened) {direction},s.id {direction}'
             with connect() as con:
                 for r in con.execute(sql,args):tree.insert('','end',values=tuple(r))
-        st.bind('<<ComboboxSelected>>',filter_it)
+        st.bind('<<ComboboxSelected>>',filter_it); order.bind('<<ComboboxSelected>>',filter_it)
+        tk.Button(bar,text='Export CSV',command=lambda:self.export_tree_csv(tree,'SERVIX_Service_Calls.csv'),bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='right',padx=(5,12))
+        def pdf_selected():
+            selection=tree.selection()
+            if not selection:return messagebox.showinfo('Service Report','Select a service call row first.')
+            self.export_service_pdf(tree.item(selection[0],'values')[0])
+        tk.Button(bar,text='Print / PDF Selected',command=pdf_selected,bg=BLUE,fg='white',bd=0,padx=12,pady=6).pack(side='right',padx=5)
 
     def form_field(self,parent,label,row,col,values=None,width=30,required=False):
         tk.Label(parent,text=label+(' *' if required else ''),bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).grid(row=row,column=col,sticky='w',padx=10,pady=(8,3)); w=PremiumCombobox(parent,values=values,width=width,state='readonly') if values is not None else ttk.Entry(parent,width=width); w.grid(row=row+1,column=col,sticky='ew',padx=10,pady=(0,8)); return w
@@ -1169,6 +1241,7 @@ class Servix(tk.Tk):
         tk.Label(tools,text='Search Client',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left',padx=(10,5),pady=8)
         q=tk.StringVar(); ent=ttk.Entry(tools,textvariable=q,width=42); ent.pack(side='left',pady=7)
         tk.Label(tools,text='Name / Contact / Mobile / Email / City',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(side='left',padx=8)
+        tk.Button(tools,text='Export CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Clients.csv'),bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=6).pack(side='right',padx=4,pady=5)
         tk.Button(tools,text='+ New Client',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.client_dialog).pack(side='right',padx=8,pady=5)
         if self.current_user['role']=='Administrator':
             tk.Button(tools,text='Merge Clients',bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=6,command=self.merge_clients_dialog).pack(side='right',padx=3,pady=5)
@@ -1281,6 +1354,7 @@ class Servix(tk.Tk):
         tk.Label(tools,text='Search Equipment',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left',padx=(10,5),pady=8)
         q=tk.StringVar(); ttk.Entry(tools,textvariable=q,width=42).pack(side='left',pady=7)
         tk.Label(tools,text='Equipment ID / Client / Make / Model / Serial No.',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(side='left',padx=8)
+        tk.Button(tools,text='Export CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Equipment.csv'),bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=6).pack(side='right',padx=4,pady=5)
         tk.Button(tools,text='+ New Equipment',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.equipment_dialog).pack(side='right',padx=8,pady=5)
         card=self.card(body); card.pack(fill='both',expand=True)
         cols=('Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'); tr=ttk.Treeview(card,columns=cols,show='headings')
@@ -1556,12 +1630,74 @@ class Servix(tk.Tk):
         cards=[]
         for title,accent in [('Records',BLUE),('Open',ORANGE),('Closed',GREEN),('Outstanding ₹',RED)]: cards.append(self.metric(metrics,title,'-',accent,'Current filter'))
 
+        charts=self.card(self.content); charts.pack(fill='x',padx=10,pady=(0,6))
+        chart_head=tk.Frame(charts,bg=CARD); chart_head.pack(fill='x',padx=14,pady=(9,2))
+        tk.Label(chart_head,text='Interactive Service Overview',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left')
+        tk.Label(chart_head,text='Click a status bar to filter the table, or a month to zoom into that month.',bg=CARD,fg=MUTED,font=('Segoe UI',9)).pack(side='left',padx=12)
+        graph_row=tk.Frame(charts,bg=CARD); graph_row.pack(fill='x',padx=12,pady=(0,8)); graph_row.columnconfigure((0,1),weight=1,uniform='charts')
+        status_chart=tk.Canvas(graph_row,height=150,bg='white',highlightthickness=0); status_chart.grid(row=0,column=0,sticky='ew',padx=(0,6))
+        month_chart=tk.Canvas(graph_row,height=150,bg='white',highlightthickness=0); month_chart.grid(row=0,column=1,sticky='ew',padx=(6,0))
+        status_chart.bind('<Button-1>',lambda e: chart_click(status_chart,e))
+        month_chart.bind('<Button-1>',lambda e: chart_click(month_chart,e))
+
         table=self.card(self.content); table.pack(fill='both',expand=True,padx=10,pady=(0,6))
         top=tk.Frame(table,bg=CARD); top.pack(fill='x',padx=14,pady=(12,4)); tk.Label(top,text='Service Report',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left')
         cols=('Service ID','Opened','Client','Equipment','Reason','Engineer','Status','Coverage','Billing','Payment','Outstanding'); tr=ttk.Treeview(table,columns=cols,show='headings',height=13)
         for x,w in zip(cols,[115,105,180,120,155,115,130,95,95,105,105]): tr.heading(x,text=x); tr.column(x,width=w,anchor='w')
         tr.pack(fill='both',expand=True,padx=14,pady=(4,8))
         current=[]
+        chart_items=[]
+        def chart_click(canvas,event):
+            found=canvas.find_withtag('current')
+            if not found:return
+            tags=canvas.gettags(found[0]); action=next((tag for tag in tags if tag.startswith('filter:')),None)
+            if not action:return
+            value=action.split(':',1)[1]
+            if canvas is status_chart:
+                status.set(value)
+            else:
+                try:
+                    year,month=(int(part) for part in value.split('-'))
+                    first=datetime.date(year,month,1); last=datetime.date(year+1,1,1) if month==12 else datetime.date(year,month+1,1)
+                    from_e.delete(0,'end'); from_e.insert(0,first.isoformat())
+                    to_e.delete(0,'end'); to_e.insert(0,(last-datetime.timedelta(days=1)).isoformat())
+                except ValueError:return
+            apply()
+        def draw_reports_charts():
+            for canvas in (status_chart,month_chart):
+                canvas.delete('all')
+            sw=max(320,status_chart.winfo_width()); mw=max(320,month_chart.winfo_width()); base=112
+            status_chart.create_text(12,12,text='Calls by status',anchor='w',fill=NAVY,font=('Segoe UI',9,'bold'))
+            groups=[('Open',sum(r['status'] not in ('Closed','Cancelled') for r in current),BLUE),
+                    ('Closed',sum(r['status']=='Closed' for r in current),GREEN),
+                    ('Awaiting Parts',sum(r['status']=='Awaiting Parts' for r in current),ORANGE),
+                    ('Awaiting Customer',sum(r['status']=='Awaiting Customer' for r in current),'#9C7ADE'),
+                    ('Dispatched',sum(r['status']=='Dispatched' for r in current),'#3E9FA5')]
+            maxval=max([1]+[g[1] for g in groups]); slot=(sw-30)/len(groups)
+            for i,(label,value,color) in enumerate(groups):
+                x=15+i*slot; height=70*value/maxval
+                status_chart.create_rectangle(x+slot*.2,base-height,x+slot*.8,base,fill=color,outline='',tags=(f'filter:{label}',))
+                status_chart.create_text(x+slot/2,base-height-11,text=str(value),fill=TEXT,font=('Segoe UI',9,'bold'),tags=(f'filter:{label}',))
+                short={'Awaiting Parts':'Parts','Awaiting Customer':'Customer'}.get(label,label)
+                status_chart.create_text(x+slot/2,base+12,text=short,fill=MUTED,font=('Segoe UI',8),tags=(f'filter:{label}',))
+            month_chart.create_text(12,12,text='Calls by entry month',anchor='w',fill=NAVY,font=('Segoe UI',9,'bold'))
+            today_date=datetime.date.today(); month_keys=[]
+            for back in range(5,-1,-1):
+                month_index=today_date.month-back; year=today_date.year
+                while month_index<=0:month_index+=12;year-=1
+                month_keys.append((year,month_index))
+            counts={key:0 for key in month_keys}
+            for row in current:
+                try:
+                    d=datetime.date.fromisoformat(str(row['opened'])[:10]); key=(d.year,d.month)
+                    if key in counts:counts[key]+=1
+                except (TypeError,ValueError):pass
+            mmax=max([1]+list(counts.values())); mslot=(mw-30)/6
+            for i,key in enumerate(month_keys):
+                value=counts[key]; x=15+i*mslot; height=70*value/mmax; keytext=f'{key[0]}-{key[1]:02d}'
+                month_chart.create_rectangle(x+mslot*.2,base-height,x+mslot*.8,base,fill='#4B9BE8',outline='',tags=(f'filter:{keytext}',))
+                month_chart.create_text(x+mslot/2,base-height-11,text=str(value),fill=TEXT,font=('Segoe UI',9,'bold'),tags=(f'filter:{keytext}',))
+                month_chart.create_text(x+mslot/2,base+12,text=datetime.date(key[0],key[1],1).strftime('%b'),fill=MUTED,font=('Segoe UI',8),tags=(f'filter:{keytext}',))
         def query_rows():
             wh=[]; args=[]
             if from_e.get().strip(): wh.append('date(s.opened)>=date(?)'); args.append(from_e.get().strip())
@@ -1589,6 +1725,7 @@ class Servix(tk.Tk):
             for card,val in zip(cards,vals):
                 labels=[w for w in card.winfo_children() if isinstance(w,tk.Label)]
                 if len(labels)>1: labels[1].config(text=f'{val:,.2f}' if isinstance(val,float) else str(val))
+            draw_reports_charts()
         def export():
             if not current: apply()
             path=filedialog.asksaveasfilename(defaultextension='.csv',filetypes=[('CSV','*.csv')],initialfile='SERVIX_Filtered_Service_Report.csv')
@@ -1864,24 +2001,65 @@ class Servix(tk.Tk):
             set_setting('repeat_complaint_days',days); audit(self.current_user['username'],'settings','repeat_complaint_days','UPDATE',str(days)); messagebox.showinfo('Saved','Repeat complaint detection window saved.')
         tk.Button(qr,text='Save',command=save_quality,bg=BLUE,fg='white',bd=0,padx=14,pady=6).pack(side='left')
 
+    def _schedule_live_search(self,event=None):
+        if event and getattr(event,'keysym','')=='Return':return
+        q=self.search.get().strip()
+        if q==getattr(self,'_search_placeholder',''):
+            return
+        old=getattr(self,'_live_search_job',None)
+        if old:
+            try:self.after_cancel(old)
+            except tk.TclError:pass
+        self._live_search_job=self.after(260,self.global_search)
+
     def global_search(self):
         q=self.search.get().strip()
-        if not q or q==getattr(self,'_search_placeholder','') or q.startswith('Search Service ID'):return
-        self.clear(); self.heading('Search Results',q); like=f'%{q}%'
-        tabs=CapsuleNotebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
-        services=tk.Frame(tabs,bg=CARD); clients=tk.Frame(tabs,bg=CARD); equipment=tk.Frame(tabs,bg=CARD)
-        tabs.add(services,text=' Service Calls '); tabs.add(clients,text=' Clients '); tabs.add(equipment,text=' Equipment ')
-        self.service_tree(services,where='s.code LIKE ? OR c.name LIKE ? OR e.code LIKE ? OR e.serial LIKE ? OR e.make LIKE ? OR e.model LIKE ?',args=(like,like,like,like,like,like))
-        ccols=('Client ID','Name','Contact','Mobile','Email','City'); ctr=ttk.Treeview(clients,columns=ccols,show='headings')
-        for x in ccols:ctr.heading(x,text=x)
-        ctr.pack(fill='both',expand=True,padx=12,pady=12)
-        ecols=('SERVIX ID','Client','Make','Model','Serial','Stock / External ID'); etr=ttk.Treeview(equipment,columns=ecols,show='headings')
-        for x in ecols:etr.heading(x,text=x)
-        etr.pack(fill='both',expand=True,padx=12,pady=12)
+        if q==getattr(self,'_search_placeholder',''):return
+        old=getattr(self,'_live_search_job',None)
+        if old:
+            try:self.after_cancel(old)
+            except tk.TclError:pass
+        self._live_search_job=None
+        self._last_global_query=q
+        self.clear()
+        self.heading('Search Results',q if q else 'Live search across service calls, clients and equipment')
+        if not q:
+            prompt=self.card(self.content); prompt.pack(fill='x',padx=28,pady=16)
+            tk.Label(prompt,text='Start typing in Global Search',bg=CARD,fg=NAVY,font=('Segoe UI',14,'bold')).pack(anchor='w',padx=18,pady=(16,4))
+            tk.Label(prompt,text='Results will update as you type. Search by service ID, client, equipment model, serial number, mobile or email.',bg=CARD,fg=MUTED,font=('Segoe UI',10),wraplength=900,justify='left').pack(anchor='w',padx=18,pady=(0,16))
+            return
+        like=f'%{q}%'
         with connect() as con:
-            for x in con.execute('SELECT code,name,contact,mobile,email,city FROM clients WHERE code LIKE ? OR name LIKE ? OR mobile LIKE ? OR email LIKE ?',(like,like,like,like)):ctr.insert('','end',values=tuple(x))
-            for x in con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
-                                    WHERE e.code LIKE ? OR c.name LIKE ? OR e.make LIKE ? OR e.model LIKE ? OR e.serial LIKE ? OR e.stock_id LIKE ?''',(like,like,like,like,like,like)):etr.insert('','end',values=tuple(x))
+            service_rows=con.execute('''SELECT s.code,s.opened,c.name,e.code,s.reason,COALESCE(s.engineer,''),s.status,COALESCE(s.payment_status,'')
+                FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id
+                WHERE s.code LIKE ? OR c.name LIKE ? OR c.mobile LIKE ? OR c.email LIKE ? OR e.code LIKE ? OR e.serial LIKE ? OR e.make LIKE ? OR e.model LIKE ?
+                ORDER BY date(s.opened) DESC,s.id DESC''',(like,like,like,like,like,like,like,like)).fetchall()
+            client_rows=con.execute('SELECT code,name,contact,mobile,email,city FROM clients WHERE code LIKE ? OR name LIKE ? OR contact LIKE ? OR mobile LIKE ? OR email LIKE ? OR city LIKE ? ORDER BY name',(like,like,like,like,like,like)).fetchall()
+            equipment_rows=con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
+                WHERE e.code LIKE ? OR c.name LIKE ? OR e.make LIKE ? OR e.model LIKE ? OR e.serial LIKE ? OR e.stock_id LIKE ? ORDER BY e.id DESC''',(like,like,like,like,like,like)).fetchall()
+        summary=self.card(self.content); summary.pack(fill='x',padx=28,pady=(4,8))
+        tk.Label(summary,text=f'{len(service_rows)} service calls    ·    {len(client_rows)} clients    ·    {len(equipment_rows)} equipment',bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=16,pady=9)
+        tabs=CapsuleNotebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,18))
+        services=tk.Frame(tabs,bg=CARD); clients=tk.Frame(tabs,bg=CARD); equipment=tk.Frame(tabs,bg=CARD)
+        tabs.add(services,text=f' Service Calls  {len(service_rows)} '); tabs.add(clients,text=f' Clients  {len(client_rows)} '); tabs.add(equipment,text=f' Equipment  {len(equipment_rows)} ')
+        service_tree=self.service_tree(services,where='1=0',order='date(s.opened) DESC,s.id DESC')
+        for row in service_rows:service_tree.insert('','end',values=tuple(row))
+        def polished_table(parent,columns,widths,rows):
+            wrap=tk.Frame(parent,bg=CARD); wrap.pack(fill='both',expand=True,padx=12,pady=12)
+            tree=ttk.Treeview(wrap,columns=columns,show='headings',height=12,style='Search.Treeview')
+            for col,width in zip(columns,widths):tree.heading(col,text=col);tree.column(col,width=width,minwidth=75,anchor='w',stretch=False)
+            ybar=ttk.Scrollbar(wrap,orient='vertical',command=tree.yview); xbar=ttk.Scrollbar(wrap,orient='horizontal',command=tree.xview)
+            tree.configure(yscrollcommand=ybar.set,xscrollcommand=xbar.set)
+            tree.grid(row=0,column=0,sticky='nsew'); ybar.grid(row=0,column=1,sticky='ns'); xbar.grid(row=1,column=0,sticky='ew')
+            wrap.rowconfigure(0,weight=1); wrap.columnconfigure(0,weight=1)
+            for i,row in enumerate(rows):tree.insert('','end',values=tuple(row),tags=('odd' if i%2 else 'even',))
+            tree.tag_configure('odd',background='#F6F9FC'); tree.tag_configure('even',background='white')
+            if not rows:tk.Label(wrap,text='No matching records',bg=CARD,fg=MUTED,font=('Segoe UI',11)).place(relx=.5,rely=.5,anchor='center')
+            return tree
+        ccols=('Client ID','Client Name','Contact','Mobile','Email','City')
+        ctr=polished_table(clients,ccols,(125,260,170,135,260,140),client_rows)
+        ecols=('SERVIX ID','Client','Make','Model','Serial','Stock / External ID')
+        etr=polished_table(equipment,ecols,(135,260,165,180,180,200),equipment_rows)
         ctr.bind('<Double-1>',lambda e:self.show_client_360(ctr.item(ctr.focus(),'values')[0]) if ctr.focus() else None)
         etr.bind('<Double-1>',lambda e:self.show_equipment_360(etr.item(etr.focus(),'values')[0]) if etr.focus() else None)
 
