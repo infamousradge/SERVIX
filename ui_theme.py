@@ -31,10 +31,12 @@ def configure_theme(root):
         style.theme_use('clam')
     except tk.TclError:
         pass
-    style.configure('Treeview', font=('Segoe UI', 11), rowheight=40,
-                    background='white', fieldbackground='white', borderwidth=0)
+    style.configure('Treeview', font=('Segoe UI', 11), rowheight=42,
+                    background='white', fieldbackground='white', borderwidth=0,
+                    relief='flat')
     style.configure('Treeview.Heading', font=('Segoe UI', 11, 'bold'),
-                    background='#EAF1F8', foreground=NAVY, padding=(11, 10))
+                    background='#EEF3F8', foreground='#3B4D63', padding=(11, 10),
+                    borderwidth=0, relief='flat')
     style.map('Treeview', background=[('selected', '#D9ECFF')],
               foreground=[('selected', TEXT)])
     style.configure('TLabel', font=('Segoe UI', 11))
@@ -305,6 +307,7 @@ class PremiumCombobox(tk.Canvas):
         self.state = state
         self.variable = textvariable or tk.StringVar(master=parent)
         self.popup = None
+        self._surface_image = None
         self._trace = self.variable.trace_add('write', self._draw)
         # Match the host surface. A BG-colored canvas on white filter cards was
         # the pale rectangular patch visible around each capsule in the screenshots.
@@ -381,17 +384,25 @@ class PremiumCombobox(tk.Canvas):
         self.delete('all')
         width = max(90, self.winfo_width())
         height = max(38, self.winfo_height())
-        left, right = 2, width - 3
-        self._pill(left, 5, right, height - 1, height // 2, '#D8E3EF')
-        self._pill(left, 2, right, height - 4, height // 2, 'white', '#D7E3F0')
-        if self.focus_get() == self:
-            self._pill(left + 1, 1, right - 1, height - 5, height // 2, None, BLUE)
-            self._pill(left + 3, 4, right - 3, height - 7, height // 2, 'white', None)
-        arrow_x = right - 23
-        self.create_oval(arrow_x - 13, height // 2 - 13, arrow_x + 13, height // 2 + 13,
-                         fill='#EAF3FC', outline='')
-        self.create_text(arrow_x, height // 2 - 1, text='⌄', fill=BLUE,
-                         font=('Segoe UI Symbol', 12, 'bold'))
+        scale=3
+        surface=Image.new('RGBA',(width*scale,height*scale),(0,0,0,0))
+        painter=ImageDraw.Draw(surface)
+        focused=self.focus_get()==self
+        edge='#79B9EE' if focused else '#D5E1ED'
+        painter.rounded_rectangle((2*scale,4*scale,(width-3)*scale,(height-2)*scale),
+                                  radius=(height//2)*scale,fill='#E8EEF5')
+        painter.rounded_rectangle((2*scale,2*scale,(width-3)*scale,(height-5)*scale),
+                                  radius=(height//2)*scale,fill='white',outline=edge,
+                                  width=(2 if focused else 1)*scale)
+        arrow_x=width-25
+        painter.rounded_rectangle(((arrow_x-14)*scale,(height//2-12)*scale,
+                                   (arrow_x+11)*scale,(height//2+12)*scale),
+                                  radius=8*scale,fill='#EEF5FC')
+        self._surface_image=ImageTk.PhotoImage(
+            surface.resize((width,height),Image.Resampling.LANCZOS),master=self)
+        self.create_image(0,0,anchor='nw',image=self._surface_image)
+        self.create_line(arrow_x-4,height//2-1,arrow_x,height//2+3,
+                         arrow_x+4,height//2-1,fill=BLUE,width=2,capstyle='round',joinstyle='round')
         selected = self.get()
         label = selected if selected else 'Select an option'
         font_obj = font.Font(family='Segoe UI', size=11)

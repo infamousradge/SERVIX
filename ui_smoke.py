@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import tkinter as tk
+from types import SimpleNamespace
 
 import database
 import app
@@ -32,6 +33,12 @@ def main():
             window = app.Servix()
         window.report_callback_exception = lambda *error: errors.append(error)
         try:
+            window.page_canvas.configure(scrollregion=(0,0,window.page_canvas.winfo_width(),2000))
+            window.update()
+            window.page_canvas.yview_moveto(0)
+            window._route_mousewheel(SimpleNamespace(x_root=-10,y_root=-10,state=0,num=None,delta=-120))
+            window.update()
+            assert window.page_canvas.yview()[0] > 0, 'Mouse wheel should scroll the page canvas'
             for size in ('1280x760', '1536x960'):
                 window.geometry(size)
                 for method in ('show_dashboard', 'show_services', 'show_new_service', 'show_clients',
