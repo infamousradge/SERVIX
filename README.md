@@ -50,4 +50,6 @@ The `feature/classic-blue-ui` branch starts the locked desktop redesign: readabl
 
 Run `python ui_smoke.py` to open every module and exercise tab selection at 1280×760 and 1536×960 using a temporary test database. This needs a graphical desktop (or Xvfb on Linux). The Windows build runs the same checks before packaging.
 
-Still pending: final visual polish against the approved samples, the single finalized SERVIX logo asset (the existing asset contains multiple variants), Windows user acceptance testing with representative data and display scaling, and a versioned installer release.
+The exact approved SERVIX logo now replaces the multi-variant asset. The app, installer, shortcuts and uninstaller use a multi-resolution gear icon. The setup wizard uses the Windows 11 style, follows the system's light/dark preference, and includes custom welcome/completion branding. `python branding_assets.py` prepares icon and installer artwork before packaging. Windows CI verifies the embedded icon resources, installs the product, checks startup, uninstalls it, and captures the actual installer in both themes.
+
+Still pending: final visual polish against the approved UI samples, Windows user acceptance testing with representative data and display scaling, and a versioned installer release. The current installer is a 1.0.1 preview.

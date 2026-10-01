@@ -8,3 +8,5 @@ data/
 attachments/
 exports/
 backups/
+assets/installer-*.png
+installer-preview/

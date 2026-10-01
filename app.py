@@ -19,10 +19,22 @@ NAVY='#071A3D'; NAVY2='#0C2B5B'; BLUE='#0876D1'; CYAN='#11B6D8'; GREEN='#48C774'
 
 class Servix(tk.Tk):
     def __init__(self):
+        if sys.platform=='win32':
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID('SERVIX.Desktop')
         super().__init__(); init_db()
         self.title('SERVIX — Service Management'); self.geometry('1536x960'); self.minsize(1280,760); self.configure(bg=BG)
         self.style=ttk.Style(self); self.style.theme_use('clam')
         configure_theme(self)
+        asset_root=Path(getattr(sys, '_MEIPASS', ROOT))
+        self.app_icon=None
+        try:
+            icon=Image.open(asset_root/'assets'/'servix-mark.png').convert('RGBA')
+            icon.thumbnail((64,64),Image.Resampling.LANCZOS)
+            self.app_icon=ImageTk.PhotoImage(icon,master=self)
+            self.iconphoto(True,self.app_icon)
+            if sys.platform=='win32': self.iconbitmap(default=str(asset_root/'assets'/'servix.ico'))
+        except (OSError,tk.TclError): pass
         self.current_user=None; self.withdraw()
         if not self.login(): self.destroy(); return
         self.deiconify(); self.page=None; self.build_shell(); self.run_auto_backup(); self.show_dashboard()
@@ -136,16 +148,16 @@ class Servix(tk.Tk):
 
     def build_shell(self):
         self.sidebar=tk.Frame(self,bg='#063765',width=280); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
-        brand=tk.Frame(self.sidebar,bg='#073A69',height=154); brand.pack(fill='x'); brand.pack_propagate(False)
+        brand=tk.Frame(self.sidebar,bg='#073A69',height=200); brand.pack(fill='x'); brand.pack_propagate(False)
         self.brand_image=None
         asset_root=Path(getattr(sys, '_MEIPASS', ROOT))
         logo_path=asset_root/'assets'/'logo.png'
         if logo_path.exists():
             try:
                 image=Image.open(logo_path).convert('RGBA')
-                image.thumbnail((236, 92), Image.Resampling.LANCZOS)
+                image.thumbnail((236, 156), Image.Resampling.LANCZOS)
                 self.brand_image=ImageTk.PhotoImage(image, master=self)
-                tk.Label(brand,image=self.brand_image,bg='#073A69').pack(pady=(12,4))
+                tk.Label(brand,image=self.brand_image,bg='white',bd=0).pack(pady=(10,2))
             except (OSError, tk.TclError): pass
         if self.brand_image is None:
             tk.Label(brand,text='SERVIX',font=('Segoe UI',28,'bold'),bg='#073A69',fg='white').pack(pady=(18,2))
