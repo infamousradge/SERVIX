@@ -212,7 +212,16 @@ class Servix(tk.Tk):
     def card(self,parent):
         return tk.Frame(parent,bg=CARD,highlightthickness=1,highlightbackground=BORDER)
     def metric(self,parent,title,value,accent=BLUE,sub=''):
-        c=self.card(parent); c.pack(side='left',fill='both',expand=True,padx=6); tk.Frame(c,bg=accent,height=4).pack(fill='x'); tk.Label(c,text=title,bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(anchor='w',padx=16,pady=(13,2)); tk.Label(c,text=str(value),bg=CARD,fg=TEXT,font=('Segoe UI',25,'bold')).pack(anchor='w',padx=16); tk.Label(c,text=sub or ' ',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(anchor='w',padx=16,pady=(2,12)); return c
+        # Spread each metric's color across the full card as a soft tint; keep
+        # the number and outline in the stronger accent for quick scanning.
+        rgb=tuple(int(accent[i:i+2],16) for i in (1,3,5))
+        surface='#'+''.join(f'{round(channel*.80+255*.20):02X}' for channel in rgb)
+        c=tk.Frame(parent,bg=surface,highlightthickness=1,highlightbackground=accent)
+        c.pack(side='left',fill='both',expand=True,padx=6)
+        tk.Label(c,text=title,bg=surface,fg=NAVY,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=16,pady=(13,2))
+        tk.Label(c,text=str(value),bg=surface,fg=accent,font=('Segoe UI',25,'bold')).pack(anchor='w',padx=16)
+        tk.Label(c,text=sub or ' ',bg=surface,fg='#56677A',font=('Segoe UI',10)).pack(anchor='w',padx=16,pady=(2,12))
+        return c
     def q1(self,sql,args=()):
         with connect() as con:return con.execute(sql,args).fetchone()[0]
 

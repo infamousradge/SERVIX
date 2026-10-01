@@ -202,7 +202,14 @@ class SidebarPill(tk.Canvas):
                          fill='#3B9CEF', width=scale)
         elif self.hover:
             rounded(3, 49, '#104879')
-        badge_color = '#1688DB' if self.active else '#0C4779'
+        badge_color = {
+            'Dashboard': '#149CF3', 'Service Calls': '#10AFA5',
+            'Clients': '#8068D9', 'Equipment': '#2587D7',
+            'Warranty & AMC': '#D99A27', 'Engineers': '#35A96D',
+            'Parts / Inventory': '#E07842', 'Commercial & Payments': '#268FAF',
+            'Documents': '#A75CC1', 'Reports & Analytics': '#347BD0',
+            'Data Export / Import': '#159B86', 'Administration': '#7085A2',
+        }.get(self.label, '#2587D7')
         painter.ellipse((12*scale, 11*scale, 42*scale, 41*scale), fill=badge_color)
         self._surface_image = ImageTk.PhotoImage(
             surface.resize((width, 52), Image.Resampling.LANCZOS), master=self)
@@ -211,7 +218,7 @@ class SidebarPill(tk.Canvas):
         self.create_text(54, 26, text=self.label, anchor='w', fill='white' if self.active else '#DDE9F7',
                          font=('Segoe UI', 11, 'bold' if self.active else 'normal'))
         if self.focus_get() == self:
-            self.create_rectangle(7, 5, right - 5, bottom - 1,
+            self.create_rectangle(7, 5, width - 7, 48,
                                   outline='#B9E2FF', dash=(2, 2))
 
     def _pill(self, left, top, right, bottom, radius, color):
@@ -228,7 +235,7 @@ class SidebarPill(tk.Canvas):
             'Documents': 'file', 'Reports & Analytics': 'chart',
             'Data Export / Import': 'transfer', 'Administration': 'settings',
         }.get(self.label, 'dot')
-        c, w = 'white', 1.8
+        c, w = 'white', 2
         def line(points):
             self.create_line(*points, fill=c, width=w, capstyle='round', joinstyle='round')
         if icon == 'home':
