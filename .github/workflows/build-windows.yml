@@ -25,6 +25,9 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Check database transactions and file release
+        run: python -m unittest test_database -v
+
       - name: Check desktop layouts and tab navigation
         run: python ui_smoke.py
 

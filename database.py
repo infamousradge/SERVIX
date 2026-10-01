@@ -1,4 +1,5 @@
 from pathlib import Path
+from contextlib import contextmanager
 import sqlite3, datetime, os, sys, hashlib, hmac, secrets
 
 APP_ROOT=Path(__file__).resolve().parent
@@ -43,8 +44,16 @@ def ensure_default_user():
             ts=datetime.datetime.now().isoformat(timespec='seconds')
             con.execute('INSERT INTO users(username,display_name,role,active,created,modified) VALUES(?,?,?,?,?,?)',('admin','Admin','Administrator',1,ts,ts))
 
+@contextmanager
 def connect():
-    con=sqlite3.connect(DB); con.row_factory=sqlite3.Row; return con
+    """Commit or roll back each operation, then release the database handle."""
+    con=sqlite3.connect(DB)
+    con.row_factory=sqlite3.Row
+    try:
+        with con:
+            yield con
+    finally:
+        con.close()
 
 def init_db():
     with connect() as con:
