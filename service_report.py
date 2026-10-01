@@ -3,17 +3,25 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as PDFImage
 from reportlab.lib.units import mm
+from xml.sax.saxutils import escape
 
-def _s(v): return str(v or '—')
+def _s(v): return escape(str(v or '—'))
 def create_service_report(path, service, client, equipment, parts, calibration, company):
     path=Path(path); styles=getSampleStyleSheet()
     body=ParagraphStyle('body',parent=styles['BodyText'],fontSize=8,leading=11)
     title=ParagraphStyle('title',parent=styles['Title'],fontSize=16,textColor=colors.HexColor('#164F7C'),alignment=TA_CENTER)
     section=ParagraphStyle('section',parent=styles['Heading3'],fontSize=9,textColor=colors.white,backColor=colors.HexColor('#164F7C'),spaceBefore=7,spaceAfter=5,leftIndent=4,leading=15)
     doc=SimpleDocTemplate(str(path),pagesize=A4,rightMargin=12*mm,leftMargin=12*mm,topMargin=11*mm,bottomMargin=11*mm,title='Service Report '+_s(service['code']))
-    story=[Paragraph(_s(company.get('name')),title),Paragraph(_s(company.get('title')),ParagraphStyle('sub',parent=body,alignment=TA_CENTER,textColor=colors.HexColor('#6E7B8D'))),Spacer(1,5)]
+    logo_path=company.get('logo_path'); signature_path=company.get('signature_path')
+    company_lines=[Paragraph(_s(company.get('name')),title),Paragraph(_s(company.get('title')),ParagraphStyle('sub',parent=body,alignment=TA_CENTER,textColor=colors.HexColor('#6E7B8D')))]
+    if logo_path and Path(logo_path).is_file():
+        logo=PDFImage(str(logo_path),width=22*mm,height=17*mm,kind='proportional')
+        header=Table([[logo,Table([[company_lines[0]],[company_lines[1]]],colWidths=[164*mm])]],colWidths=[22*mm,164*mm])
+        header.setStyle(TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('BOTTOMPADDING',(0,0),(-1,-1),5),('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0)]))
+        story=[header,Spacer(1,4)]
+    else:story=company_lines+[Spacer(1,4)]
     def info(name,rows):
         story.append(Paragraph(name,section)); data=[]
         for a,b,c,d in rows:data.append([Paragraph('<b>'+a+'</b>',body),Paragraph(_s(b),body),Paragraph('<b>'+c+'</b>',body),Paragraph(_s(d),body)])
@@ -28,5 +36,6 @@ def create_service_report(path, service, client, equipment, parts, calibration, 
         pt=Table(pdata,colWidths=[30*mm,75*mm,18*mm,30*mm,25*mm]); pt.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#EAF4FF')),('GRID',(0,0),(-1,-1),.35,colors.HexColor('#C8D9E8')),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),7)])); story.append(pt)
     if calibration: info('CALIBRATION',[('Calibration Date',calibration['calibration_date'],'Result',calibration['result']),('Certificate No.',calibration['certificate_no'],'Certificate Date',calibration['certificate_date']),('Next Calibration Due',calibration['next_due'],'Performed By',calibration['performed_by']),('Standards / Reference',calibration['standards_reference'],'Remarks',calibration['remarks'])])
     info('COMPLETION & DISPATCH',[('Completion Date',service['completion_date'],'Closure Date',service['closure_date']),('Dispatch Date',service['dispatch_date'],'Dispatch Mode',service['dispatch_mode']),('Dispatch Reference',service['dispatch_reference'],'Service Category',service['foc_chargeable'])])
-    story += [Spacer(1,12),Table([['Engineer / Service Signature','Customer Acknowledgement'],['\n\n____________________________','\n\n____________________________']],colWidths=[90*mm,90*mm],style=[('ALIGN',(0,0),(-1,-1),'CENTER'),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8)])]
+    signature=PDFImage(str(signature_path),width=42*mm,height=15*mm,kind='proportional') if signature_path and Path(signature_path).is_file() else '\n\n____________________________'
+    story += [Spacer(1,12),Table([['Engineer / Service Signature','Customer Acknowledgement'],[signature,'\n\n____________________________']],colWidths=[90*mm,90*mm],style=[('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('BOX',(0,0),(-1,-1),.4,colors.HexColor('#C8D9E8')),('INNERGRID',(0,0),(-1,-1),.3,colors.HexColor('#DDE6F0')),('TOPPADDING',(0,1),(-1,-1),10),('BOTTOMPADDING',(0,1),(-1,-1),10)])]
     doc.build(story); return path

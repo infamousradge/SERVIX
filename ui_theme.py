@@ -51,9 +51,9 @@ def configure_theme(root):
     style.configure('TButton', font=('Segoe UI', 11, 'bold'), padding=(14, 9),
                     background='#EAF3FC', foreground=NAVY, borderwidth=0)
     style.map('TButton', background=[('pressed', '#D4E8FB'), ('active', '#DDEEFF')])
-    style.configure('TEntry', font=('Segoe UI', 11), padding=(10, 8),
+    style.configure('TEntry', font=('Segoe UI', 10), padding=(9, 6),
                     fieldbackground='white', borderwidth=1, relief='flat')
-    style.configure('TCombobox', font=('Segoe UI', 11), padding=(11, 8),
+    style.configure('TCombobox', font=('Segoe UI', 10), padding=(9, 6),
                     fieldbackground='white', background='#EAF3FC', foreground=TEXT,
                     bordercolor='#D7E3F0', lightcolor='#D7E3F0', darkcolor='#D7E3F0',
                     arrowsize=15, arrowcolor=BLUE)
@@ -69,6 +69,7 @@ def configure_theme(root):
 class CapsuleNotebook(tk.Frame):
     """Native notebook pages with wrapping, keyboard-accessible raised pill tabs."""
     def __init__(self, parent, **kwargs):
+        self.max_per_row=kwargs.pop('max_per_row',None)
         super().__init__(parent, bg=BG, **kwargs)
         self.bar = tk.Frame(self, bg=BG)
         self.bar.pack(fill='x', pady=(2, 12))
@@ -85,30 +86,33 @@ class CapsuleNotebook(tk.Frame):
         # Old numbered workflow labels are preserved in the native notebook metadata.
         if '. ' in label and label.split('. ', 1)[0].isdigit():
             label = label.split('. ', 1)[1]
-        width = font.Font(family='Segoe UI', size=11, weight='bold').measure(label) + 44
-        button = tk.Canvas(self.bar, width=width, height=50, bg=BG,
+        width = font.Font(family='Segoe UI', size=10, weight='bold').measure(label) + 36
+        button = tk.Canvas(self.bar, width=width, height=44, bg=BG,
                            highlightthickness=0, takefocus=True, cursor='hand2')
         button.label = label
         button.page = str(child)
         button.images = {}
         for active in (False, True):
-            image = Image.new('RGBA', (width * 2, 100))
+            image = Image.new('RGBA', (width * 2, 88))
             draw = ImageDraw.Draw(image)
-            draw.rounded_rectangle((2, 10, width * 2 - 2, 98), radius=44, fill='#CBD8E6')
+            draw.rounded_rectangle((3, 9, width * 2 - 3, 86), radius=42, fill='#CBD8E6')
             if active:
-                for y in range(4, 90):
-                    t = (y - 4) / 86
+                gradient=Image.new('RGBA',(width*2,88),(0,0,0,0)); grad=ImageDraw.Draw(gradient)
+                for y in range(4, 82):
+                    t = (y - 4) / 78
                     top, bottom = (21, 139, 226), (5, 103, 190)
                     color = tuple(round(a + (b - a) * t) for a, b in zip(top, bottom))
-                    draw.line((3, y, width * 2 - 3, y), fill=color)
-                draw.rounded_rectangle((3, 4, width * 2 - 3, 90), radius=44,
+                    grad.line((3,y,width*2-3,y),fill=color+(255,))
+                mask=Image.new('L',(width*2,88),0); ImageDraw.Draw(mask).rounded_rectangle((3,4,width*2-3,82),radius=39,fill=255)
+                gradient.putalpha(mask); image.alpha_composite(gradient)
+                draw.rounded_rectangle((3, 4, width * 2 - 3, 82), radius=39,
                                        outline='#0564B5', width=2)
                 draw.line((42, 7, width * 2 - 42, 7), fill='#6DBCF5', width=2)
             else:
-                draw.rounded_rectangle((3, 4, width * 2 - 3, 90), radius=44,
+                draw.rounded_rectangle((3, 4, width * 2 - 3, 82), radius=39,
                                        fill='#FFFFFF', outline='#D7E3F0', width=2)
                 draw.line((42, 7, width * 2 - 42, 7), fill='#FFFFFF', width=2)
-            button.images[active] = ImageTk.PhotoImage(image.resize((width, 50), Image.Resampling.LANCZOS), master=self)
+            button.images[active] = ImageTk.PhotoImage(image.resize((width, 44), Image.Resampling.LANCZOS), master=self)
         button.bind('<Button-1>', lambda e, page=child: self.select(page))
         button.bind('<Return>', lambda e, page=child: self.select(page))
         button.bind('<space>', lambda e, page=child: self.select(page))
@@ -136,15 +140,15 @@ class CapsuleNotebook(tk.Frame):
         if event and width == self._last_width:
             return
         self._last_width = width
-        row = used = 0
+        row = used = row_count = 0
         for button in self.buttons:
             size = int(button.cget('width')) + 8
-            if used and used + size > max(1, width):
+            if used and (used + size > max(1, width) or (self.max_per_row and row_count >= self.max_per_row)):
                 row += 1
-                used = 0
-            button.place(x=used, y=row * 54)
-            used += size
-        self.bar.configure(height=(row + 1) * 54 if self.buttons else 0)
+                used = row_count = 0
+            button.place(x=used, y=row * 48)
+            used += size; row_count += 1
+        self.bar.configure(height=(row + 1) * 48 if self.buttons else 0)
 
     def _refresh(self, event=None):
         selected = self.notebook.select()
@@ -154,9 +158,9 @@ class CapsuleNotebook(tk.Frame):
             button.create_image(0, 0, anchor='nw', image=button.images[active])
             button.create_text(int(button.cget('width')) // 2, 21,
                                text=button.label, fill='white' if active else TEXT,
-                               font=('Segoe UI', 11, 'bold'))
+                               font=('Segoe UI', 10, 'bold'))
             if self.focus_get() == button:
-                left, top, right, bottom, radius = 7, 2, int(button.cget('width')) - 7, 48, 23
+                left, top, right, bottom, radius = 5, 1, int(button.cget('width')) - 5, 43, 21
                 color = '#FFFFFF' if active else BLUE
                 button.create_line(left + radius, top, right - radius, top,
                                    fill=color, dash=(2, 2))
@@ -336,8 +340,9 @@ class PremiumCombobox(tk.Canvas):
                 parent_bg = parent.cget('background')
             except (tk.TclError, AttributeError):
                 parent_bg = BG
-        super().__init__(parent, height=44, width=max(160, width * 7 + 60),
-                         bg=parent_bg or BG, highlightthickness=0, takefocus=True,
+        self.host_bg = parent_bg or BG
+        super().__init__(parent, height=40, width=max(160, width * 7 + 60),
+                         bg=self.host_bg, highlightthickness=0, takefocus=True,
                          cursor='hand2', **kwargs)
         self.bind('<Configure>', self._draw)
         self.bind('<Button-1>', self._toggle)
@@ -423,12 +428,12 @@ class PremiumCombobox(tk.Canvas):
                          arrow_x+4,height//2-1,fill=BLUE,width=2,capstyle='round',joinstyle='round')
         selected = self.get()
         label = selected if selected else 'Select an option'
-        font_obj = font.Font(family='Segoe UI', size=11)
+        font_obj = font.Font(family='Segoe UI', size=10)
         max_width = max(30, arrow_x - 25)
         while label and font_obj.measure(label) > max_width:
             label = label[:-2] + '…' if len(label) > 2 else '…'
         self.create_text(18, height // 2, text=label, anchor='w',
-                         fill=TEXT if selected else MUTED, font=('Segoe UI', 11))
+                         fill=TEXT if selected else MUTED, font=('Segoe UI', 10))
 
     def _pill(self, left, top, right, bottom, radius, fill, outline=None):
         if right <= left or bottom <= top:
@@ -462,29 +467,27 @@ class PremiumCombobox(tk.Canvas):
         popup.withdraw()
         popup.overrideredirect(True)
         popup.transient(self.winfo_toplevel())
-        popup.configure(bg='#E8EEF5')
+        popup.configure(bg=self.host_bg)
         visible = min(8, max(1, len(self.values)))
         row_height=36; font_obj=font.Font(family='Segoe UI',size=10)
         longest=max((font_obj.measure(str(value)) for value in self.values),default=150)
         desired_width=max(self.winfo_width(),min(480,max(190,longest+48)))
         desired_height=visible*row_height+18
-        shell=tk.Frame(popup,bg='#E8EEF5'); shell.pack(fill='both',expand=True,padx=1,pady=1)
-        self._popup_canvas=tk.Canvas(shell,width=desired_width-2,height=desired_height-2,
-                                     bg='white',highlightthickness=0,takefocus=True)
-        self._popup_canvas.pack(side='left',fill='both',expand=True)
-        # Supersampled rounded popup surface with a soft lift shadow.
+        self._popup_canvas=tk.Canvas(popup,width=desired_width,height=desired_height,
+                                     bg=self.host_bg,highlightthickness=0,takefocus=True)
+        self._popup_canvas.pack(fill='both',expand=True)
+        # The popup overlaps the capsule slightly: its top edge stays open so
+        # the option sheet reads as the lower half of the same control.
         scale=3; surface=Image.new('RGBA',(desired_width*scale,desired_height*scale),(0,0,0,0)); painter=ImageDraw.Draw(surface)
-        painter.rounded_rectangle((3*scale,5*scale,(desired_width-3)*scale,(desired_height-2)*scale),radius=13*scale,fill='#D3DFEB')
-        painter.rounded_rectangle((2*scale,2*scale,(desired_width-4)*scale,(desired_height-6)*scale),radius=13*scale,fill='white',outline='#D8E4F0',width=scale)
+        painter.rounded_rectangle((3*scale,3*scale,(desired_width-3)*scale,(desired_height-2)*scale),radius=13*scale,fill='#D3DFEB')
+        painter.rounded_rectangle((2*scale,0,(desired_width-4)*scale,(desired_height-6)*scale),radius=13*scale,fill='white',outline='#D8E4F0',width=scale)
+        painter.rectangle((3*scale,0,(desired_width-5)*scale,15*scale),fill='white')
+        painter.line((3*scale,0,(desired_width-5)*scale,0),fill='#D8E4F0',width=scale)
         self._popup_surface=ImageTk.PhotoImage(surface.resize((desired_width,desired_height),Image.Resampling.LANCZOS),master=self)
         self._popup_canvas.create_image(0,0,anchor='nw',image=self._popup_surface,tags=('surface',))
-        self._popup_canvas.configure(scrollregion=(0,0,desired_width-12,len(self.values)*row_height+18))
+        self._popup_canvas.configure(scrollregion=(0,0,desired_width,len(self.values)*row_height+18))
         self._popup_index=self.values.index(self.get()) if self.get() in self.values else 0
         self._popup_draw_options()
-        if len(self.values)>visible:
-            scrollbar=ttk.Scrollbar(shell,orient='vertical',command=self._popup_canvas.yview)
-            scrollbar.pack(side='right',fill='y',padx=(1,3),pady=6)
-            self._popup_canvas.configure(yscrollcommand=scrollbar.set)
         self._popup_canvas.bind('<Button-1>',self._popup_click)
         self._popup_canvas.bind('<Motion>',self._popup_motion)
         self._popup_canvas.bind('<Leave>',lambda _e:self._popup_draw_options())
@@ -498,10 +501,10 @@ class PremiumCombobox(tk.Canvas):
         self._popup_canvas.bind('<FocusOut>',self._popup_focus_out)
         popup.update_idletasks()
         x = min(self.winfo_rootx(), self.winfo_screenwidth() - desired_width - 8)
-        y = self.winfo_rooty() + self.winfo_height() - 2
+        y = self.winfo_rooty() + self.winfo_height() - 7
         screen_bottom = self.winfo_screenheight()
         if y + desired_height > screen_bottom - 12:
-            y = max(0, self.winfo_rooty() - desired_height + 2)
+            y = max(0, self.winfo_rooty() - desired_height + 7)
         popup.geometry(f'{desired_width}x{desired_height}+{x}+{y}')
         popup.deiconify()
         popup.lift()
