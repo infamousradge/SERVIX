@@ -148,23 +148,20 @@ class Servix(tk.Tk):
 
     def build_shell(self):
         self.sidebar=tk.Frame(self,bg='#063765',width=288); self.sidebar.pack(side='left',fill='y'); self.sidebar.pack_propagate(False)
-        brand=tk.Frame(self.sidebar,bg='#073A69',height=220); brand.pack(fill='x'); brand.pack_propagate(False)
+        brand=tk.Frame(self.sidebar,bg='#063765',height=204); brand.pack(fill='x'); brand.pack_propagate(False)
         self.brand_image=None
         asset_root=Path(getattr(sys, '_MEIPASS', ROOT))
-        logo_path=asset_root/'assets'/'logo.png'
+        logo_path=asset_root/'assets'/'servix-sidebar-logo.png'
         if logo_path.exists():
             try:
                 image=Image.open(logo_path).convert('RGBA')
-                image.thumbnail((236, 158), Image.Resampling.LANCZOS)
+                image.thumbnail((236, 176), Image.Resampling.LANCZOS)
                 self.brand_image=ImageTk.PhotoImage(image, master=self)
-                logo_card=tk.Frame(brand,bg='white',highlightthickness=1,highlightbackground='#D8E9F8')
-                logo_card.pack(padx=22,pady=(12,4))
-                tk.Label(logo_card,image=self.brand_image,bg='white',bd=0).pack(padx=3,pady=2)
+                tk.Label(brand,image=self.brand_image,bg='#063765',bd=0).pack(padx=0,pady=(10,6))
             except (OSError, tk.TclError): pass
         if self.brand_image is None:
-            tk.Label(brand,text='SERVIX',font=('Segoe UI',28,'bold'),bg='#073A69',fg='white').pack(pady=(18,2))
-            tk.Label(brand,text='SERVICE MANAGEMENT',font=('Segoe UI',10,'bold'),bg='#073A69',fg='#B9D9F4').pack()
-        tk.Label(brand,text=get_setting('company_short_name','HAC'),font=('Segoe UI',11,'bold'),bg='#073A69',fg='#D7EAFB',wraplength=250).pack(pady=(2,8))
+            tk.Label(brand,text='SERVIX',font=('Segoe UI',28,'bold'),bg='#063765',fg='white').pack(pady=(34,2))
+            tk.Label(brand,text='SERVICE MANAGEMENT',font=('Segoe UI',10,'bold'),bg='#063765',fg='#B9D9F4').pack()
         self.nav={}
         items=[('Dashboard','⌂',self.show_dashboard,'dashboard'),('Service Calls','⌕',self.show_services,'services'),('Clients','♟',self.show_clients,'clients'),('Equipment','▣',self.show_equipment,'equipment'),('Warranty & AMC','◆',self.show_warranty,'warranty'),('Engineers','♟',self.show_engineers,'engineers'),('Parts / Inventory','↕',self.show_parts_inventory,'parts'),('Commercial & Payments','₹',self.show_commercial,'commercial'),('Documents','▧',self.show_documents,'documents'),('Reports & Analytics','▥',self.show_reports,'reports'),('Data Export / Import','⇄',self.show_data_management,'data'),('Administration','⚙',self.show_settings,'admin')]
         items=[x for x in items if self.permitted(x[3])]
@@ -173,10 +170,7 @@ class Servix(tk.Tk):
             btn.set_active(label=='Dashboard')
         right=tk.Frame(self,bg=BG); right.pack(side='left',fill='both',expand=True)
         top=tk.Frame(right,bg='#063765',height=88); top.pack(fill='x'); top.pack_propagate(False)
-        title=tk.Frame(top,bg='#063765'); title.pack(side='left',padx=(18,24),pady=5)
-        tk.Label(title,text=get_setting('company_name',get_setting('system_title','Service Management System')),font=('Segoe UI',12,'bold'),bg='#063765',fg='white').pack(anchor='w')
-        tk.Label(title,text=get_setting('system_subtitle','Service   |   Calibration   |   Warranty   |   AMC'),font=('Segoe UI',10),bg='#063765',fg='#D6E8F7').pack(anchor='w')
-        searchwrap=tk.Frame(top,bg='white',highlightthickness=1,highlightbackground='#CFE0F0'); searchwrap.pack(side='left',fill='x',expand=True,pady=12)
+        searchwrap=tk.Frame(top,bg='white',highlightthickness=1,highlightbackground='#CFE0F0'); searchwrap.pack(side='left',fill='x',expand=True,padx=(18,0),pady=12)
         self.search=tk.Entry(searchwrap,font=('Segoe UI',11),bd=0,bg='white',fg=MUTED,insertbackground=TEXT); self.search.insert(0,'Search services, clients, equipment…'); self.search.pack(side='left',fill='x',expand=True,padx=(15,8),ipady=6); self.search.bind('<Return>',lambda e:self.global_search())
         search_icon=tk.Canvas(searchwrap,width=34,height=34,bg='white',highlightthickness=0,cursor='hand2'); search_icon.pack(side='right',padx=7,pady=4)
         search_icon.create_oval(2,2,32,32,fill='#EAF3FC',outline='')
@@ -1688,29 +1682,17 @@ class Servix(tk.Tk):
 
     def show_settings(self):
         if not self.require('admin'): return
-        self.clear(); self.section_header('Administration','Branding / Identity / Numbering Settings')
-        brand=self.card(self.content); brand.pack(fill='x',padx=10,pady=(8,6)); brand.grid_columnconfigure((0,1,2),weight=1)
-        tk.Label(brand,text='Company Branding / Header',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).grid(row=0,column=0,columnspan=3,sticky='w',padx=14,pady=(12,2))
-        tk.Label(brand,text='Change HAC/company identity later without changing application code.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).grid(row=1,column=0,columnspan=3,sticky='w',padx=14,pady=(0,8))
-        short=self.form_field(brand,'Header Short Name',2,0); short.insert(0,get_setting('company_short_name','HAC'))
-        cname=self.form_field(brand,'Company Name',2,1); cname.insert(0,get_setting('company_name','HAC'))
-        stitle=self.form_field(brand,'System Title',2,2); stitle.insert(0,get_setting('system_title','Service Management System'))
-        subtitle=self.form_field(brand,'Header Subtitle',4,0); subtitle.insert(0,get_setting('system_subtitle','Service | Calibration | Warranty | AMC'))
-        logo=self.form_field(brand,'Logo File (PNG)',4,1); logo.insert(0,get_setting('company_logo_path',''))
-        def choose_logo():
-            p=filedialog.askopenfilename(filetypes=[('PNG Logo','*.png')])
-            if p: logo.delete(0,'end'); logo.insert(0,p)
-        tk.Button(brand,text='Choose Logo',command=choose_logo,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=7).grid(row=5,column=1,sticky='e',padx=10,pady=(0,8))
+        self.clear(); self.section_header('Administration','Company Profile / Numbering Settings')
+        brand=self.card(self.content); brand.pack(fill='x',padx=10,pady=(8,6)); brand.grid_columnconfigure((0,1),weight=1)
+        tk.Label(brand,text='Company / Report Identity',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).grid(row=0,column=0,columnspan=2,sticky='w',padx=14,pady=(12,2))
+        tk.Label(brand,text='These details appear on service reports. SERVIX branding stays fixed in the sidebar.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).grid(row=1,column=0,columnspan=2,sticky='w',padx=14,pady=(0,8))
+        cname=self.form_field(brand,'Company Name',2,0); cname.insert(0,get_setting('company_name','HAC'))
+        stitle=self.form_field(brand,'System Title',2,1); stitle.insert(0,get_setting('system_title','Service Management System'))
         def save_brand():
-            set_setting('company_short_name',short.get().strip() or 'HAC'); set_setting('company_name',cname.get().strip() or short.get().strip() or 'HAC')
-            set_setting('system_title',stitle.get().strip() or 'Service Management System'); set_setting('system_subtitle',subtitle.get().strip())
-            lp=logo.get().strip()
-            if lp and Path(lp).exists():
-                from database import DATA_ROOT
-                d=DATA_ROOT/'branding'; d.mkdir(parents=True,exist_ok=True); dest=d/'company_logo.png'; shutil.copy2(lp,dest); set_setting('company_logo_path',str(dest))
-            elif not lp:set_setting('company_logo_path','')
-            messagebox.showinfo('Branding saved','Company/header branding saved. Restart SERVIX to refresh the main header.')
-        tk.Button(brand,text='Save Branding',command=save_brand,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=7,column=2,sticky='e',padx=10,pady=10)
+            set_setting('company_name',cname.get().strip() or 'HAC')
+            set_setting('system_title',stitle.get().strip() or 'Service Management System')
+            messagebox.showinfo('Report identity saved','Company and report identity details were saved.')
+        tk.Button(brand,text='Save Report Identity',command=save_brand,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=3,column=1,sticky='e',padx=10,pady=10)
 
         card=self.card(self.content); card.pack(fill='x',padx=10,pady=(0,10))
         tk.Label(card,text='Service ID Numbering',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=16,pady=(10,4))

@@ -158,6 +158,7 @@ class SidebarPill(tk.Canvas):
         self.label, self.icon, self.command = label, icon, command
         self.active = False
         self.hover = False
+        self._surface_image = None
         self.bind('<Configure>', self._draw)
         self.bind('<Button-1>', self._activate)
         self.bind('<Return>', self._activate)
@@ -187,17 +188,25 @@ class SidebarPill(tk.Canvas):
     def _draw(self, _event=None):
         self.delete('all')
         width = max(1, self.winfo_width())
-        left, right, top, bottom, radius = 2, width - 2, 3, 49, 22
+        scale = 3
+        surface = Image.new('RGBA', (width * scale, 52 * scale), (0, 0, 0, 0))
+        painter = ImageDraw.Draw(surface)
+        def rounded(top, bottom, color):
+            painter.rounded_rectangle((2*scale, top*scale, (width-2)*scale, bottom*scale),
+                                      radius=22*scale, fill=color)
         if self.active:
-            # A low shadow and pale top highlight make the selected destination read as a raised pill.
-            self._pill(left, top + 3, right, bottom + 3, radius, '#04294E')
-            self._pill(left, top, right, bottom, radius, '#0876D1')
-            self.create_line(left + radius, top + 1, right - radius, top + 1,
-                             fill='#3B9CEF', width=1)
+            # Supersampling removes the stair-stepped edges visible on native Tk ovals.
+            rounded(6, 52, '#04294E')
+            rounded(3, 49, '#0876D1')
+            painter.line((24*scale, 4*scale, (width-24)*scale, 4*scale),
+                         fill='#3B9CEF', width=scale)
         elif self.hover:
-            self._pill(left, top, right, bottom, radius, '#104879')
-        self.create_oval(12, 11, 42, 41,
-                         fill='#1688DB' if self.active else '#0C4779', outline='')
+            rounded(3, 49, '#104879')
+        badge_color = '#1688DB' if self.active else '#0C4779'
+        painter.ellipse((12*scale, 11*scale, 42*scale, 41*scale), fill=badge_color)
+        self._surface_image = ImageTk.PhotoImage(
+            surface.resize((width, 52), Image.Resampling.LANCZOS), master=self)
+        self.create_image(0, 0, anchor='nw', image=self._surface_image)
         self._draw_icon(27, 26)
         self.create_text(54, 26, text=self.label, anchor='w', fill='white' if self.active else '#DDE9F7',
                          font=('Segoe UI', 11, 'bold' if self.active else 'normal'))
