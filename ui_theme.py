@@ -25,6 +25,12 @@ def configure_theme(root):
     for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont'):
         font.nametofont(name).configure(family='Segoe UI', size=11)
     style = root.style
+    # The Windows default ttk theme adds raised gray borders to every table
+    # cell and control. Clam keeps these surfaces flat and visually consistent.
+    try:
+        style.theme_use('clam')
+    except tk.TclError:
+        pass
     style.configure('Treeview', font=('Segoe UI', 11), rowheight=40,
                     background='white', fieldbackground='white', borderwidth=0)
     style.configure('Treeview.Heading', font=('Segoe UI', 11, 'bold'),
@@ -192,8 +198,7 @@ class SidebarPill(tk.Canvas):
             self._pill(left, top, right, bottom, radius, '#104879')
         self.create_oval(12, 11, 42, 41,
                          fill='#1688DB' if self.active else '#0C4779', outline='')
-        self.create_text(27, 26, text=self.icon, fill='white',
-                         font=('Segoe UI Symbol', 13, 'bold'))
+        self._draw_icon(27, 26)
         self.create_text(54, 26, text=self.label, anchor='w', fill='white' if self.active else '#DDE9F7',
                          font=('Segoe UI', 11, 'bold' if self.active else 'normal'))
         if self.focus_get() == self:
@@ -204,6 +209,57 @@ class SidebarPill(tk.Canvas):
         self.create_rectangle(left + radius, top, right - radius, bottom, fill=color, outline='')
         self.create_oval(left, top, left + radius * 2, bottom, fill=color, outline='')
         self.create_oval(right - radius * 2, top, right, bottom, fill=color, outline='')
+
+    def _draw_icon(self, x, y):
+        """Draw matching outline icons instead of platform-dependent text glyphs."""
+        icon = {
+            'Dashboard': 'home', 'Service Calls': 'wrench', 'Clients': 'users',
+            'Equipment': 'box', 'Warranty & AMC': 'shield', 'Engineers': 'user',
+            'Parts / Inventory': 'layers', 'Commercial & Payments': 'coin',
+            'Documents': 'file', 'Reports & Analytics': 'chart',
+            'Data Export / Import': 'transfer', 'Administration': 'settings',
+        }.get(self.label, 'dot')
+        c, w = 'white', 1.8
+        def line(points):
+            self.create_line(*points, fill=c, width=w, capstyle='round', joinstyle='round')
+        if icon == 'home':
+            line((x-8,y-1,x,y-8,x+8,y-1)); line((x-6,y-2,x-6,y+7,x+6,y+7,x+6,y-2))
+            line((x-2,y+7,x-2,y+2,x+2,y+2,x+2,y+7))
+        elif icon == 'wrench':
+            line((x-5,y+6,x+4,y-3)); self.create_oval(x-7,y+4,x-3,y+8,outline=c,width=w)
+            line((x+2,y-5,x+5,y-7,x+8,y-4,x+6,y-1,x+3,y-2))
+        elif icon in ('users','user'):
+            self.create_oval(x-3,y-8,x+3,y-2,outline=c,width=w)
+            line((x-7,y+7,x-7,y+4,x-5,y+1,x-2,y,x+2,y,x+5,y+1,x+7,y+4,x+7,y+7))
+            if icon == 'users':
+                self.create_arc(x-10,y-6,x-5,y-1,start=80,extent=210,style='arc',outline=c,width=w)
+                self.create_arc(x+5,y-6,x+10,y-1,start=250,extent=210,style='arc',outline=c,width=w)
+        elif icon == 'box':
+            line((x-8,y-5,x,y-9,x+8,y-5,x+8,y+5,x,y+9,x-8,y+5,x-8,y-5))
+            line((x-8,y-5,x,y-1,x+8,y-5)); line((x,y-1,x,y+9))
+        elif icon == 'shield':
+            line((x,y-9,x+7,y-6,x+6,y+1,x+3,y+6,x,y+9,x-3,y+6,x-6,y+1,x-7,y-6,x,y-9))
+            line((x-3,y,x-1,y+2,x+4,y-3))
+        elif icon == 'layers':
+            line((x,y-8,x+8,y-4,x,y,x-8,y-4,x,y-8)); line((x-8,y,x,y+4,x+8,y)); line((x-8,y+4,x,y+8,x+8,y+4))
+        elif icon == 'coin':
+            self.create_oval(x-8,y-8,x+8,y+8,outline=c,width=w)
+            line((x+3,y-4,x-2,y-4,x-4,y-2,x+3,y+1,x+2,y+4,x-3,y+4)); line((x,y-6,x,y+6))
+        elif icon == 'file':
+            line((x-6,y-8,x+2,y-8,x+7,y-3,x+7,y+8,x-6,y+8,x-6,y-8))
+            line((x+2,y-8,x+2,y-3,x+7,y-3)); line((x-3,y+1,x+4,y+1)); line((x-3,y+4,x+4,y+4))
+        elif icon == 'chart':
+            line((x-8,y+7,x-8,y-7)); line((x-8,y+7,x+8,y+7)); line((x-5,y+3,x-1,y-1,x+2,y+2,x+7,y-5))
+        elif icon == 'transfer':
+            line((x-7,y-4,x+7,y-4,x+4,y-7)); line((x+7,y-4,x+4,y-1))
+            line((x+7,y+4,x-7,y+4,x-4,y+1)); line((x-7,y+4,x-4,y+7))
+        elif icon == 'settings':
+            self.create_oval(x-7,y-7,x+7,y+7,outline=c,width=w)
+            self.create_oval(x-2,y-2,x+2,y+2,outline=c,width=w)
+            for dx,dy in ((0,-9),(0,9),(-9,0),(9,0),(-6,-6),(6,-6),(-6,6),(6,6)):
+                line((x+dx*.78,y+dy*.78,x+dx,y+dy))
+        else:
+            self.create_oval(x-3,y-3,x+3,y+3,fill=c,outline='')
 
 
 class PremiumCombobox(tk.Canvas):
@@ -219,8 +275,18 @@ class PremiumCombobox(tk.Canvas):
         self.variable = textvariable or tk.StringVar(master=parent)
         self.popup = None
         self._trace = self.variable.trace_add('write', self._draw)
+        # Match the host surface. A BG-colored canvas on white filter cards was
+        # the pale rectangular patch visible around each capsule in the screenshots.
+        try:
+            parent_bg = parent.cget('bg')
+        except (tk.TclError, AttributeError):
+            try:
+                parent_bg = parent.cget('background')
+            except (tk.TclError, AttributeError):
+                parent_bg = BG
         super().__init__(parent, height=44, width=max(160, width * 7 + 60),
-                         bg=BG, highlightthickness=0, takefocus=True, cursor='hand2', **kwargs)
+                         bg=parent_bg or BG, highlightthickness=0, takefocus=True,
+                         cursor='hand2', **kwargs)
         self.bind('<Configure>', self._draw)
         self.bind('<Button-1>', self._toggle)
         self.bind('<Return>', self._toggle)
