@@ -6,7 +6,7 @@ import tkinter as tk
 
 import database
 import app
-from ui_theme import CapsuleNotebook
+from ui_theme import CapsuleNotebook, PremiumCombobox
 
 
 def walk(widget):
@@ -41,7 +41,7 @@ def main():
                                'show_users', 'show_settings'):
                     getattr(window, method)()
                     window.update()
-                    assert window.sidebar.winfo_width() == 280
+                    assert window.sidebar.winfo_width() == 288
                     assert window.content.winfo_width() > 900
                 for method, code in (('show_service_detail', 'SRV-TEST'),
                                      ('show_client_360', 'CLI-TEST'),
@@ -55,6 +55,20 @@ def main():
                             window.update()
                             assert notebook.notebook.select() == button.page
                             assert window.nametowidget(button.page).winfo_ismapped()
+                selector = PremiumCombobox(window.content, values=['One', 'Two'], width=12)
+                selector.pack()
+                selector.set('One')
+                window.update()
+                assert selector.get() == 'One'
+                selector._show_popup()
+                window.update()
+                assert selector.popup is not None and selector.popup.winfo_viewable()
+                selector._popup_listbox.selection_clear(0, 'end')
+                selector._popup_listbox.selection_set(1)
+                selector._choose(selector._popup_listbox)
+                window.update()
+                assert selector.get() == 'Two'
+                selector.destroy()
                 print(f'All modules and capsule selections passed at {size}')
             assert not errors, errors
         finally:
