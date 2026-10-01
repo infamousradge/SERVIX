@@ -2,7 +2,7 @@ name: Build SERVIX Windows App
 
 on:
   push:
-    branches: [ main, feature/service-workflow-v2 ]
+    branches: [ main, feature/service-workflow-v2, feature/classic-blue-ui ]
   workflow_dispatch:
 
 jobs:
@@ -25,10 +25,13 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Check desktop layouts and tab navigation
+        run: python ui_smoke.py
+
       - name: Build SERVIX EXE
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --windowed --name SERVIX app.py
+          pyinstaller --noconfirm --clean --windowed --name SERVIX --add-data "assets;assets" app.py
 
       - name: Smoke test packaged SERVIX startup
         shell: pwsh
