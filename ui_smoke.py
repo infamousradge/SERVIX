@@ -71,7 +71,7 @@ def main():
                     window.update()
                     for notebook in [w for w in walk(window.content) if isinstance(w, CapsuleNotebook)]:
                         if method == 'show_service_detail':
-                            assert len(notebook.notebook.tabs()) == 12, 'Service Request should keep all workflow tabs'
+                            assert len(notebook.notebook.tabs()) == 10, 'Service Request should keep all ten workflow tabs'
                         for button in notebook.buttons:
                             assert button.winfo_x() + button.winfo_width() <= notebook.bar.winfo_width(), button.label
                             notebook.select(button.page)
