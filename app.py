@@ -559,40 +559,41 @@ class Servix(tk.Tk):
             ('Open Calls',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled')"),'#83BCF4',''),
             ('Overdue',self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"),'#FF999B',''),
             ('Awaiting Parts',self.q1("SELECT COUNT(*) FROM services WHERE status='Awaiting Parts'"),'#FFD65F',''),
-            ('Awaiting Customer',self.q1("SELECT COUNT(*) FROM services WHERE status='Awaiting Customer'"),'#B892EF',''),
-            ('Quotation Pending',self.q1("SELECT COUNT(*) FROM services WHERE quote_status='Pending Decision'"),'#58D1C9',''),
-            ('Payment Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid','Invoice Raised','To Be Invoiced')"),'#FFAD73','₹ {:,.0f}'.format(self.q1("SELECT COALESCE(SUM(MAX(0,COALESCE(invoice_amount,0)-COALESCE(amount_received,0))),0) FROM services"))),
-            ('Calibration Due',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"),'#CBD4DE','(30 days)'),
-            ('AMC Expiring',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"),'#A9E8B1','(60 days)')]
+            ('Customer',self.q1("SELECT COUNT(*) FROM services WHERE status='Awaiting Customer'"),'#B892EF',''),
+            ('Quotes',self.q1("SELECT COUNT(*) FROM services WHERE quote_status='Pending Decision'"),'#58D1C9',''),
+            ('Payments',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid','Invoice Raised','To Be Invoiced')"),'#FFAD73','₹ {:,.0f}'.format(self.q1("SELECT COALESCE(SUM(MAX(0,COALESCE(invoice_amount,0)-COALESCE(amount_received,0))),0) FROM services"))),
+            ('Calibration',self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"),'#CBD4DE','(30d)'),
+            ('AMC',self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"),'#A9E8B1','(60d)')]
         for index,(title,val,color,sub) in enumerate(data):
-            kpi.columnconfigure(index%4,weight=1,uniform='metrics')
+            kpi.columnconfigure(index,weight=1,uniform='metrics')
             rgb=tuple(int(color[i:i+2],16) for i in (1,3,5))
-            surface='#'+''.join(f'{round(channel*.06+255*.94):02X}' for channel in rgb)
-            card=tk.Frame(kpi,bg=surface,highlightthickness=1,highlightbackground='#DDE6F0')
-            card.grid(row=index//4,column=index%4,sticky='nsew',padx=6,pady=6)
-            tk.Frame(card,bg=color,height=4).pack(fill='x')
-            tk.Label(card,text=title,bg=surface,fg=MUTED,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=18,pady=(12,3))
-            tk.Label(card,text=str(val),bg=surface,fg=TEXT,font=('Segoe UI',26,'bold')).pack(anchor='w',padx=18)
-            tk.Label(card,text=sub or ' ',bg=surface,fg=MUTED,font=('Segoe UI',10)).pack(anchor='w',padx=18,pady=(0,10))
+            surface='#'+''.join(f'{round(channel*.07+255*.93):02X}' for channel in rgb)
+            card=tk.Frame(kpi,bg=surface,highlightthickness=0)
+            card.grid(row=0,column=index,sticky='nsew',padx=3,pady=4)
+            tk.Frame(card,bg=color,width=3).pack(side='left',fill='y')
+            copy=tk.Frame(card,bg=surface); copy.pack(fill='both',expand=True,padx=8,pady=7)
+            tk.Label(copy,text=title,bg=surface,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w')
+            tk.Label(copy,text=str(val),bg=surface,fg=TEXT,font=('Segoe UI',20,'bold')).pack(anchor='w',pady=(1,0))
+            tk.Label(copy,text=sub or ' ',bg=surface,fg=MUTED,font=('Segoe UI',8)).pack(anchor='w',pady=(0,1))
 
         analytics=tk.Frame(self.content,bg=BG); analytics.pack(fill='x',padx=10,pady=(0,7))
         def panel(parent,title):
-            index=len(parent.winfo_children()); parent.columnconfigure(index%2,weight=1,uniform='analytics'); f=self.card(parent); f.grid(row=index//2,column=index%2,sticky='nsew',padx=6,pady=6); tk.Label(f,text=title,bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=10,pady=(7,3)); return f
+            index=len(parent.winfo_children()); parent.columnconfigure(index%5,weight=1,uniform='analytics'); f=self.card(parent); f.grid(row=index//5,column=index%5,sticky='nsew',padx=4,pady=5); tk.Label(f,text=title,bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold'),wraplength=170,justify='left').pack(anchor='w',padx=10,pady=(7,3)); return f
         p1=panel(analytics,'Service Calls by Month'); p2=panel(analytics,'Service Type (Current Year)'); p3=panel(analytics,'FOC vs Chargeable'); p4=panel(analytics,'Payment Status (Chargeable)'); p5=panel(analytics,'Top 5 Customers (Service Calls)')
-        months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; canvas=tk.Canvas(p1,height=132,bg='white',highlightthickness=0); canvas.pack(fill='x',padx=8,pady=3)
+        months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; canvas=tk.Canvas(p1,height=94,bg='white',highlightthickness=0); canvas.pack(fill='x',padx=8,pady=3)
         with connect() as con: monthly={int(r[0]):r[1] for r in con.execute("SELECT CAST(strftime('%m',opened) AS INTEGER),COUNT(*) FROM services WHERE strftime('%Y',opened)=strftime('%Y','now') GROUP BY 1")}
         mx=max([1]+list(monthly.values()))
         def draw_months(event):
             canvas.delete('all'); step=max(1,(event.width-20)/12)
             for i,m in enumerate(months):
-                x=10+i*step; h=76*monthly.get(i+1,0)/mx
-                canvas.create_line(x+step/2,8,x+step/2,100,fill='#EEF3F8')
-                canvas.create_rectangle(x+3,98-h,x+step-3,98,fill='#4B9BE8',outline='')
-                canvas.create_text(x+step/2,115,text=m,font=('Segoe UI',9),fill=MUTED)
+                x=10+i*step; h=42*monthly.get(i+1,0)/mx
+                canvas.create_line(x+step/2,5,x+step/2,58,fill='#EEF3F8')
+                canvas.create_rectangle(x+3,57-h,x+step-3,57,fill='#4B9BE8',outline='')
+                canvas.create_text(x+step/2,72,text=m,font=('Segoe UI',8),fill=MUTED)
         canvas.bind('<Configure>',draw_months)
         def statlines(parent,rows):
             for label,val,color in rows:
-                r=tk.Frame(parent,bg=CARD); r.pack(fill='x',padx=10,pady=3); tk.Label(r,text='■',fg=color,bg=CARD,font=('Segoe UI',11)).pack(side='left'); tk.Label(r,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',10)).pack(side='left',padx=4); tk.Label(r,text=str(val),bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).pack(side='right')
+                r=tk.Frame(parent,bg=CARD); r.pack(fill='x',padx=9,pady=2); tk.Label(r,text='●',fg=color,bg=CARD,font=('Segoe UI',8)).pack(side='left'); tk.Label(r,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',8),wraplength=128,justify='left').pack(side='left',padx=4,fill='x',expand=True); tk.Label(r,text=str(val),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(side='right',anchor='n')
         statlines(p2,[('Breakdown',self.q1("SELECT COUNT(*) FROM services WHERE reason='Breakdown / Complaint'"),'#FF4545'),('Calibration',self.q1("SELECT COUNT(*) FROM services WHERE reason='Calibration'"),BLUE),('Preventive PM',self.q1("SELECT COUNT(*) FROM services WHERE reason LIKE '%Preventive%'"),GREEN),('Others',self.q1("SELECT COUNT(*) FROM services WHERE reason NOT IN ('Breakdown / Complaint','Calibration','Preventive Maintenance')"),ORANGE)])
         statlines(p3,[('Chargeable',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='Chargeable'"),BLUE),('FOC / Warranty / AMC',self.q1("SELECT COUNT(*) FROM services WHERE foc_chargeable='FOC' OR warranty='Yes' OR amc='Yes'"),GREEN)])
         statlines(p4,[('Paid',self.q1("SELECT COUNT(*) FROM services WHERE payment_status='Paid'"),GREEN),('Pending',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"),ORANGE),('Not Invoiced',self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Not Applicable','To Be Invoiced')"),'#8B9BAD')])
@@ -600,7 +601,7 @@ class Servix(tk.Tk):
         statlines(p5,[(r['name'],r['n'],BLUE) for r in tops] or [('No service data yet',0,BLUE)])
 
         lower=tk.Frame(self.content,bg=BG); lower.pack(fill='both',expand=True,padx=10,pady=(0,8))
-        lower.columnconfigure(0,weight=2); lower.columnconfigure(1,weight=1); recent=self.card(lower); recent.grid(row=0,column=0,sticky='nsew',padx=6)
+        lower.columnconfigure(0,weight=1); recent=self.card(lower); recent.grid(row=0,column=0,sticky='nsew',padx=4)
         rh=tk.Frame(recent,bg=CARD); rh.pack(fill='x',padx=10,pady=(7,3)); tk.Label(rh,text='Recent Service Calls',font=('Segoe UI',11,'bold'),bg=CARD,fg=TEXT).pack(side='left')
         tk.Button(rh,text='View All',command=self.show_services,bg=CARD,fg=BLUE,bd=0,font=('Segoe UI',10,'underline')).pack(side='right')
         dashboard_filters=tk.Frame(recent,bg=CARD); dashboard_filters.pack(fill='x',padx=10,pady=(1,5))
@@ -611,11 +612,12 @@ class Servix(tk.Tk):
         recent_list.pack(fill='x',padx=14,pady=(0,12))
         grid_weights=(15,28,20,18,16,12)
         headings=('SERVICE / DATE','CLIENT / EQUIPMENT','REQUEST','ENGINEER','STATUS','PAYMENT')
-        header=tk.Frame(recent_list,bg='#EEF4FA')
-        header.pack(fill='x',pady=(0,4))
+        header=tk.Frame(recent_list,bg=CARD)
+        header.pack(fill='x',pady=(0,2))
         for col,(label,weight) in enumerate(zip(headings,grid_weights)):
             header.grid_columnconfigure(col,weight=weight,uniform='recent')
-            tk.Label(header,text=label,bg='#EEF4FA',fg=MUTED,font=('Segoe UI',8,'bold'),anchor='w').grid(row=0,column=col,sticky='ew',padx=10,pady=8)
+            tk.Label(header,text=label,bg=CARD,fg='#8291A3',font=('Segoe UI',8,'bold'),anchor='w').grid(row=0,column=col,sticky='ew',padx=10,pady=8)
+        tk.Frame(recent_list,bg='#E8EFF6',height=1).pack(fill='x',pady=(0,2))
         recent_rows=tk.Frame(recent_list,bg=CARD)
         recent_rows.pack(fill='x')
         badge_cache=[]
@@ -651,7 +653,7 @@ class Servix(tk.Tk):
                 code,opened,client,equipment,reason,engineer,status,payment=row
                 shade='#FFFFFF' if index%2==0 else '#F8FAFD'
                 line=tk.Frame(recent_rows,bg=shade)
-                line.pack(fill='x',pady=2)
+                line.pack(fill='x',pady=1)
                 for col,weight in enumerate(grid_weights): line.grid_columnconfigure(col,weight=weight,uniform='recent')
                 cell=tk.Frame(line,bg=shade); cell.grid(row=0,column=0,sticky='ew',padx=10,pady=7)
                 tk.Label(cell,text=short(code,19),bg=shade,fg=BLUE,font=('Segoe UI',9,'bold'),anchor='w').pack(anchor='w')
@@ -672,17 +674,8 @@ class Servix(tk.Tk):
                 payment_cell=tk.Frame(line,bg=shade); payment_cell.grid(row=0,column=5,sticky='w',padx=10,pady=12)
                 badge(payment_cell,payment,fill,ink)
         dash_status.bind('<<ComboboxSelected>>',refresh_recent); dash_sort.bind('<<ComboboxSelected>>',refresh_recent); refresh_recent()
-        alerts=self.card(lower); alerts.grid(row=0,column=1,sticky='nsew',padx=6); tk.Label(alerts,text='Alerts & Reminders',font=('Segoe UI',11,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=12,pady=(8,5))
-        alert_rows=[
-            ('clock',RED,str(self.q1("SELECT COUNT(*) FROM services WHERE status NOT IN ('Closed','Cancelled') AND date(opened)<date('now','-7 day')"))+' service calls overdue'),
-            ('calendar',ORANGE,str(self.q1("SELECT COUNT(*) FROM calibration WHERE next_due!='' AND date(next_due)<=date('now','+30 day')"))+' calibrations due within 30 days'),
-            ('calendar',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE warranty_till!='' AND date(warranty_till)>=date('now') AND date(warranty_till)<=date('now','+30 day')"))+' warranties expiring this month'),
-            ('calendar',ORANGE,str(self.q1("SELECT COUNT(*) FROM equipment WHERE amc_till!='' AND date(amc_till)>=date('now') AND date(amc_till)<=date('now','+60 day')"))+' AMC expiring in 60 days'),
-            ('invoice',ORANGE,str(self.q1("SELECT COUNT(*) FROM services WHERE payment_status IN ('Pending','Part Paid')"))+' invoices pending payment'),
-            ('warning',RED,str(self.q1("SELECT COUNT(*) FROM equipment WHERE serial IS NULL OR serial=''"))+' equipment with missing serial numbers')
-        ]
-        for icon,color,msg in alert_rows:
-            r=tk.Frame(alerts,bg=CARD); r.pack(fill='x',padx=12,pady=4); self._alert_icon(r,icon,color); tk.Label(r,text=msg,bg=CARD,fg=TEXT,font=('Segoe UI',10),wraplength=260,justify='left').pack(side='left',padx=8)
+        # KPI tiles above carry the key alerts and reminders, so the recent
+        # calls panel can use the full dashboard width without repeating them.
 
     def _alert_icon(self,parent,kind,color):
         # Draw the small alert glyph at 4x resolution so Windows scaling does

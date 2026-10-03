@@ -2,7 +2,7 @@ name: Build SERVIX Windows App
 
 on:
   push:
-    branches: [ main, feature/service-workflow-v2, feature/classic-blue-ui ]
+    branches: [ main, feature/service-workflow-v2 ]
   workflow_dispatch:
 
 jobs:
