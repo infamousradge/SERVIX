@@ -247,10 +247,15 @@ class Servix(tk.Tk):
             demo=tk.Label(top,text='DEMO',bg='#F1A84A',fg='#3B2A10',font=('Segoe UI',8,'bold'),padx=9,pady=4)
             demo.pack(side='right',padx=(0,4),pady=28)
         viewport=tk.Frame(right,bg=BG); viewport.pack(fill='both',expand=True)
+        viewport.grid_rowconfigure(1,weight=1); viewport.grid_columnconfigure(0,weight=1)
+        self.dashboard_header_host=tk.Frame(viewport,bg=BG)
+        self.dashboard_header_host.grid(row=0,column=0,columnspan=2,sticky='ew')
+        self.dashboard_header_host.grid_remove()
         self.page_canvas=tk.Canvas(viewport,bg=BG,highlightthickness=0)
-        scroll=ttk.Scrollbar(viewport,orient='vertical',command=self.page_canvas.yview)
-        scroll.pack(side='right',fill='y'); self.page_canvas.pack(side='left',fill='both',expand=True)
-        self.page_canvas.configure(yscrollcommand=scroll.set)
+        self.page_canvas.grid(row=1,column=0,sticky='nsew')
+        self.page_scroll=ttk.Scrollbar(viewport,orient='vertical',command=self.page_canvas.yview)
+        self.page_scroll.grid(row=1,column=1,sticky='ns')
+        self.page_canvas.configure(yscrollcommand=self.page_scroll.set)
         self.content=tk.Frame(self.page_canvas,bg=BG)
         content_window=self.page_canvas.create_window(0,0,window=self.content,anchor='nw')
         def resize_page(event=None):
@@ -305,14 +310,22 @@ class Servix(tk.Tk):
         for k,b in self.nav.items(): b.set_active(k==label)
         cmd()
     def clear(self):
+        if hasattr(self, 'dashboard_header_host'):
+            self.dashboard_header_host.grid_remove()
+        if hasattr(self, 'page_scroll'):
+            self.page_scroll.configure(style='Vertical.TScrollbar')
         for w in self.content.winfo_children(): w.destroy()
         self.page_canvas.yview_moveto(0)
     def heading(self,title,subtitle='',action=None,action_text=''):
         h=tk.Frame(self.content,bg=BG); h.pack(fill='x',padx=28,pady=(24,14)); left=tk.Frame(h,bg=BG); left.pack(side='left'); tk.Label(left,text=title,font=('Segoe UI',22,'bold'),bg=BG,fg=TEXT).pack(anchor='w');
         if subtitle: tk.Label(left,text=subtitle,font=('Segoe UI',11),bg=BG,fg=MUTED).pack(anchor='w',pady=(3,0))
         if action: tk.Button(h,text=action_text,command=action,bg=BLUE,fg='white',font=('Segoe UI',11,'bold'),bd=0,padx=18,pady=10,cursor='hand2').pack(side='right')
-    def section_header(self,title,subtitle=''):
-        h=tk.Frame(self.content,bg=BG); h.pack(fill='x',padx=26,pady=(20,8))
+    def section_header(self,title,subtitle='',fixed=False):
+        parent=self.dashboard_header_host if fixed else self.content
+        if fixed:
+            self.dashboard_header_host.grid()
+            self.page_scroll.configure(style='Dashboard.Vertical.TScrollbar')
+        h=tk.Frame(parent,bg=BG); h.pack(fill='x',padx=26,pady=(14,8) if fixed else (20,8))
         tk.Frame(h,bg=CYAN,width=4,height=44).pack(side='left',padx=(0,14))
         copy=tk.Frame(h,bg=BG); copy.pack(side='left',fill='x',expand=True)
         tk.Label(copy,text=title,bg=BG,fg=NAVY,font=('Segoe UI',23,'bold')).pack(anchor='w')
@@ -532,7 +545,7 @@ class Servix(tk.Tk):
         tr.bind('<Double-1>',lambda e:open_file());load()
 
     def show_dashboard(self):
-        self.clear(); self.section_header('Dashboard','Service Operations / Alerts / Management Overview')
+        self.clear(); self.section_header('Dashboard','Service Operations / Alerts / Management Overview',fixed=True)
         if DEMO_MODE:
             sample=self.card(self.content); sample.pack(fill='x',padx=10,pady=(0,6))
             tk.Label(sample,text='DEMO DATA — SEPARATE FROM YOUR REAL SERVIX WORKSPACE',bg=CARD,fg=BLUE,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=14,pady=(9,3))
@@ -590,19 +603,70 @@ class Servix(tk.Tk):
         tk.Label(dashboard_filters,text='Show',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold')).pack(side='left',padx=(0,5))
         dash_status=PremiumCombobox(dashboard_filters,width=17,state='readonly',values=['All','Open','Closed','Pending']); dash_status.set('All'); dash_status.pack(side='left')
         dash_sort=PremiumCombobox(dashboard_filters,width=18,state='readonly',values=['Newest entry first','Oldest entry first']); dash_sort.set('Newest entry first'); dash_sort.pack(side='left',padx=6)
-        recent_tree=self.service_tree(recent,5)
+        recent_list=tk.Frame(recent,bg=CARD)
+        recent_list.pack(fill='x',padx=14,pady=(0,12))
+        grid_weights=(1.05,2.0,1.45,1.3,1.15,0.9)
+        headings=('SERVICE / DATE','CLIENT / EQUIPMENT','REQUEST','ENGINEER','STATUS','PAYMENT')
+        header=tk.Frame(recent_list,bg='#EEF4FA')
+        header.pack(fill='x',pady=(0,4))
+        for col,(label,weight) in enumerate(zip(headings,grid_weights)):
+            header.grid_columnconfigure(col,weight=weight,uniform='recent')
+            tk.Label(header,text=label,bg='#EEF4FA',fg=MUTED,font=('Segoe UI',8,'bold'),anchor='w').grid(row=0,column=col,sticky='ew',padx=10,pady=8)
+        recent_rows=tk.Frame(recent_list,bg=CARD)
+        recent_rows.pack(fill='x')
+        badge_cache=[]
+        def badge(parent,text,fill,fg):
+            width=max(56,min(124,len(str(text))*7+22)); height=26; scale=3
+            surface=Image.new('RGBA',(width*scale,height*scale),(0,0,0,0))
+            ImageDraw.Draw(surface).rounded_rectangle((0,0,width*scale-1,height*scale-1),radius=13*scale,fill=fill)
+            photo=ImageTk.PhotoImage(surface.resize((width,height),Image.Resampling.LANCZOS),master=self)
+            badge_cache.append(photo)
+            canvas=tk.Canvas(parent,width=width,height=height,bg=parent.cget('bg'),highlightthickness=0)
+            canvas.create_image(0,0,anchor='nw',image=photo)
+            canvas.create_text(width//2,height//2,text=str(text),fill=fg,font=('Segoe UI',8,'bold'))
+            canvas.pack(anchor='w')
+        def short(value,limit):
+            value='' if value is None else str(value)
+            return value if len(value)<=limit else value[:max(1,limit-1)].rstrip()+'…'
         def refresh_recent(*_):
-            recent_tree.delete(*recent_tree.get_children())
+            for child in recent_rows.winfo_children(): child.destroy()
             filters={'Open':"s.status NOT IN ('Closed','Cancelled')",'Closed':"s.status='Closed'",
                      'Pending':"s.status IN ('New','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch')"}
             where=filters.get(dash_status.get(),'')
             order='ASC' if dash_sort.get()=='Oldest entry first' else 'DESC'
-            sql='''SELECT s.code,s.opened,c.name,e.code,s.reason,COALESCE(s.engineer,''),s.status,COALESCE(s.payment_status,'')
+            sql='''SELECT s.code,s.opened,COALESCE(c.name,''),COALESCE(e.code,''),COALESCE(s.reason,''),
+                          COALESCE(s.engineer,''),COALESCE(s.status,''),COALESCE(s.payment_status,'')
                    FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id'''
             if where: sql+=' WHERE '+where
             sql+=f' ORDER BY date(s.opened) {order},s.id {order} LIMIT 5'
-            with connect() as con:
-                for row in con.execute(sql): recent_tree.insert('','end',values=tuple(row))
+            with connect() as con: rows=con.execute(sql).fetchall()
+            if not rows:
+                tk.Label(recent_rows,text='No service calls match these filters yet.',bg=CARD,fg=MUTED,font=('Segoe UI',10),anchor='w').pack(fill='x',padx=12,pady=14)
+                return
+            for index,row in enumerate(rows):
+                code,opened,client,equipment,reason,engineer,status,payment=row
+                shade='#FFFFFF' if index%2==0 else '#F8FAFD'
+                line=tk.Frame(recent_rows,bg=shade)
+                line.pack(fill='x',pady=2)
+                for col,weight in enumerate(grid_weights): line.grid_columnconfigure(col,weight=weight,uniform='recent')
+                cell=tk.Frame(line,bg=shade); cell.grid(row=0,column=0,sticky='ew',padx=10,pady=7)
+                tk.Label(cell,text=short(code,19),bg=shade,fg=BLUE,font=('Segoe UI',9,'bold'),anchor='w').pack(anchor='w')
+                tk.Label(cell,text=str(opened or '')[:10],bg=shade,fg=MUTED,font=('Segoe UI',8),anchor='w').pack(anchor='w',pady=(2,0))
+                cell=tk.Frame(line,bg=shade); cell.grid(row=0,column=1,sticky='ew',padx=10,pady=7)
+                tk.Label(cell,text=short(client,25),bg=shade,fg=TEXT,font=('Segoe UI',9,'bold'),anchor='w').pack(anchor='w')
+                tk.Label(cell,text='Equipment '+short(equipment,18),bg=shade,fg=MUTED,font=('Segoe UI',8),anchor='w').pack(anchor='w',pady=(2,0))
+                tk.Label(line,text=short(reason,21),bg=shade,fg=TEXT,font=('Segoe UI',9),anchor='w').grid(row=0,column=2,sticky='ew',padx=10,pady=12)
+                tk.Label(line,text=short(engineer or 'Unassigned',17),bg=shade,fg=TEXT,font=('Segoe UI',9),anchor='w').grid(row=0,column=3,sticky='ew',padx=10,pady=12)
+                status_colors={'Closed':('#E7F6EC','#257548'),'Cancelled':('#F2F4F7','#657386'),'Open':('#EAF4FF','#176AB0'),
+                               'New':('#EAF4FF','#176AB0'),'Assigned':('#EAF4FF','#176AB0'),'Under Diagnosis':('#FFF3DE','#9A6500'),
+                               'Awaiting Parts':('#FFF3DE','#9A6500'),'Awaiting Customer':('#FFF3DE','#9A6500'),'Ready for Dispatch':('#E7F6EC','#257548')}
+                fill,ink=status_colors.get(status,('#F0F3F7','#526173'))
+                status_cell=tk.Frame(line,bg=shade); status_cell.grid(row=0,column=4,sticky='w',padx=10,pady=12)
+                badge(status_cell,status,fill,ink)
+                payment_colors={'Paid':('#E7F6EC','#257548'),'Pending':('#FFF3DE','#9A6500'),'Part Paid':('#FFF3DE','#9A6500')}
+                fill,ink=payment_colors.get(payment,('#F0F3F7','#526173'))
+                payment_cell=tk.Frame(line,bg=shade); payment_cell.grid(row=0,column=5,sticky='w',padx=10,pady=12)
+                badge(payment_cell,payment,fill,ink)
         dash_status.bind('<<ComboboxSelected>>',refresh_recent); dash_sort.bind('<<ComboboxSelected>>',refresh_recent); refresh_recent()
         alerts=self.card(lower); alerts.grid(row=0,column=1,sticky='nsew',padx=6); tk.Label(alerts,text='Alerts & Reminders',font=('Segoe UI',11,'bold'),bg=CARD,fg=TEXT).pack(anchor='w',padx=12,pady=(8,5))
         alert_rows=[
@@ -617,17 +681,37 @@ class Servix(tk.Tk):
             r=tk.Frame(alerts,bg=CARD); r.pack(fill='x',padx=12,pady=4); self._alert_icon(r,icon,color); tk.Label(r,text=msg,bg=CARD,fg=TEXT,font=('Segoe UI',10),wraplength=260,justify='left').pack(side='left',padx=8)
 
     def _alert_icon(self,parent,kind,color):
-        icon=tk.Canvas(parent,width=28,height=28,bg=CARD,highlightthickness=0)
-        icon.pack(side='left',anchor='n')
-        icon.create_oval(2,2,26,26,fill='#F2F7FC',outline='#E0EAF4')
+        # Draw the small alert glyph at 4x resolution so Windows scaling does
+        # not turn its strokes into the jagged symbols shown in the old build.
+        size, scale = 34, 4
+        image=Image.new('RGBA',(size*scale,size*scale),(0,0,0,0))
+        draw=ImageDraw.Draw(image)
+        box=(2*scale,2*scale,(size-2)*scale,(size-2)*scale)
+        pale='#FFF1F1' if color==RED else '#FFF6E8'
+        draw.ellipse(box,fill=pale,outline='#E1EAF4',width=scale)
+        stroke=2*scale
         if kind=='clock':
-            icon.create_oval(8,8,20,20,outline=color,width=2); icon.create_line(14,10,14,14,18,16,fill=color,width=2,capstyle='round')
+            draw.ellipse((10*scale,10*scale,24*scale,24*scale),outline=color,width=stroke)
+            draw.line(((17*scale,12*scale),(17*scale,17*scale),(21*scale,20*scale)),fill=color,width=stroke,joint='curve')
         elif kind=='calendar':
-            icon.create_rectangle(8,8,20,20,outline=color,width=2); icon.create_line(8,12,20,12,fill=color,width=2); icon.create_line(11,6,11,10,fill=color,width=2); icon.create_line(17,6,17,10,fill=color,width=2); icon.create_oval(10,14,12,16,fill=color,outline=color); icon.create_oval(16,14,18,16,fill=color,outline=color)
+            draw.rounded_rectangle((9*scale,10*scale,25*scale,24*scale),radius=3*scale,outline=color,width=stroke)
+            draw.line((10*scale,15*scale,24*scale,15*scale),fill=color,width=stroke)
+            for x in (13,21):
+                draw.line((x*scale,8*scale,x*scale,12*scale),fill=color,width=stroke)
+            for x in (14,20):
+                draw.ellipse((x*scale,18*scale,(x+2)*scale,20*scale),fill=color)
         elif kind=='invoice':
-            icon.create_rectangle(9,7,19,21,outline=color,width=2); icon.create_line(12,11,17,11,fill=color,width=2); icon.create_line(12,15,17,15,fill=color,width=2); icon.create_text(14,18,text='₹',fill=color,font=('Segoe UI',7,'bold'))
+            draw.rounded_rectangle((11*scale,8*scale,23*scale,26*scale),radius=2*scale,outline=color,width=stroke)
+            for y in (14,18,22):
+                draw.line((14*scale,y*scale,20*scale,y*scale),fill=color,width=stroke)
         else:
-            icon.create_polygon(14,6,22,20,6,20,fill='#FFF2E9',outline=color,width=2); icon.create_line(14,10,14,15,fill=color,width=2); icon.create_oval(13,17,15,19,fill=color,outline=color)
+            draw.polygon(((17*scale,7*scale),(27*scale,25*scale),(7*scale,25*scale)),fill='#FFF1E8',outline=color)
+            draw.line((17*scale,13*scale,17*scale,19*scale),fill=color,width=stroke)
+            draw.ellipse((16*scale,21*scale,18*scale,23*scale),fill=color)
+        photo=ImageTk.PhotoImage(image.resize((size,size),Image.Resampling.LANCZOS),master=parent)
+        icon=tk.Label(parent,image=photo,bg=CARD,bd=0,highlightthickness=0)
+        icon.image=photo
+        icon.pack(side='left',anchor='n')
         return icon
 
     def service_tree(self,parent,limit=None,where='',args=(),order='s.id DESC'):
