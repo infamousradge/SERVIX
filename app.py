@@ -320,14 +320,14 @@ class Servix(tk.Tk):
         for w in self.content.winfo_children(): w.destroy()
         self.page_canvas.yview_moveto(0)
     def heading(self,title,subtitle='',action=None,action_text=''):
-        h=tk.Frame(self.content,bg=BG); h.pack(fill='x',padx=28,pady=(24,14)); left=tk.Frame(h,bg=BG); left.pack(side='left'); tk.Label(left,text=title,font=('Segoe UI',22,'bold'),bg=BG,fg=TEXT).pack(anchor='w');
-        if subtitle: tk.Label(left,text=subtitle,font=('Segoe UI',11),bg=BG,fg=MUTED).pack(anchor='w',pady=(3,0))
-        if action: tk.Button(h,text=action_text,command=action,bg=BLUE,fg='white',font=('Segoe UI',11,'bold'),bd=0,padx=18,pady=10,cursor='hand2').pack(side='right')
-    def section_header(self,title,subtitle='',fixed=False):
+        h=self.section_header(title,subtitle,fixed=True)
+        if action: tk.Button(h,text=action_text,command=action,bg=BLUE,fg='white',font=('Segoe UI',11,'bold'),bd=0,padx=18,pady=8,cursor='hand2').pack(side='right',padx=8)
+        return h
+    def section_header(self,title,subtitle='',fixed=True):
         parent=self.dashboard_header_host if fixed else self.content
         if fixed:
             self.dashboard_header_host.grid()
-            style='Dashboard.Vertical.TScrollbar' if title=='Dashboard' else 'Vertical.TScrollbar'
+            style='Vertical.TScrollbar'
             self.page_scroll.configure(style=style)
         h=tk.Frame(parent,bg=BG); h.pack(fill='x',padx=26,pady=(14,8) if fixed else (20,8))
         tk.Frame(h,bg=CYAN,width=4,height=44).pack(side='left',padx=(0,14))
@@ -336,13 +336,13 @@ class Servix(tk.Tk):
         if subtitle: tk.Label(copy,text=subtitle,bg=BG,fg=MUTED,font=('Segoe UI',10)).pack(anchor='w',pady=(2,0))
         return h
     def card(self,parent):
-        return tk.Frame(parent,bg=CARD,highlightthickness=1,highlightbackground=BORDER)
+        return tk.Frame(parent,bg=CARD,highlightthickness=0)
     def metric(self,parent,title,value,accent=BLUE,sub=''):
         # Keep the clear white-box layout, with a small color rail and only a
         # very light tint so repeated metric rows stay calm across modules.
         rgb=tuple(int(accent[i:i+2],16) for i in (1,3,5))
         surface='#'+''.join(f'{round(channel*.06+255*.94):02X}' for channel in rgb)
-        c=tk.Frame(parent,bg=surface,highlightthickness=1,highlightbackground='#DDE6F0')
+        c=tk.Frame(parent,bg=surface,highlightthickness=0)
         c.pack(side='left',fill='both',expand=True,padx=6)
         tk.Frame(c,bg=accent,height=4).pack(fill='x')
         tk.Label(c,text=title,bg=surface,fg=MUTED,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=16,pady=(12,3))
@@ -359,7 +359,7 @@ class Servix(tk.Tk):
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
         m=tk.Frame(body,bg=BG); m.pack(fill='x',pady=(0,6))
         for a,b,color,note in metrics:self.metric(m,a,b,color,note)
-        bar=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); bar.pack(fill='x',pady=(0,6))
+        bar=tk.Frame(body,bg=CARD,highlightthickness=0); bar.pack(fill='x',pady=(0,6))
         tk.Label(bar,text=title+' Register',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left',padx=(10,8),pady=8)
         q=tk.StringVar(); ttk.Entry(bar,textvariable=q,width=30).pack(side='left',pady=6)
         tk.Label(bar,text=search_hint,bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(side='left',padx=8)
