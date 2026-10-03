@@ -867,7 +867,8 @@ class Servix(tk.Tk):
         selection=tk.Frame(row2,bg=CARD); selection.pack(side='left',padx=(8,0),pady=(13,0))
         select_all=tk.Label(selection,image=check_images[0],bg=CARD,cursor='hand2')
         select_all.pack(side='left',padx=(0,5))
-        tk.Label(selection,text='Select all visible',bg=CARD,fg=TEXT,font=('Segoe UI',9),cursor='hand2').pack(side='left')
+        select_text=tk.Label(selection,text='Select all visible',bg=CARD,fg=TEXT,font=('Segoe UI',9),cursor='hand2')
+        select_text.pack(side='left')
         selected_count=tk.Label(selection,text='0 selected',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold'))
         selected_count.pack(side='left',padx=(8,6))
         btns=tk.Frame(row2,bg=CARD); btns.pack(side='right',pady=(13,0))
@@ -961,7 +962,15 @@ class Servix(tk.Tk):
             sql+=f' ORDER BY date(s.opened) {direction},s.id {direction}'
             with connect() as con: visible_rows.extend(tuple(row) for row in con.execute(sql))
             render_rows(); scroller.yview_moveto(0)
-        select_all.bind('<Button-1>',lambda _e:(selected_codes.difference_update(str(r[0]) for r in visible_rows) if update_selection() else selected_codes.update(str(r[0]) for r in visible_rows),render_rows(),'break')[-1])
+        def toggle_all_visible(_event=None):
+            if update_selection():
+                selected_codes.difference_update(str(r[0]) for r in visible_rows)
+            else:
+                selected_codes.update(str(r[0]) for r in visible_rows)
+            render_rows()
+            return 'break'
+        select_all.bind('<Button-1>',toggle_all_visible)
+        select_text.bind('<Button-1>',toggle_all_visible)
         for widget in (search,status,reason,engineer,payment,order):
             if isinstance(widget,PremiumCombobox): widget.bind('<<ComboboxSelected>>',refresh)
         refresh_id={'after':None}
@@ -1104,8 +1113,9 @@ class Servix(tk.Tk):
             tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
             widget.pack(anchor='w')
         field(row,'Search ID / client / model / serial',search)
-        field(row,'Make',make); field(row,'Warranty',warranty); field(row,'AMC',amc); field(row,'Sort',order)
+        field(row,'Make',make); field(row,'Warranty',warranty)
         row2=tk.Frame(tools,bg=CARD); row2.pack(fill='x',padx=12,pady=(3,9))
+        field(row2,'AMC',amc); field(row2,'Sort',order)
         selected_codes=set(); check_images=self._selection_images()
         selected_label=tk.Label(row2,text='0 selected',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold')); selected_label.pack(side='left',padx=(0,9))
         select_btn=tk.Button(row2,text='Select Visible',bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=5,cursor='hand2'); select_btn.pack(side='left')
