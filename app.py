@@ -259,7 +259,9 @@ class Servix(tk.Tk):
         self.content=tk.Frame(self.page_canvas,bg=BG)
         content_window=self.page_canvas.create_window(0,0,window=self.content,anchor='nw')
         def resize_page(event=None):
-            self.page_canvas.itemconfigure(content_window,width=self.page_canvas.winfo_width())
+            width=max(1,self.page_canvas.winfo_width())
+            height=max(self.page_canvas.winfo_height(),self.content.winfo_reqheight())
+            self.page_canvas.itemconfigure(content_window,width=width,height=max(1,height))
             self.page_canvas.configure(scrollregion=self.page_canvas.bbox('all'))
         self.page_canvas.bind('<Configure>',resize_page)
         self.content.bind('<Configure>',resize_page)
@@ -311,6 +313,7 @@ class Servix(tk.Tk):
         cmd()
     def clear(self):
         if hasattr(self, 'dashboard_header_host'):
+            for child in self.dashboard_header_host.winfo_children(): child.destroy()
             self.dashboard_header_host.grid_remove()
         if hasattr(self, 'page_scroll'):
             self.page_scroll.configure(style='Vertical.TScrollbar')
@@ -324,7 +327,8 @@ class Servix(tk.Tk):
         parent=self.dashboard_header_host if fixed else self.content
         if fixed:
             self.dashboard_header_host.grid()
-            self.page_scroll.configure(style='Dashboard.Vertical.TScrollbar')
+            style='Dashboard.Vertical.TScrollbar' if title=='Dashboard' else 'Vertical.TScrollbar'
+            self.page_scroll.configure(style=style)
         h=tk.Frame(parent,bg=BG); h.pack(fill='x',padx=26,pady=(14,8) if fixed else (20,8))
         tk.Frame(h,bg=CYAN,width=4,height=44).pack(side='left',padx=(0,14))
         copy=tk.Frame(h,bg=BG); copy.pack(side='left',fill='x',expand=True)
@@ -726,6 +730,67 @@ class Servix(tk.Tk):
             for r in con.execute(sql,args): tree.insert('','end',values=tuple(r))
         tree.bind('<Double-1>',lambda e:self.open_selected_service(tree)); return tree
 
+    def _selection_images(self):
+        if not hasattr(self,'_selection_icon_images'):
+            images=[]
+            for checked in (False,True):
+                size,scale=20,4
+                image=Image.new('RGBA',(size*scale,size*scale),(0,0,0,0))
+                draw=ImageDraw.Draw(image)
+                if checked:
+                    draw.rounded_rectangle((2*scale,2*scale,18*scale,18*scale),radius=4*scale,fill=BLUE)
+                    draw.line((5*scale,10*scale,8*scale,13*scale,15*scale,6*scale),fill='white',width=2*scale,joint='curve')
+                else:
+                    draw.rounded_rectangle((2*scale,2*scale,18*scale,18*scale),radius=4*scale,fill='white',outline='#9BB0C5',width=scale)
+                images.append(ImageTk.PhotoImage(image.resize((size,size),Image.Resampling.LANCZOS),master=self))
+            self._selection_icon_images=tuple(images)
+        return self._selection_icon_images
+
+    def _save_rows_csv(self,title,headers,rows,filename):
+        if not rows:
+            messagebox.showinfo(title,'Select one or more records first.'); return
+        path=filedialog.asksaveasfilename(defaultextension='.csv',initialfile=filename,filetypes=[('CSV file','*.csv')])
+        if not path:return
+        with open(path,'w',newline='',encoding='utf-8-sig') as fh:
+            writer=csv.writer(fh); writer.writerow(headers); writer.writerows(rows)
+        messagebox.showinfo(title,f'{len(rows)} selected records exported to CSV.')
+
+    def _print_rows_pdf(self,title,headers,rows,filename):
+        if not rows:
+            messagebox.showinfo(title,'Select one or more records first.'); return
+        path=filedialog.asksaveasfilename(defaultextension='.pdf',initialfile=filename,filetypes=[('PDF file','*.pdf')])
+        if not path:return
+        try:
+            from xml.sax.saxutils import escape
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            doc=SimpleDocTemplate(path,pagesize=landscape(A4),rightMargin=12,leftMargin=12,topMargin=14,bottomMargin=14,title=title)
+            styles=getSampleStyleSheet()
+            title_style=ParagraphStyle('ServixListTitle',parent=styles['Title'],fontName='Helvetica-Bold',fontSize=15,leading=19,textColor=colors.HexColor('#164F7C'),spaceAfter=3)
+            small=ParagraphStyle('ServixListCell',parent=styles['BodyText'],fontName='Helvetica',fontSize=7.5,leading=9)
+            head=ParagraphStyle('ServixListHead',parent=small,fontName='Helvetica-Bold',textColor=colors.HexColor('#173E61'))
+            story=[Paragraph(escape(get_setting('company_name','SERVIX')),title_style),
+                   Paragraph(escape(title),small),Spacer(1,9)]
+            data=[[Paragraph(escape(str(value)),head) for value in headers]]
+            data.extend([[Paragraph(escape(str(value or '—')),small) for value in row] for row in rows])
+            width=doc.width/max(1,len(headers))
+            table=Table(data,colWidths=[width]*len(headers),repeatRows=1,hAlign='LEFT')
+            table.setStyle(TableStyle([
+                ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#EAF3FC')),
+                ('TEXTCOLOR',(0,0),(-1,0),colors.HexColor('#173E61')),
+                ('GRID',(0,0),(-1,-1),0.35,colors.HexColor('#D5E1ED')),
+                ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#F7FAFD')]),
+                ('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),5),
+                ('RIGHTPADDING',(0,0),(-1,-1),5),('TOPPADDING',(0,0),(-1,-1),5),
+                ('BOTTOMPADDING',(0,0),(-1,-1),5)
+            ]))
+            story.append(table); doc.build(story)
+            messagebox.showinfo(title,f'PDF saved:\n{path}')
+        except Exception as ex:
+            messagebox.showerror(title,f'Could not create the PDF:\n{ex}')
+
     def export_tree_csv(self,tree,filename):
         rows=[tree.item(item,'values') for item in tree.get_children()]
         if not rows:
@@ -758,866 +823,374 @@ class Servix(tk.Tk):
         if item:self.show_service_detail(tree.item(item,'values')[0])
 
     def show_services(self):
-        self.clear(); h=self.section_header('Service Calls','Search / Review / Complete Service History')
-        if self.can_edit(): tk.Button(h,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',font=('Segoe UI',11,'bold'),bd=0,padx=13,pady=4).pack(side='right',padx=10,pady=5)
-        bar=self.card(self.content); bar.pack(fill='x',padx=10,pady=(8,6)); tk.Label(bar,text='Status',bg=CARD,fg=MUTED,font=('Segoe UI',10,'bold')).pack(side='left',padx=(15,5),pady=10); st=PremiumCombobox(bar,width=20,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened']); st.set('All'); st.pack(side='left')
-        tk.Label(bar,text='Entry date',bg=CARD,fg=MUTED,font=('Segoe UI',10,'bold')).pack(side='left',padx=(15,5)); order=PremiumCombobox(bar,width=19,state='readonly',values=['Newest first','Oldest first']); order.set('Newest first'); order.pack(side='left')
-        tk.Button(bar,text='Export CSV',command=lambda:export_rows(),bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=6).pack(side='right',padx=(5,12))
-        holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=10,pady=(0,8))
-        scroller=tk.Canvas(holder,bg=CARD,highlightthickness=0); sb=ttk.Scrollbar(holder,orient='vertical',command=scroller.yview); scroller.pack(side='left',fill='both',expand=True,padx=(8,0),pady=8); sb.pack(side='right',fill='y',padx=(0,8),pady=8); scroller.configure(yscrollcommand=sb.set)
-        records=tk.Frame(scroller,bg=CARD); win=scroller.create_window((0,0),window=records,anchor='nw'); records.bind('<Configure>',lambda _e:scroller.configure(scrollregion=scroller.bbox('all'))); scroller.bind('<Configure>',lambda e:scroller.itemconfigure(win,width=e.width))
-        rows=[]; selected={'code':None}
-        def open_row(_event=None):
-            if selected['code']:self.show_service_detail(selected['code'])
-        def export_rows():
-            if not rows:return messagebox.showinfo('Export CSV','There are no service calls in the current view to export.')
-            path=filedialog.asksaveasfilename(defaultextension='.csv',initialfile='SERVIX_Service_Calls.csv',filetypes=[('CSV file','*.csv')])
-            if not path:return
-            with open(path,'w',newline='',encoding='utf-8-sig') as fh:
-                writer=csv.writer(fh); writer.writerow(['Service ID','Opened','Client','Equipment','Reason','Engineer','Status','Payment']); writer.writerows(rows)
-            messagebox.showinfo('Export complete',f'{len(rows)} service calls exported to CSV.')
-        def filter_it(*_):
-            for child in records.winfo_children():child.destroy()
-            selected['code']=None; rows.clear(); direction='ASC' if order.get()=='Oldest first' else 'DESC'
-            sql='''SELECT s.code,s.opened,COALESCE(c.name,'—'),COALESCE(e.code,'—'),s.reason,COALESCE(s.engineer,'Unassigned'),s.status,COALESCE(s.payment_status,'') FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id'''
-            args=()
-            if st.get()!='All':sql+=' WHERE s.status=?';args=(st.get(),)
-            sql+=f' ORDER BY date(s.opened) {direction},s.id {direction}'
-            with connect() as con: data=[tuple(r) for r in con.execute(sql,args)]
-            rows.extend(data)
-            for idx,rec in enumerate(data):
-                code,opened,client,equipment,reason,engineer,status,payment=rec
-                bg='#F2F8FE' if idx%2==0 else '#FFFFFF'
-                card=tk.Frame(records,bg=bg,highlightthickness=1,highlightbackground='#E6EDF5',cursor='hand2');card.pack(fill='x',padx=9,pady=4)
-                left=tk.Frame(card,bg=bg,width=155);left.pack(side='left',fill='y',padx=(14,8),pady=11);left.pack_propagate(False)
-                tk.Label(left,text=code,bg=bg,fg=BLUE,font=('Segoe UI',11,'bold')).pack(anchor='w');tk.Label(left,text=str(opened),bg=bg,fg=MUTED,font=('Segoe UI',9)).pack(anchor='w',pady=(3,0))
-                mid=tk.Frame(card,bg=bg);mid.pack(side='left',fill='both',expand=True,padx=8,pady=9)
-                tk.Label(mid,text=client,bg=bg,fg=TEXT,font=('Segoe UI',11,'bold'),anchor='w').pack(anchor='w');tk.Label(mid,text=f'{equipment}   ·   {reason}',bg=bg,fg=MUTED,font=('Segoe UI',10),anchor='w').pack(anchor='w',pady=(2,0));tk.Label(mid,text=f'Engineer: {engineer}',bg=bg,fg='#7B8796',font=('Segoe UI',9),anchor='w').pack(anchor='w',pady=(2,0))
-                right=tk.Frame(card,bg=bg);right.pack(side='right',padx=14,pady=10)
-                status_color=BLUE if status not in ('Closed','Cancelled') else '#4C9A72'
-                tk.Label(right,text=status,bg='#EAF4FE' if status_color==BLUE else '#EAF7F0',fg=status_color,font=('Segoe UI',9,'bold'),padx=10,pady=4).pack(anchor='e')
-                tk.Label(right,text=payment or 'Payment not set',bg=bg,fg=MUTED,font=('Segoe UI',9)).pack(anchor='e',pady=(5,0))
-                def pick(_e=None,c=card,key=code):
-                    selected['code']=key
-                    for item in records.winfo_children():item.configure(highlightbackground=BLUE if item is c else '#E6EDF5',highlightthickness=2 if item is c else 1)
+        self.clear()
+        h=self.section_header('Service Calls','Search / Review / Complete Service History',fixed=True)
+        if self.can_edit():
+            tk.Button(h,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',
+                      font=('Segoe UI',11,'bold'),bd=0,padx=13,pady=5,cursor='hand2').pack(side='right',padx=12,pady=5)
+
+        filters=self.card(self.dashboard_header_host)
+        filters.pack(fill='x',padx=10,pady=(0,8))
+        row1=tk.Frame(filters,bg=CARD); row1.pack(fill='x',padx=12,pady=(9,3))
+        row2=tk.Frame(filters,bg=CARD); row2.pack(fill='x',padx=12,pady=(2,8))
+        q=tk.StringVar()
+        search=ttk.Entry(row1,textvariable=q,width=27)
+        status=PremiumCombobox(row1,width=13,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened'])
+        with connect() as con:
+            reasons=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT reason FROM services WHERE COALESCE(reason,'')!=''")})
+            engineers=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT engineer FROM services WHERE COALESCE(engineer,'')!=''")})
+        reason=PremiumCombobox(row1,width=13,state='readonly',values=reasons)
+        engineer=PremiumCombobox(row1,width=13,state='readonly',values=engineers)
+        status.set('All'); reason.set('All'); engineer.set('All')
+        def field(parent,label,widget):
+            group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,10))
+            tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
+            widget.pack(anchor='w')
+            return group
+        field(row1,'Search ID / client / equipment',search)
+        field(row1,'Status',status)
+        field(row1,'Service reason',reason)
+        field(row1,'Engineer',engineer)
+
+        date_from=tk.StringVar(); date_to=tk.StringVar()
+        from_entry=ttk.Entry(row2,textvariable=date_from,width=14)
+        to_entry=ttk.Entry(row2,textvariable=date_to,width=14)
+        payment=PremiumCombobox(row2,width=13,state='readonly',values=['All','Paid','Pending','Part Paid','Invoice Raised','To Be Invoiced','Not Applicable'])
+        order=PremiumCombobox(row2,width=13,state='readonly',values=['Newest first','Oldest first'])
+        payment.set('All'); order.set('Newest first')
+        field(row2,'Opened from (YYYY-MM-DD)',from_entry)
+        field(row2,'Opened to (YYYY-MM-DD)',to_entry)
+        field(row2,'Payment',payment)
+        field(row2,'Entry date order',order)
+
+        check_images=self._selection_images()
+        selection=tk.Frame(row2,bg=CARD); selection.pack(side='left',padx=(8,0),pady=(13,0))
+        select_all=tk.Label(selection,image=check_images[0],bg=CARD,cursor='hand2')
+        select_all.pack(side='left',padx=(0,5))
+        tk.Label(selection,text='Select all visible',bg=CARD,fg=TEXT,font=('Segoe UI',9),cursor='hand2').pack(side='left')
+        selected_count=tk.Label(selection,text='0 selected',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold'))
+        selected_count.pack(side='left',padx=(8,6))
+        btns=tk.Frame(row2,bg=CARD); btns.pack(side='right',pady=(13,0))
+        holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=10,pady=(0,10))
+        scroller=tk.Canvas(holder,bg=CARD,highlightthickness=0)
+        sb=ttk.Scrollbar(holder,orient='vertical',command=scroller.yview,style='Dashboard.Vertical.TScrollbar')
+        scroller.pack(side='left',fill='both',expand=True,padx=(8,0),pady=8)
+        sb.pack(side='right',fill='y',padx=(0,8),pady=8); scroller.configure(yscrollcommand=sb.set)
+        records=tk.Frame(scroller,bg=CARD); win=scroller.create_window((0,0),window=records,anchor='nw')
+        records.bind('<Configure>',lambda _e:scroller.configure(scrollregion=scroller.bbox('all')))
+        scroller.bind('<Configure>',lambda e:scroller.itemconfigure(win,width=e.width))
+        selected_codes=set(); visible_rows=[]
+
+        def update_selection():
+            selected_count.configure(text=f'{len(selected_codes)} selected')
+            all_visible=bool(visible_rows) and all(str(row[0]) in selected_codes for row in visible_rows)
+            select_all.configure(image=check_images[1] if all_visible else check_images[0])
+            select_all.image=check_images[1] if all_visible else check_images[0]
+            return all_visible
+
+        def render_rows():
+            for child in records.winfo_children(): child.destroy()
+            if not visible_rows:
+                tk.Label(records,text='No service calls match these filters.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(pady=30)
+                update_selection(); return
+            for idx,rec in enumerate(visible_rows):
+                code,opened,client,equipment,reason_text,engineer_text,status_text,payment_text=rec
+                bg='#F6FAFE' if idx%2==0 else '#FFFFFF'
+                card=tk.Frame(records,bg=bg,highlightthickness=0,cursor='hand2'); card.pack(fill='x',padx=8,pady=3)
+                left=tk.Frame(card,bg=bg,width=185); left.pack(side='left',fill='y',padx=(12,8),pady=10); left.pack_propagate(False)
+                mark=tk.Label(left,image=check_images[1] if code in selected_codes else check_images[0],bg=bg,cursor='hand2')
+                mark.image=check_images[1] if code in selected_codes else check_images[0]
+                mark.pack(side='left',anchor='n',padx=(0,8))
+                details=tk.Frame(left,bg=bg); details.pack(side='left',fill='y')
+                tk.Label(details,text=str(code),bg=bg,fg=BLUE,font=('Segoe UI',10,'bold'),anchor='w').pack(anchor='w')
+                tk.Label(details,text=str(opened or '')[:10],bg=bg,fg=MUTED,font=('Segoe UI',8),anchor='w').pack(anchor='w',pady=(2,0))
+                mid=tk.Frame(card,bg=bg); mid.pack(side='left',fill='both',expand=True,padx=8,pady=9)
+                tk.Label(mid,text=str(client),bg=bg,fg=TEXT,font=('Segoe UI',10,'bold'),anchor='w').pack(anchor='w')
+                tk.Label(mid,text=f'{equipment}   ·   {reason_text}',bg=bg,fg=MUTED,font=('Segoe UI',9),anchor='w').pack(anchor='w',pady=(2,0))
+                tk.Label(mid,text=f'Engineer: {engineer_text}',bg=bg,fg='#7B8796',font=('Segoe UI',8),anchor='w').pack(anchor='w',pady=(2,0))
+                right=tk.Frame(card,bg=bg); right.pack(side='right',padx=12,pady=9)
+                status_color=BLUE if status_text not in ('Closed','Cancelled') else '#4C9A72'
+                tk.Label(right,text=status_text,bg='#EAF4FE' if status_color==BLUE else '#EAF7F0',fg=status_color,font=('Segoe UI',8,'bold'),padx=9,pady=4).pack(anchor='e')
+                tk.Label(right,text=payment_text or 'Payment not set',bg=bg,fg=MUTED,font=('Segoe UI',8),anchor='e').pack(anchor='e',pady=(4,0))
+                def toggle(_event=None,key=str(code)):
+                    if key in selected_codes: selected_codes.remove(key)
+                    else: selected_codes.add(key)
+                    render_rows()
+                    return 'break'
+                def open_row(_event=None,key=str(code)):
+                    self.show_service_detail(key); return 'break'
                 def bind_card(widget):
-                    widget.bind('<Button-1>',pick);widget.bind('<Double-1>',lambda e,key=code:self.show_service_detail(key))
-                    widget.bind('<MouseWheel>',lambda e:scroller.yview_scroll(-1 if e.delta>0 else 1,'units'))
-                    widget.bind('<Button-4>',lambda _e:scroller.yview_scroll(-1,'units'));widget.bind('<Button-5>',lambda _e:scroller.yview_scroll(1,'units'))
-                    for child in widget.winfo_children():bind_card(child)
+                    widget.bind('<Button-1>',toggle)
+                    widget.bind('<Double-1>',open_row)
+                    for child in widget.winfo_children(): bind_card(child)
                 bind_card(card)
-            if not data:tk.Label(records,text='No service calls match this status.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(pady=30)
-            scroller.yview_moveto(0)
-        st.bind('<<ComboboxSelected>>',filter_it); order.bind('<<ComboboxSelected>>',filter_it)
-        scroller.bind('<MouseWheel>',lambda e:scroller.yview_scroll(-1 if e.delta>0 else 1,'units'));scroller.bind('<Button-4>',lambda _e:scroller.yview_scroll(-1,'units'));scroller.bind('<Button-5>',lambda _e:scroller.yview_scroll(1,'units'))
-        def pdf_selected():
-            if not selected['code']:return messagebox.showinfo('Service Report','Select a service call first.')
-            self.export_service_pdf(selected['code'])
-        tk.Button(bar,text='Print / PDF Selected',command=pdf_selected,bg=BLUE,fg='white',bd=0,padx=12,pady=6).pack(side='right',padx=5)
-        filter_it()
 
-    def form_field(self,parent,label,row,col,values=None,width=30,required=False):
-        tk.Label(parent,text=label+(' *' if required else ''),bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).grid(row=row,column=col,sticky='w',padx=9,pady=(6,2)); w=PremiumCombobox(parent,values=values,width=width,state='readonly') if values is not None else ttk.Entry(parent,width=width); w.grid(row=row+1,column=col,sticky='ew',padx=9,pady=(0,5)); return w
+        def selected_service_rows():
+            return [row for row in visible_rows if str(row[0]) in selected_codes]
+        def print_selected():
+            rows=selected_service_rows()
+            self._print_rows_pdf('Selected Service Calls',
+                ['Service ID','Opened','Client','Equipment','Reason','Engineer','Status','Payment'],
+                rows,'SERVIX_Selected_Service_Calls.pdf')
+        def export_selected():
+            self._save_rows_csv('Selected Service Calls',
+                ['Service ID','Opened','Client','Equipment','Reason','Engineer','Status','Payment'],
+                selected_service_rows(),'SERVIX_Selected_Service_Calls.csv')
+        print_btn=tk.Button(btns,text='Print Selected PDF',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2')
+        print_btn.pack(side='right',padx=(5,0))
+        tk.Button(btns,text='Export Selected CSV',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right')
 
-    def show_new_service(self):
-        if not self.require('services'): return
-        if not self.require_edit(): return self.show_services()
-        self.clear()
-        bar=tk.Frame(self.content,bg=BG); bar.pack(fill='x',padx=26,pady=(18,8))
-        copy=tk.Frame(bar,bg=BG); copy.pack(side='left',fill='x',expand=True)
-        tk.Label(copy,text='New Service Request',bg=BG,fg=NAVY,font=('Segoe UI',22,'bold')).pack(anchor='w')
-        tk.Label(copy,text='Record the client, equipment and service details',bg=BG,fg=MUTED,font=('Segoe UI',10)).pack(anchor='w',pady=(2,0))
-        tk.Label(bar,text='AUTO ON SAVE',bg='#EAF4FF',fg=BLUE,font=('Segoe UI',10,'bold'),padx=14,pady=7).pack(side='right',padx=(10,2))
-        tk.Button(bar,text='Cancel',command=self.show_services,bg='#E8EEF5',fg=NAVY,activebackground='#DCE7F2',bd=0,font=('Segoe UI',10,'bold'),padx=16,pady=8,cursor='hand2').pack(side='right',padx=5)
-        save_header=tk.Button(bar,text='Save',bg=BLUE,fg='white',activebackground='#0564B5',activeforeground='white',bd=0,font=('Segoe UI',10,'bold'),padx=18,pady=8,cursor='hand2')
-        save_header.pack(side='right',padx=5)
-        workspace=tk.Frame(self.content,bg=BG); workspace.pack(fill='both',expand=True,padx=10,pady=(6,8))
-        form=self.card(workspace); form.pack(fill='x'); form.grid_columnconfigure((0,1,2),weight=1)
-        section=tk.Frame(form,bg='#F7FAFD',highlightthickness=1,highlightbackground='#B8D8F3'); section.grid(row=0,column=0,columnspan=3,sticky='ew',padx=8,pady=(8,2))
-        for i,title in enumerate(('Client & Contact','Equipment','Service Request')):
-            section.grid_columnconfigure(i,weight=1)
-            tk.Label(section,text=title,bg='#F7FAFD',fg=BLUE,font=('Segoe UI',11,'bold'),anchor='w').grid(row=0,column=i,sticky='ew',padx=10,pady=7)
-
-        client=self.form_field(form,'Client / Search Client',2,0,[],required=True)
-        equip=self.form_field(form,'Equipment / Serial / Make / Model',2,1,[],required=True)
-        reason=self.form_field(form,'Reason for Service',2,2,['Breakdown / Complaint','Calibration','Preventive Maintenance','AMC Preventive Visit','Installation / Commissioning','Inspection / Check-up','Performance Verification','Software/Firmware Update','Accessory Replacement','Part Replacement','Customer Requested Service','Other'],required=True)
-        warranty=self.form_field(form,'Under Warranty?',4,0,['Yes','No'],required=True)
-        amc=self.form_field(form,'Under AMC?',4,1,['Yes','No'],required=True)
-        engineer=self.form_field(form,'Assigned Engineer (important)',4,2,[])
-        priority=self.form_field(form,'Priority',6,0,['Normal','Urgent','Critical']); priority.set('Normal')
-        source=self.form_field(form,'Request Source (optional)',6,1,['Phone','Email','WhatsApp','Walk-in','Other'])
-        complaint_date=self.form_field(form,'Complaint Received Date *',6,2); complaint_date.insert(0,today())
-        status=self.form_field(form,'Opening Status',8,0,['New','Assigned','Received']); status.set('New')
-        received_date=self.form_field(form,'Equipment Received Date',8,1)
-        received_condition=self.form_field(form,'Equipment Received Condition',8,2)
-
-        info=tk.Frame(form,bg='#F7FAFD',highlightthickness=1,highlightbackground='#D6E6F3'); info.grid(row=7,column=0,columnspan=3,sticky='ew',padx=10,pady=(3,3))
-        for i in range(3): info.grid_columnconfigure(i,weight=1)
-        tk.Label(info,text='Client: select an existing customer or use + Quick Add Client',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',10),anchor='w').grid(row=0,column=0,sticky='ew',padx=8,pady=5)
-        tk.Label(info,text='Equipment: filtered to the selected client; serial identity is preserved',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',10),anchor='w').grid(row=0,column=1,sticky='ew',padx=8,pady=5)
-        cal_hint=tk.Label(info,text='Calibration fields become available after the service is created',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',10),anchor='w')
-        cal_hint.grid(row=0,column=2,sticky='ew',padx=8,pady=5)
-
-        cmap={}; emap={}
-        def refresh_lists(select_client_id=None,select_equipment_id=None):
-            nonlocal cmap,emap
-            with connect() as con:
-                engineer_names=[x['name'] for x in con.execute('SELECT name FROM engineers WHERE active=1 ORDER BY name')]
-                clients=[(x['id'],f"{x['code']} — {x['name']}") for x in con.execute('SELECT id,code,name FROM clients ORDER BY name')]
-                equipment=[(x['id'],x['client_id'],f"{x['code']} — {x['make']} {x['model']} — {x['serial'] or 'Serial not available'}") for x in con.execute('SELECT id,client_id,code,make,model,serial FROM equipment ORDER BY id DESC')]
-            engineer['values']=engineer_names
-            cmap={v:k for k,v in clients}
-            chosen_client=select_client_id or cmap.get(client.get())
-            client['values']=list(cmap)
-            if chosen_client:
-                for label,cid in cmap.items():
-                    if cid==chosen_client: client.set(label); break
-            emap={label:eid for eid,cid,label in equipment if not chosen_client or cid==chosen_client}
-            equip['values']=list(emap)
-            if select_equipment_id:
-                for label,eid in emap.items():
-                    if eid==select_equipment_id: equip.set(label); break
-            elif equip.get() not in emap: equip.set('')
-
-        def on_client(*_):
-            refresh_lists()
-        client.bind('<<ComboboxSelected>>',on_client)
-
-        quick=tk.Frame(form,bg=CARD); quick.grid(row=8,column=0,columnspan=3,sticky='ew',padx=10,pady=(2,8))
-        tk.Label(quick,text='Not in SERVIX yet?',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(side='left',padx=(0,10))
-
-        def quick_client():
-            d=tk.Toplevel(self); d.title('Quick Add Client'); center_window(d, 580, 540); d.configure(bg=CARD); d.transient(self); d.grab_set()
-            vals={}
-            for key,label in [('name','Client / Company *'),('contact','Contact Person'),('mobile','Mobile'),('email','Email'),('city','City'),('address','Address')]:
-                tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24,pady=(8,2)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=24)
-            def save_client():
-                name=vals['name'].get().strip(); mobile=vals['mobile'].get().strip(); email=vals['email'].get().strip()
-                if not name or (not mobile and not email): return messagebox.showwarning('Required','Client name and at least Mobile or Email are required.',parent=d)
-                with connect() as con:
-                    dup=con.execute("""SELECT id,code,name FROM clients WHERE
-                        (?<>'' AND REPLACE(REPLACE(mobile,' ',''),'-','')=REPLACE(REPLACE(?,' ',''),'-',''))
-                        OR (?<>'' AND LOWER(email)=LOWER(?))""",(mobile,mobile,email,email)).fetchone()
-                    if dup:
-                        if messagebox.askyesno('Existing client found',f"{dup['code']} — {dup['name']} already matches this mobile/email.\n\nUse the existing client?",parent=d):
-                            cid=dup['id']; d.destroy(); refresh_lists(select_client_id=cid); return
-                        return messagebox.showwarning('Duplicate protected','Create Anyway is intentionally blocked in quick entry. Use the Clients screen for an authorized duplicate override.',parent=d)
-                    ts=now(); code=next_code('CLI','clients')
-                    cur=con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(code,name,vals['contact'].get().strip(),mobile,email,vals['address'].get().strip(),vals['city'].get().strip(),'Created during service entry',ts,ts)); cid=cur.lastrowid
-                d.destroy(); refresh_lists(select_client_id=cid)
-            tk.Button(d,text='Create & Select Client',command=save_client,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=18)
-
-        def quick_equipment():
-            cid=cmap.get(client.get())
-            if not cid:return messagebox.showwarning('Select client','Select or create the client first.')
-            d=tk.Toplevel(self); d.title('Quick Add Equipment'); center_window(d, 600, 630); d.configure(bg=CARD); d.transient(self); d.grab_set()
-            vals={}
-            for key,label in [('make','Make *'),('model','Model *'),('serial','Serial Number'),('stock','Stock / External ID'),('type','Equipment Type'),('location','Location / Department')]:
-                tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24,pady=(8,2)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=24)
-            no_serial=tk.BooleanVar(value=False)
-            tk.Checkbutton(d,text='Serial number not available',variable=no_serial,bg=CARD,fg=TEXT,activebackground=CARD).pack(anchor='w',padx=20,pady=8)
-            sold=tk.StringVar(value='Unknown'); row=tk.Frame(d,bg=CARD); row.pack(fill='x',padx=24); tk.Label(row,text='Sold By',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left'); PremiumCombobox(row,textvariable=sold,values=['Us','Other','Unknown'],state='readonly',width=15).pack(side='right')
-            def save_equipment():
-                make=vals['make'].get().strip(); model=vals['model'].get().strip(); serial=vals['serial'].get().strip()
-                if not make or not model:return messagebox.showwarning('Required','Make and Model are mandatory.',parent=d)
-                if not serial and not no_serial.get():return messagebox.showwarning('Serial','Enter the serial number or tick “Serial number not available”.',parent=d)
-                with connect() as con:
-                    if serial:
-                        dup=con.execute('''SELECT e.id,e.code,e.make,e.model,e.serial,c.name client_name FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
-                                           WHERE LOWER(TRIM(e.serial))=LOWER(TRIM(?))''',(serial,)).fetchone()
-                        if dup:
-                            if messagebox.askyesno('Existing equipment found',f"{dup['code']} — {dup['make']} {dup['model']}\nS/N {dup['serial']}\nClient: {dup['client_name']}\n\nUse this existing SERVIX Equipment ID?",parent=d):
-                                eid=dup['id']; d.destroy()
-                                with connect() as c2: owner=c2.execute('SELECT client_id FROM equipment WHERE id=?',(eid,)).fetchone()[0]
-                                refresh_lists(select_client_id=owner,select_equipment_id=eid); return
-                            return messagebox.showwarning('Duplicate protected','The same physical serial should keep one SERVIX Equipment ID. Resolve ownership/history from Equipment before creating another record.',parent=d)
-                    ts=now(); code=next_code('SEQ','equipment')
-                    cur=con.execute('''INSERT INTO equipment(code,client_id,make,model,serial,stock_id,equipment_type,sold_by,location,notes,created,modified)
-                                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)''',(code,cid,make,model,serial,vals['stock'].get().strip(),vals['type'].get().strip(),sold.get(),vals['location'].get().strip(),'Serial explicitly unavailable' if no_serial.get() else '',ts,ts)); eid=cur.lastrowid
-                d.destroy(); refresh_lists(select_client_id=cid,select_equipment_id=eid)
-            tk.Button(d,text='Create & Select Equipment',command=save_equipment,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=18)
-
-        tk.Button(quick,text='+ Quick Add Client',command=quick_client,bg='#EAF2FF',fg=BLUE,bd=0,padx=12,pady=7).pack(side='left',padx=4)
-        tk.Button(quick,text='+ Quick Add Equipment',command=quick_equipment,bg='#EAF7F8',fg='#087A84',bd=0,padx=12,pady=7).pack(side='left',padx=4)
-        refresh_lists()
-
-        tk.Label(form,text='Complaint / Requirement *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).grid(row=10,column=0,sticky='w',padx=10,pady=(6,3))
-        complaint=tk.Text(form,height=4,font=('Segoe UI',11),relief='solid',bd=1); complaint.grid(row=11,column=0,columnspan=3,sticky='ew',padx=10,pady=(0,8))
-
-        guide=self.card(self.content); guide.pack(fill='x',padx=10,pady=(0,6))
-        tk.Label(guide,text='* Mandatory   •   Engineer / Priority are important   •   Request Source is optional   •   Quote, charges, payment, work done and dispatch are completed later when relevant.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(anchor='w',padx=14,pady=10)
-
-        actions=tk.Frame(self.content,bg=BG); actions.pack(fill='x',padx=10)
-        def save():
-            cid=cmap.get(client.get()); eid=emap.get(equip.get()); text=complaint.get('1.0','end').strip()
-            if not cid or not eid or not reason.get() or not warranty.get() or not amc.get() or not text or not complaint_date.get().strip():return messagebox.showwarning('Mandatory information','Complete Client, Equipment, Complaint Received Date, Reason, Complaint, Warranty and AMC.')
-            try: datetime.datetime.strptime(complaint_date.get().strip(),'%Y-%m-%d')
-            except ValueError:return messagebox.showwarning('Complaint date','Complaint Received Date must be YYYY-MM-DD.')
-            if status.get()=='Received' and not received_date.get().strip():return messagebox.showwarning('Received date','Equipment Received Date is required when opening the Service as Received.')
-            if received_date.get().strip():
-                try: datetime.datetime.strptime(received_date.get().strip(),'%Y-%m-%d')
-                except ValueError:return messagebox.showwarning('Received date','Equipment Received Date must be YYYY-MM-DD.')
-            with connect() as con:
-                owner=con.execute('SELECT client_id FROM equipment WHERE id=?',(eid,)).fetchone()
-                if not owner or owner[0]!=cid:return messagebox.showwarning('Equipment mismatch','Selected equipment does not belong to the selected client. Refresh the selection and try again.')
-                if reason.get()=='Breakdown / Complaint':
-                    serial=con.execute('SELECT serial FROM equipment WHERE id=?',(eid,)).fetchone()[0]
-                    matches=repeat_complaints(eid,text)
-                    if matches:
-                        prev=matches[0]; days=get_setting('repeat_complaint_days','60')
-                        if not messagebox.askyesno('Repeat complaint warning',f"This equipment has a similar complaint within {days} days: {prev['code']} ({prev['opened']}).\n\nPrevious complaint: {prev['complaint']}\n\nCreate a new Service ID anyway?",parent=self):return
-                sc=next_code('SRV','services'); ts=now()
-                opened=complaint_date.get().strip()
-                cur=con.execute('''INSERT INTO services(code,client_id,equipment_id,opened,request_source,reason,complaint,warranty,amc,engineer,priority,status,received_date,received_condition,payment_status,modified)
-                                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',(sc,cid,eid,opened,source.get(),reason.get(),text,warranty.get(),amc.get(),engineer.get().strip(),priority.get() or 'Normal',status.get() or 'New',received_date.get().strip(),received_condition.get().strip(),'Not Applicable',ts))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(cur.lastrowid,ts,'Service call created from office intake',self.current_user['username']))
-            audit(self.current_user['username'],'service',sc,'CREATE','Service call created')
-            if engineer.get().strip(): audit(self.current_user['username'],'service',sc,'ENGINEER_ASSIGN',f"Assigned to {engineer.get().strip()}")
-            messagebox.showinfo('Service created',f'{sc} created successfully.'); self.show_service_detail(sc)
-        save_header.configure(command=save)
-        tk.Button(actions,text='Save / Create Service ID',command=save,bg=GREEN,fg='white',font=('Segoe UI',11,'bold'),bd=0,padx=22,pady=9).pack(side='right')
-        tk.Button(actions,text='Cancel',command=self.show_services,bg='#6B7280',fg='white',font=('Segoe UI',11),bd=0,padx=18,pady=9).pack(side='right',padx=6)
-
-    def show_service_detail(self,code):
-        self.clear()
-        with connect() as con:r=con.execute('''SELECT s.*,c.name client,e.code equipment,e.make,e.model,e.serial FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id WHERE s.code=?''',(code,)).fetchone()
-        if not r:return
-        bar=tk.Frame(self.content,bg=BG); bar.pack(fill='x',padx=26,pady=(18,8))
-        copy=tk.Frame(bar,bg=BG); copy.pack(side='left',fill='x',expand=True)
-        tk.Label(copy,text='Service Request',bg=BG,fg=NAVY,font=('Segoe UI',22,'bold')).pack(anchor='w')
-        tk.Label(copy,text=f"{r['client']}  ·  {r['equipment']}  ·  {r['make']} {r['model']}",bg=BG,fg=MUTED,font=('Segoe UI',10)).pack(anchor='w',pady=(2,0))
-        tk.Button(bar,text='Back to Service Calls',command=self.show_services,bg='#E8EEF5',fg=NAVY,activebackground='#DCE7F2',bd=0,font=('Segoe UI',10,'bold'),padx=15,pady=8,cursor='hand2').pack(side='right',padx=(6,0))
-        tk.Label(bar,text=code,bg='#EAF4FF',fg=BLUE,font=('Segoe UI',10,'bold'),padx=14,pady=7).pack(side='right',padx=5)
-        tabs=CapsuleNotebook(self.content,max_per_row=5); tabs.pack(fill='both',expand=True,padx=10,pady=(6,10))
-        ov=tk.Frame(tabs,bg=CARD); tech=tk.Frame(tabs,bg=CARD); parts_tab=tk.Frame(tabs,bg=CARD); cal_tab=tk.Frame(tabs,bg=CARD); att_tab=tk.Frame(tabs,bg=CARD); comm=tk.Frame(tabs,bg=CARD); location_tab=tk.Frame(tabs,bg=CARD); hist=tk.Frame(tabs,bg=CARD)
-        tabs.add(ov,text=' 1. Client & Equipment ')
-        tabs.add(cal_tab,text=' 4. Calibration Details ')
-        tabs.add(comm,text=' 5. Commercial & Approval ')
-        tabs.add(parts_tab,text=' 6. Parts Used ')
-        tabs.add(tech,text=' 7. Work Done & Testing ')
-        tabs.add(att_tab,text=' 8. Photos / Documents ')
-        tabs.add(location_tab,text=' 9. Location / Movement ')
-        tabs.add(hist,text=' 10. Communication History ')
-        report_tab=tk.Frame(tabs,bg=CARD); close_tab=tk.Frame(tabs,bg=CARD)
-        tabs.add(report_tab,text=' 11. Service Report ')
-        tabs.add(close_tab,text=' 12. Completion & Closure ')
-        tk.Label(report_tab,text='Service Report Preview',bg=CARD,fg=TEXT,font=('Segoe UI',14,'bold')).pack(anchor='w',padx=18,pady=(18,4))
-        tk.Label(report_tab,text='Printable/PDF service report generation will use this service record, technical work, parts and calibration data.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(anchor='w',padx=18)
-        summary=tk.Frame(report_tab,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); summary.pack(fill='x',padx=18,pady=16)
-        for label,value in [('Service ID',code),('Client',r['client']),('Equipment',f"{r['make']} {r['model']} / {r['serial'] or 'No serial'}"),('Complaint',r['complaint']),('Work Done',r['work_done'] or 'Pending'),('Final Result',r['final_result'] or 'Pending')]:
-            row=tk.Frame(summary,bg='#F7FAFD'); row.pack(fill='x',padx=12,pady=5); tk.Label(row,text=label,width=16,anchor='w',bg='#F7FAFD',fg=MUTED,font=('Segoe UI',11,'bold')).pack(side='left'); tk.Label(row,text=str(value),anchor='w',bg='#F7FAFD',fg=TEXT,font=('Segoe UI',11),wraplength=850,justify='left').pack(side='left',fill='x',expand=True)
-        def build_service_pdf(filename,track=False):
-            try:
-                with connect() as con:
-                    report_parts=con.execute('SELECT * FROM parts WHERE service_id=? ORDER BY id',(r['id'],)).fetchall()
-                    report_cal=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
-                create_service_report(filename,r,cli,eq,report_parts,report_cal,{'name':get_setting('company_name','HAC'),'title':get_setting('system_title','Service Management System'),'logo_path':get_setting('company_logo_path',''),'signature_path':get_setting('company_signature_path','')})
-                if track and self.can_edit():
-                    with connect() as con: con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'PDF Service Report generated',self.current_user['username']))
-                    audit(self.current_user['username'],'service',code,'REPORT_GENERATED',Path(filename).name)
-                return True
-            except Exception as ex:
-                messagebox.showerror('Service Report',f'Could not generate report:\n{ex}');return False
-        def preview_service_pdf():
-            folder=DATA_ROOT/'report_previews';folder.mkdir(parents=True,exist_ok=True);filename=folder/f'{code}-preview.pdf'
-            if not build_service_pdf(str(filename)):return
-            try:
-                if hasattr(os,'startfile'):os.startfile(str(filename))
-                else:webbrowser.open(filename.resolve().as_uri())
-            except Exception as ex:messagebox.showerror('Service Report',f'Could not open the PDF preview:\n{ex}')
-        def export_service_pdf():
-            filename=filedialog.asksaveasfilename(defaultextension='.pdf',initialfile=f"{code}-Service-Report.pdf",filetypes=[('PDF Report','*.pdf')])
-            if filename and build_service_pdf(filename,track=True):messagebox.showinfo('Service Report','PDF service report generated successfully.')
-        tk.Button(report_tab,text='Preview PDF',command=preview_service_pdf,bg='#EAF2FF',fg=BLUE,bd=0,padx=18,pady=9).pack(side='left',padx=18,pady=(0,16))
-        tk.Button(report_tab,text='Save PDF',command=export_service_pdf,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(side='right',padx=18,pady=(0,16))
-        tk.Label(close_tab,text='Completion & Closure',bg=CARD,fg=TEXT,font=('Segoe UI',14,'bold')).pack(anchor='w',padx=18,pady=(18,4))
-        tk.Label(close_tab,text='Closure is controlled from Work Done & Testing. Required fields are checked before Closed status is accepted.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(anchor='w',padx=18)
-        checks=tk.Frame(close_tab,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); checks.pack(fill='x',padx=18,pady=16)
-        closure_checks=[('Engineer assigned',bool(r['engineer'])),('Work date recorded',bool(r['work_date'])),('Work performed recorded',bool(r['work_done'])),('Final result recorded',bool(r['final_result'] and r['final_result']!='Pending')),('Billing decision',bool(r['foc_chargeable'])),('Completion date',bool(r['completion_date']))]
-        for label,ok in closure_checks: tk.Label(checks,text=('✓  ' if ok else '○  ')+label,bg='#F7FAFD',fg=GREEN if ok else ORANGE,font=('Segoe UI',11,'bold' if ok else 'normal')).pack(anchor='w',padx=14,pady=5)
-        ov.grid_columnconfigure((0,1),weight=1,uniform='overview'); ov.grid_rowconfigure((0,1),weight=1)
-        client_box=tk.LabelFrame(ov,text=' 1. Client Information ',bg=CARD,fg=BLUE,font=('Segoe UI',11,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); client_box.grid(row=0,column=0,sticky='nsew',padx=(5,2),pady=5)
-        equip_box=tk.LabelFrame(ov,text=' 2. Equipment Information ',bg=CARD,fg=BLUE,font=('Segoe UI',11,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); equip_box.grid(row=0,column=1,sticky='nsew',padx=2,pady=5)
-        service_box=tk.LabelFrame(ov,text=' 3. Service Details ',bg=CARD,fg=BLUE,font=('Segoe UI',11,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); service_box.grid(row=1,column=0,sticky='nsew',padx=2,pady=5)
-        cal_summary=tk.LabelFrame(ov,text=' 4. Calibration Details ',bg=CARD,fg=BLUE,font=('Segoe UI',11,'bold'),highlightthickness=1,highlightbackground='#B8D8F3'); cal_summary.grid(row=1,column=1,sticky='nsew',padx=(2,5),pady=5)
-        def readonly_row(parent,label,value,row):
-            tk.Label(parent,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',10)).grid(row=row,column=0,sticky='w',padx=(10,5),pady=4)
-            e=ttk.Entry(parent,font=('Segoe UI',11)); e.grid(row=row,column=1,sticky='ew',padx=(0,10),pady=4); e.insert(0,str(value or '—')); e.configure(state='readonly'); parent.grid_columnconfigure(1,weight=1)
-        with connect() as con:
-            cli=con.execute('SELECT * FROM clients WHERE id=?',(r['client_id'],)).fetchone()
-            eq=con.execute('SELECT * FROM equipment WHERE id=?',(r['equipment_id'],)).fetchone()
-        for rr,(lab,val) in enumerate([('Client ID',cli['code']),('Client Name',cli['name']),('Contact Person',cli['contact']),('Mobile',cli['mobile']),('Email',cli['email']),('City',cli['city'])]): readonly_row(client_box,lab,val,rr)
-        tk.Button(client_box,text='View Full Client Details',command=lambda:self.show_client_360(cli['code']),bg='#EAF4FF',fg=BLUE,bd=0,padx=10,pady=6).grid(row=7,column=0,columnspan=2,sticky='ew',padx=10,pady=8)
-        for rr,(lab,val) in enumerate([('Equipment ID',eq['code']),('Make',eq['make']),('Model',eq['model']),('Serial No.',eq['serial'] or 'Not Available'),('Equipment Type',eq['equipment_type']),('Location',eq['location']),('Warranty Up To',eq['warranty_till']),('AMC Up To',eq['amc_till'])]): readonly_row(equip_box,lab,val,rr)
-        tk.Button(equip_box,text='View Full Equipment History',command=lambda:self.show_equipment_360(eq['code']),bg='#EAF4FF',fg=BLUE,bd=0,padx=10,pady=6).grid(row=9,column=0,columnspan=2,sticky='ew',padx=10,pady=8)
-        for rr,(lab,val) in enumerate([('Date of Complaint',r['opened']),('Reason for Service',r['reason']),('Priority',r['priority']),('Assigned Engineer',r['engineer'] or 'Unassigned'),('Current Status',r['status']),('Warranty',r['warranty']),('AMC',r['amc'])]): readonly_row(service_box,lab,val,rr)
-        tk.Label(service_box,text='Complaint Details',bg=CARD,fg=MUTED,font=('Segoe UI',10)).grid(row=8,column=0,sticky='nw',padx=(10,5),pady=4)
-        complaint=tk.Text(service_box,height=4,font=('Segoe UI',11),wrap='word'); complaint.grid(row=8,column=1,sticky='ew',padx=(0,10),pady=4); complaint.insert('1.0',r['complaint']); complaint.configure(state='disabled')
-        with connect() as con: cal_head=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
-        if r['reason']=='Calibration':
-            cal_rows=[('Received Date',cal_head['received_date'] if cal_head else ''),('Performed Date',cal_head['calibration_date'] if cal_head else ''),('Result',cal_head['result'] if cal_head else 'Pending'),('Certificate No.',cal_head['certificate_no'] if cal_head else ''),('Certificate Date',cal_head['certificate_date'] if cal_head else ''),('Next Due',cal_head['next_due'] if cal_head else ''),('Performed By',cal_head['performed_by'] if cal_head else ''),('Standards / Reference',cal_head['standards_reference'] if cal_head else '')]
-            for rr,(lab,val) in enumerate(cal_rows): readonly_row(cal_summary,lab,val,rr)
-            tk.Button(cal_summary,text='Open Calibration Details',command=lambda:tabs.select(cal_tab),bg='#EAF4FF',fg=BLUE,bd=0,padx=8,pady=5).grid(row=8,column=0,columnspan=2,sticky='ew',padx=8,pady=8)
-        else:
-            tk.Label(cal_summary,text='Shown when Reason for Service is Calibration',bg=CARD,fg=MUTED,font=('Segoe UI',11),wraplength=180,justify='left').pack(anchor='nw',padx=12,pady=14)
-
-        tech.grid_columnconfigure((0,1,2),weight=1)
-        stage=tk.Frame(tech,bg='#F7FAFD',highlightthickness=1,highlightbackground=BORDER); stage.grid(row=1,column=0,columnspan=3,sticky='ew',padx=10,pady=(4,4))
-        tk.Label(stage,text='WORKFLOW CONTROL',bg='#F7FAFD',fg=BLUE,font=('Segoe UI',11,'bold')).pack(side='left',padx=12,pady=8)
-        tk.Label(stage,text=f"Current: {r['status']}   •   Complete only the fields required for the stage you are moving to.",bg='#F7FAFD',fg=MUTED,font=('Segoe UI',11)).pack(side='left',padx=8)
-        stat=self.form_field(tech,'Status',2,0,['New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Reopened','Cancelled']); stat.set(r['status'])
-        pending=self.form_field(tech,'Pending Reason',2,1,['','Awaiting Customer','Awaiting Parts','Awaiting Approval','Awaiting Payment','Awaiting Engineer','Other']); pending.set(r['pending_reason'] or '')
-        eng=self.form_field(tech,'Engineer',2,2,[])
-        with connect() as con: active_engineers=[x['name'] for x in con.execute('SELECT name FROM engineers WHERE active=1 ORDER BY name')]
-        if r['engineer'] and r['engineer'] not in active_engineers: active_engineers.append(r['engineer'])
-        eng['values']=active_engineers; eng.set(r['engineer'] or '')
-        received=self.form_field(tech,'Equipment Received Date',4,0); received.insert(0,r['received_date'] or '')
-        condition=self.form_field(tech,'Received Condition / Accessories',4,1); condition.insert(0,r['received_condition'] or '')
-        work_date=self.form_field(tech,'Engineer Visit / Work Date',4,2); work_date.insert(0,r['work_date'] or '')
-        diag=self.form_field(tech,'Diagnosis',6,0); diag.insert(0,r['diagnosis'] or '')
-        root=self.form_field(tech,'Root Cause',6,1); root.insert(0,r['root_cause'] or '')
-        work=self.form_field(tech,'Work Performed',6,2); work.insert(0,r['work_done'] or '')
-        testing=self.form_field(tech,'Testing / Verification',8,0); testing.insert(0,r['testing_result'] or '')
-        result=self.form_field(tech,'Final Result',8,1,['Pending','Successful','Partially Resolved','Not Resolved']); result.set(r['final_result'] or 'Pending')
-        next_action=self.form_field(tech,'Next Action',8,2); next_action.insert(0,r['next_action'] or '')
-        dispatch=self.form_field(tech,'Dispatch Date',10,0); dispatch.insert(0,r['dispatch_date'] or '')
-        dispatch_mode=self.form_field(tech,'Dispatch Mode',10,1,['','Courier','Hand','Other']); dispatch_mode.set(r['dispatch_mode'] or '')
-        dispatch_ref=self.form_field(tech,'Dispatch Reference / Remarks',10,2); dispatch_ref.insert(0,r['dispatch_reference'] or '')
-        completion=self.form_field(tech,'Service Completion Date',12,0); completion.insert(0,r['completion_date'] or '')
-        closure=self.form_field(tech,'Closure Date',12,1); closure.insert(0,r['closure_date'] or '')
-        cancel_reason=self.form_field(tech,'Cancel / Reopen Reason',12,2); cancel_reason.insert(0,r['cancel_reason'] or '')
-
-        update_box=tk.LabelFrame(tech,text=' Add chronological engineer / office update ',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold'))
-        update_box.grid(row=14,column=0,columnspan=3,sticky='ew',padx=10,pady=10); update_box.grid_columnconfigure((0,1,2),weight=1)
-        upd_type=self.form_field(update_box,'Update Type',0,0,['Engineer Update','Technical','Customer Communication','Follow-up','Management']); upd_type.set('Engineer Update')
-        upd_date=self.form_field(update_box,'Date / Time',0,1); upd_date.insert(0,now())
-        upd_eng=self.form_field(update_box,'Engineer',0,2,active_engineers); upd_eng.set(r['engineer'] or '')
-        upd_diag=self.form_field(update_box,'Diagnosis / Update',2,0); upd_work=self.form_field(update_box,'Work Done',2,1); upd_next=self.form_field(update_box,'Next Action',2,2)
-        def add_update():
-            if not self.require_edit(): return
-            if not upd_date.get().strip() or not (upd_diag.get().strip() or upd_work.get().strip()):return messagebox.showwarning('Update required','Enter the update date/time and Diagnosis/Update or Work Done.')
-            with connect() as con:
-                con.execute('''INSERT INTO service_updates(service_id,update_date,engineer,update_type,diagnosis,work_done,result,next_action,user) VALUES(?,?,?,?,?,?,?,?,?)''',(r['id'],upd_date.get().strip(),upd_eng.get().strip(),upd_type.get(),upd_diag.get().strip(),upd_work.get().strip(),result.get(),upd_next.get().strip(),self.current_user['username']))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"{upd_type.get()}: {upd_work.get().strip() or upd_diag.get().strip()}",self.current_user['username']))
-                con.execute('UPDATE services SET modified=? WHERE id=?',(now(),r['id']))
-            self.show_service_detail(code)
-        tk.Button(update_box,text='+ Add Update',command=add_update,bg='#EAF2FF',fg=BLUE,bd=0,padx=15,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=10)
-
-        ucols=('Date','Type','Engineer','Diagnosis / Update','Work Done','Next Action'); utr=ttk.Treeview(tech,columns=ucols,show='headings',height=6)
-        for x in ucols:utr.heading(x,text=x)
-        utr.grid(row=16,column=0,columnspan=3,sticky='nsew',padx=10,pady=8)
-        with connect() as con:
-            for x in con.execute('SELECT update_date,update_type,engineer,diagnosis,work_done,next_action FROM service_updates WHERE service_id=? ORDER BY id DESC',(r['id'],)):utr.insert('','end',values=tuple(x))
-
-        def save_tech():
-            if not self.require_edit(): return
-            target=stat.get(); missing=[]
-            workflow=['New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed']
-            old_status=r['status']
-            if old_status=='Cancelled' and target!='Reopened':return messagebox.showwarning('Reopen required','A Cancelled Service Request must be Reopened before moving to another workflow stage.')
-            if old_status=='Closed' and target not in ('Closed','Reopened'):return messagebox.showwarning('Reopen required','A Closed Service Request must be Reopened before further workflow changes.')
-            if target=='Reopened' and old_status not in ('Closed','Cancelled'):return messagebox.showwarning('Invalid transition','Reopened is only valid for a Closed or Cancelled Service Request.')
-            if target=='Cancelled' and old_status in ('Closed','Cancelled'):return messagebox.showwarning('Invalid transition','This Service Request cannot be cancelled from its current status.')
-            if target in workflow and old_status in workflow and workflow.index(target)<workflow.index(old_status):
-                return messagebox.showwarning('Invalid transition','Use Reopened for a completed Service Request. Earlier workflow stages cannot overwrite the recorded service progression.')
-            if target=='Received' and not received.get().strip():missing.append('Equipment Received Date')
-            if target in ('Under Diagnosis','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed') and not eng.get().strip():missing.append('Engineer')
-            if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and not work.get().strip():missing.append('Work Performed')
-            if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and result.get() in ('','Pending'):missing.append('Final Result')
-            if target in ('Ready for Dispatch','Dispatched','Resolved','Closed') and not work_date.get().strip():missing.append('Engineer Visit / Work Date')
-            if target in ('Dispatched','Closed') and not dispatch.get().strip():missing.append('Dispatch Date')
-            if target=='Dispatched' and not dispatch_mode.get():missing.append('Dispatch Mode')
-            if target=='Closed' and not completion.get().strip():missing.append('Service Completion Date')
-            if target=='Closed' and not closure.get().strip():missing.append('Closure Date')
-            if target=='Closed' and not r['foc_chargeable']:missing.append('FOC / Chargeable (Commercial tab)')
-            if target=='Closed' and r['foc_chargeable']=='Chargeable' and (not r['payment_status'] or r['payment_status']=='Not Applicable'):missing.append('Payment Status (Commercial tab)')
-            if target in ('Cancelled','Reopened') and not cancel_reason.get().strip():missing.append('Cancel / Reopen Reason')
-            if r['reason']=='Calibration' and target=='Closed':
-                with connect() as con: cal=con.execute('SELECT calibration_date,result FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
-                if not cal or not cal['calibration_date'] or not cal['result']:missing.append('Calibration Date + Result')
-            if missing:return messagebox.showwarning('Cannot complete this stage','Complete these required items first:\n\n• '+'\n• '.join(missing))
-            if target.startswith('Awaiting') and not pending.get():return messagebox.showwarning('Pending reason','Select a Pending Reason for an Awaiting status.')
-            with connect() as con:
-                con.execute('''UPDATE services SET diagnosis=?,root_cause=?,work_done=?,testing_result=?,final_result=?,status=?,pending_reason=?,engineer=?,received_date=?,received_condition=?,work_date=?,dispatch_date=?,dispatch_mode=?,dispatch_reference=?,completion_date=?,closure_date=?,next_action=?,cancel_reason=?,modified=? WHERE code=?''',(diag.get().strip(),root.get().strip(),work.get().strip(),testing.get().strip(),result.get(),target,pending.get(),eng.get().strip(),received.get().strip(),condition.get().strip(),work_date.get().strip(),dispatch.get().strip(),dispatch_mode.get(),dispatch_ref.get().strip(),completion.get().strip(),closure.get().strip(),next_action.get().strip(),cancel_reason.get().strip(),now(),code))
-                note=f"Status {old_status} → {target}" if old_status!=target else f"Technical record updated — {target}"
-                if target in ('Cancelled','Reopened'): note+=f" — Reason: {cancel_reason.get().strip()}"
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),note,self.current_user['username']))
-            messagebox.showinfo('Saved','Service workflow updated.'); self.show_service_detail(code)
-        tk.Button(tech,text='Save Workflow Update',command=save_tech,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=16,column=2,sticky='e',padx=10,pady=15)
-        location_tab.grid_columnconfigure((0,1),weight=1)
-        tk.Label(location_tab,text='Equipment Location & Movement',bg=CARD,fg=TEXT,font=('Segoe UI',14,'bold')).grid(row=0,column=0,columnspan=2,sticky='w',padx=18,pady=(18,3))
-        tk.Label(location_tab,text='Optional operational locations only — use when equipment is collected, moved or returned.',bg=CARD,fg=MUTED,font=('Segoe UI',11)).grid(row=1,column=0,columnspan=2,sticky='w',padx=18,pady=(0,10))
-        service_loc=self.form_field(location_tab,'Service / Site Location',2,0); service_loc.insert(0,r['service_location'] or (eq['location'] if eq else '') or '')
-        pickup=self.form_field(location_tab,'Pickup / Collection Location',2,1); pickup.insert(0,r['pickup_location'] or '')
-        drop=self.form_field(location_tab,'Drop / Return Location',4,0); drop.insert(0,r['drop_location'] or '')
-        loc_notes=self.form_field(location_tab,'Location / Movement Notes',4,1); loc_notes.insert(0,r['location_notes'] or '')
-        def save_location():
-            if not self.require_edit(): return
-            with connect() as con:
-                con.execute('UPDATE services SET service_location=?,pickup_location=?,drop_location=?,location_notes=?,modified=? WHERE id=?',(service_loc.get().strip(),pickup.get().strip(),drop.get().strip(),loc_notes.get().strip(),now(),r['id']))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),'Location / movement details updated',self.current_user['username']))
-            messagebox.showinfo('Saved','Location and movement details saved.')
-        tk.Button(location_tab,text='Save Location Details',command=save_location,bg=BLUE,fg='white',bd=0,padx=18,pady=8).grid(row=6,column=1,sticky='e',padx=10,pady=12)
-
-        # Parts Used is integrated with Inventory. Stock issues are linked to this Service ID.
-        pcols=('Part No.','Description','Qty','FOC / Chargeable','Amount','Remarks'); ptr=ttk.Treeview(parts_tab,columns=pcols,show='headings',height=10)
-        for pc in pcols: ptr.heading(pc,text=pc)
-        ptr.pack(fill='both',expand=True,padx=12,pady=(12,6))
-        pform=tk.Frame(parts_tab,bg=CARD); pform.pack(fill='x',padx=12,pady=8)
-        with connect() as con:
-            inv=con.execute("""SELECT i.id,i.code,i.part_name,i.part_number,i.unit,
-                COALESCE(SUM(CASE WHEN m.movement_type IN ('Opening','Receipt','Return','Adjustment +') THEN m.qty
-                                  WHEN m.movement_type IN ('Issue','Adjustment -') THEN -m.qty ELSE 0 END),0) stock
-                FROM inventory_items i LEFT JOIN inventory_movements m ON m.item_id=i.id
-                WHERE i.active=1 GROUP BY i.id ORDER BY i.part_name""").fetchall()
-        invmap={f"{x['code']} — {x['part_name']} ({x['stock']:g} {x['unit']})":x for x in inv}
-        tk.Label(pform,text='Inventory Part',bg=CARD,fg=MUTED,font=('Segoe UI',11)).grid(row=0,column=0,sticky='w',padx=4)
-        partsel=PremiumCombobox(pform,state='readonly',values=list(invmap),width=38); partsel.grid(row=1,column=0,padx=4,sticky='ew')
-        pent={}
-        for i,(key,label,width) in enumerate([('qty','Qty',8),('amount','Amount',10),('remarks','Remarks',22)],1):
-            tk.Label(pform,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',11)).grid(row=0,column=i,sticky='w',padx=4)
-            pent[key]=ttk.Entry(pform,width=width); pent[key].grid(row=1,column=i,padx=4,sticky='ew')
-        pcharge=PremiumCombobox(pform,width=15,state='readonly',values=['FOC','Chargeable']); pcharge.set('Chargeable'); pcharge.grid(row=1,column=4,padx=4)
-        def refresh_parts():
-            ptr.delete(*ptr.get_children())
-            with connect() as con:
-                for x in con.execute('SELECT id,part_no,description,qty,chargeable,amount,remarks FROM parts WHERE service_id=? ORDER BY id DESC',(r['id'],)): ptr.insert('','end',iid=str(x['id']),values=tuple(x)[1:])
-        def save_part():
-            if not self.require_edit(): return
-            item=invmap.get(partsel.get())
-            if not item:return messagebox.showwarning('Required','Select an active Inventory Part.')
-            try: qty=float(pent['qty'].get() or 1); amount=float(pent['amount'].get() or 0)
-            except ValueError:return messagebox.showwarning('Check values','Quantity and amount must be numeric.')
-            if qty<=0:return messagebox.showwarning('Check quantity','Quantity must be greater than zero.')
-            with connect() as con:
-                stock=con.execute("""SELECT COALESCE(SUM(CASE WHEN movement_type IN ('Opening','Receipt','Return','Adjustment +') THEN qty
-                    WHEN movement_type IN ('Issue','Adjustment -') THEN -qty ELSE 0 END),0) FROM inventory_movements WHERE item_id=?""",(item['id'],)).fetchone()[0]
-                if qty>stock:return messagebox.showwarning('Insufficient stock',f"Available stock is {stock:g} {item['unit']}. Receive or adjust stock before issuing this quantity.")
-                cur=con.execute('INSERT INTO parts(service_id,part_no,description,qty,chargeable,amount,remarks) VALUES(?,?,?,?,?,?,?)',(r['id'],item['part_number'] or item['code'],item['part_name'],qty,pcharge.get(),amount,pent['remarks'].get().strip()))
-                con.execute('INSERT INTO inventory_movements(item_id,movement_date,movement_type,qty,service_id,reference,notes,username) VALUES(?,?,?,?,?,?,?,?)',(item['id'],now(),'Issue',qty,r['id'],r['code'],f"Service part row {cur.lastrowid}",self.current_user['username']))
-            add_history(r['id'],f"Inventory issued: {item['part_name']} x {qty}",self.current_user['username'])
-            audit(self.current_user['username'],'service',r['code'],'PART_ISSUE',f"{item['code']} {item['part_name']} x {qty}")
-            partsel.set('')
-            for x in pent.values():x.delete(0,'end')
-            refresh_parts(); messagebox.showinfo('Part issued','Part recorded against the service and deducted from inventory.')
-        tk.Button(pform,text='+ Issue Part',command=save_part,bg=BLUE,fg='white',bd=0,padx=14,pady=8).grid(row=1,column=5,padx=8)
-        def return_part():
-            if not self.require_edit(): return
-            sel=ptr.selection()
-            if not sel:return messagebox.showwarning('Select part','Select the issued part to return.')
-            part_id=int(sel[0])
-            with connect() as con:
-                p=con.execute('SELECT * FROM parts WHERE id=? AND service_id=?',(part_id,r['id'])).fetchone()
-                if not p:return messagebox.showwarning('Part','The selected service part no longer exists.')
-                issue=con.execute("""SELECT m.*,i.code,i.part_name,i.unit FROM inventory_movements m JOIN inventory_items i ON i.id=m.item_id
-                    WHERE m.service_id=? AND m.movement_type='Issue' AND m.notes=? ORDER BY m.id LIMIT 1""",(r['id'],f"Service part row {part_id}")).fetchone()
-                if not issue:return messagebox.showwarning('Legacy part','This part was not issued from Inventory and cannot be stock-returned automatically.')
-                already=con.execute("""SELECT COALESCE(SUM(qty),0) FROM inventory_movements
-                    WHERE service_id=? AND item_id=? AND movement_type='Return' AND reference=?""",(r['id'],issue['item_id'],f"{r['code']}/PART-{part_id}")).fetchone()[0]
-            remaining=float(p['qty'])-float(already or 0)
-            if remaining<=0:return messagebox.showinfo('Already returned','The full issued quantity has already been returned to inventory.')
-            qty=simpledialog.askfloat('Return Part',f"Return quantity for {issue['part_name']}\nMaximum: {remaining:g} {issue['unit']}",minvalue=0.000001,maxvalue=remaining,parent=self)
-            if qty is None:return
-            reason=simpledialog.askstring('Return reason','Reason for return / correction:',parent=self)
-            if not reason or not reason.strip():return messagebox.showwarning('Reason required','A return reason is required for the audit trail.')
-            if not messagebox.askyesno('Confirm Return',f"Return {qty:g} {issue['unit']} of {issue['part_name']} to inventory?\n\nThe original issue record will be preserved.",parent=self):return
-            with connect() as con:
-                con.execute('INSERT INTO inventory_movements(item_id,movement_date,movement_type,qty,service_id,reference,notes,username) VALUES(?,?,?,?,?,?,?,?)',(issue['item_id'],now(),'Return',qty,r['id'],f"{r['code']}/PART-{part_id}",reason.strip(),self.current_user['username']))
-            add_history(r['id'],f"Inventory returned: {issue['part_name']} x {qty:g}. Reason: {reason.strip()}",self.current_user['username'])
-            audit(self.current_user['username'],'service',r['code'],'PART_RETURN',f"{issue['code']} {issue['part_name']} x {qty:g}; {reason.strip()}")
-            messagebox.showinfo('Returned','Stock returned successfully. The original issue remains in service history.')
-        tk.Button(pform,text='Return Selected',command=return_part,bg='#6B7280',fg='white',bd=0,padx=12,pady=8).grid(row=1,column=6,padx=4)
-        refresh_parts()
-
-        # Calibration fields only matter when the service reason is Calibration.
-        cal_tab.grid_columnconfigure((0,1,2),weight=1)
-        cal_received=self.form_field(cal_tab,'Received Date',0,0); cal_date=self.form_field(cal_tab,'Performed Date',0,1); cal_result=self.form_field(cal_tab,'Result',0,2,['Pass','Fail'])
-        cert=self.form_field(cal_tab,'Certificate No.',2,0); cert_date=self.form_field(cal_tab,'Certificate Date',2,1); next_due=self.form_field(cal_tab,'Next Due Date',2,2)
-        performed_by=self.form_field(cal_tab,'Performed By',4,0); standards=self.form_field(cal_tab,'Standards / Reference',4,1); cal_remarks=self.form_field(cal_tab,'Remarks',4,2)
-        with connect() as con: cr=con.execute('SELECT * FROM calibration WHERE service_id=?',(r['id'],)).fetchone()
-        if cr:
-            cal_received.insert(0,cr['received_date'] or ''); cal_date.insert(0,cr['calibration_date'] or ''); cal_result.set(cr['result'] or ''); cert.insert(0,cr['certificate_no'] or ''); cert_date.insert(0,cr['certificate_date'] or ''); next_due.insert(0,cr['next_due'] or ''); performed_by.insert(0,cr['performed_by'] or ''); standards.insert(0,cr['standards_reference'] or ''); cal_remarks.insert(0,cr['remarks'] or '')
-        def save_cal():
-            if not self.require_edit(): return
-            if r['reason']=='Calibration' and (not cal_date.get() or not cal_result.get()): return messagebox.showwarning('Required','Performed Date and Result are required for calibration jobs.')
-            for label,value in [('Received Date',cal_received.get()),('Performed Date',cal_date.get()),('Certificate Date',cert_date.get()),('Next Due Date',next_due.get())]:
-                if value.strip():
-                    try: datetime.datetime.strptime(value.strip(),'%Y-%m-%d')
-                    except ValueError:return messagebox.showwarning(label,f'{label} must be YYYY-MM-DD.')
-            upsert_calibration(r['id'],cal_received.get(),cal_date.get(),cal_result.get(),cert.get(),cert_date.get(),next_due.get(),performed_by.get(),standards.get(),cal_remarks.get())
-            add_history(r['id'],f"Calibration updated: {cal_result.get() or 'details saved'}",self.current_user['username']); audit(self.current_user['username'],'service',code,'CALIBRATION_UPDATE',cal_result.get() or 'details saved'); messagebox.showinfo('Saved','Calibration information saved.')
-        tk.Button(cal_tab,text='Save Calibration',command=save_cal,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=6,column=2,sticky='e',padx=10,pady=15)
-        if r['reason']!='Calibration': tk.Label(cal_tab,text='This service is not marked as Calibration. These fields are optional.',bg=CARD,fg=MUTED).grid(row=7,column=0,columnspan=2,pady=8)
-
-        # Compact document cards aligned to the approved Service Request design.
-        tk.Label(att_tab,text='Photos / Documents',bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold')).pack(anchor='w',padx=10,pady=(10,3))
-        cards=tk.Frame(att_tab,bg=CARD); cards.pack(fill='x',padx=8,pady=(2,5))
-        details=tk.Frame(att_tab,bg=CARD); details.pack(fill='both',expand=True,padx=8,pady=(0,6))
-        acols=('Document','Type','Original','Stored','Saved'); atr=ttk.Treeview(details,columns=acols,show='headings',height=7)
-        for ac in acols: atr.heading(ac,text=ac)
-        atr.pack(fill='both',expand=True)
-        def human(n):
-            n=float(n or 0)
-            for unit in ('B','KB','MB','GB'):
-                if n<1024:return f'{n:.0f} {unit}' if unit=='B' else f'{n:.1f} {unit}'
-                n/=1024
-            return f'{n:.1f} TB'
-        def refresh_att():
-            for w in cards.winfo_children(): w.destroy()
-            for x in atr.get_children(): atr.delete(x)
-            with connect() as con: docs=con.execute('SELECT original_name,kind,original_size,stored_size,created FROM attachments WHERE service_id=? ORDER BY id DESC',(r['id'],)).fetchall()
-            for i,x in enumerate(docs[:4]):
-                tile=tk.Frame(cards,bg='#F8FBFE',width=112,height=88,highlightthickness=1,highlightbackground='#C8DDF0'); tile.pack(side='left',padx=3); tile.pack_propagate(False)
-                icon='PDF' if str(x['kind']).lower()=='pdf' or str(x['original_name']).lower().endswith('.pdf') else 'PHOTO'
-                tk.Label(tile,text=icon,bg='#EAF4FF',fg=RED if icon=='PDF' else BLUE,font=('Segoe UI',11,'bold')).pack(fill='x',pady=(8,4))
-                tk.Label(tile,text=x['original_name'],bg='#F8FBFE',fg=TEXT,font=('Segoe UI',10),wraplength=100,justify='center').pack(padx=4)
-            
-            for x in docs: atr.insert('','end',values=(x['original_name'],x['kind'],human(x['original_size']),human(x['stored_size']),x['created']))
-        def attach():
-            if not self.require_edit(): return
-            path=filedialog.askopenfilename(filetypes=[('Images / PDF','*.jpg *.jpeg *.png *.webp *.pdf'),('All files','*.*')])
-            if not path:return
-            try: meta=store_attachment(path,code)
-            except Exception as ex:return messagebox.showerror('Attachment',str(ex))
-            add_attachment(r['id'],meta); add_history(r['id'],f"Attachment added: {meta['original_name']}",self.current_user['username']); audit(self.current_user['username'],'service',code,'ATTACHMENT_ADD',meta['original_name']); refresh_att()
-        tk.Button(cards,text='+\nAdd Files',command=attach,bg='white',fg=BLUE,bd=1,relief='solid',font=('Segoe UI',11,'bold'),width=10,height=4).pack(side='left',padx=3)
-        refresh_att()
-
-        comm.grid_columnconfigure((0,1,2),weight=1)
-        foc=self.form_field(comm,'Billing Decision',0,0,['','FOC','Chargeable']); foc.set(r['foc_chargeable'] or '')
-        quote=self.form_field(comm,'Quotation / Approval Status',0,1,['','Quotation Sent','No Quotation - Verbal Discussion','Estimate Shared by Phone','Estimate Shared by Email/WhatsApp','Quotation Not Required','FOC','AMC Covered','Pending Decision']); quote.set(r['quote_status'] or '')
-        pay=self.form_field(comm,'Payment Status',0,2,['Not Applicable','To Be Invoiced','Invoice Raised','Pending','Part Paid','Paid']); pay.set(r['payment_status'] or 'Not Applicable')
-        svc=self.form_field(comm,'Service Charge',2,0); svc.insert(0,str(r['service_charge'] or ''))
-        parts=self.form_field(comm,'Parts Charge',2,1); parts.insert(0,str(r['parts_charge'] or ''))
-        qa=self.form_field(comm,'Quote Amount',2,2); qa.insert(0,str(r['quote_amount'] or ''))
-        qno=self.form_field(comm,'Quote No.',4,0); qno.insert(0,r['quote_no'] or '')
-        qdate=self.form_field(comm,'Quote Date',4,1); qdate.insert(0,r['quote_date'] or '')
-        po=self.form_field(comm,'PO / Approval Reference',4,2); po.insert(0,r['po_reference'] or '')
-        inv=self.form_field(comm,'Invoice No.',6,0); inv.insert(0,r['invoice_no'] or '')
-        invdate=self.form_field(comm,'Invoice Date',6,1); invdate.insert(0,r['invoice_date'] or '')
-        invamt=self.form_field(comm,'Invoice Amount',6,2); invamt.insert(0,str(r['invoice_amount'] or ''))
-
-        def money(x):
-            try:return float(x or 0)
-            except:return 0
-        paid_total=self.q1('SELECT COALESCE(SUM(amount),0) FROM payments WHERE service_id=?',(r['id'],))
-        balance=max(0,money(r['invoice_amount'])-paid_total)
-        summary=tk.Label(comm,text=f"Payments received: ₹{paid_total:,.2f}    Outstanding: ₹{balance:,.2f}",bg=CARD,fg=TEXT,font=('Segoe UI',10,'bold'))
-        summary.grid(row=8,column=0,columnspan=3,sticky='w',padx=10,pady=8)
-
-        def save_comm():
-            if not self.require_edit(): return
-            if foc.get()=='FOC': pay.set('Not Applicable')
-            if foc.get()=='Chargeable' and pay.get()=='Not Applicable': return messagebox.showwarning('Payment status','Select the applicable payment status for a chargeable service.')
-            with connect() as con:
-                con.execute('''UPDATE services SET foc_chargeable=?,quote_status=?,payment_status=?,service_charge=?,parts_charge=?,quote_amount=?,quote_no=?,quote_date=?,po_reference=?,invoice_no=?,invoice_date=?,invoice_amount=?,modified=? WHERE code=?''',(foc.get(),quote.get(),pay.get(),money(svc.get()),money(parts.get()),money(qa.get()),qno.get().strip(),qdate.get().strip(),po.get().strip(),inv.get().strip(),invdate.get().strip(),money(invamt.get()),now(),code))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial update: {foc.get() or 'billing pending'} / {pay.get()}",self.current_user['username']))
-            messagebox.showinfo('Saved','Commercial information saved.'); self.show_service_detail(code)
-        tk.Button(comm,text='Save Commercial Update',command=save_comm,bg=BLUE,fg='white',bd=0,padx=18,pady=9).grid(row=10,column=2,sticky='e',padx=10,pady=10)
-
-        discussion=tk.LabelFrame(comm,text=' Commercial discussion / approval log ',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold'))
-        discussion.grid(row=12,column=0,columnspan=3,sticky='ew',padx=10,pady=8); discussion.grid_columnconfigure((0,1,2),weight=1)
-        ddate=self.form_field(discussion,'Date / Time',0,0); ddate.insert(0,now())
-        dperson=self.form_field(discussion,'Person / Customer',0,1)
-        dmethod=self.form_field(discussion,'Method',0,2,['Phone','Email','WhatsApp','In Person','Other'])
-        damount=self.form_field(discussion,'Amount Discussed',2,0)
-        dapproved=self.form_field(discussion,'Approved?',2,1,['Pending','Yes','No']); dapproved.set('Pending')
-        dnotes=self.form_field(discussion,'Discussion Notes',2,2)
-        def add_discussion():
-            if not self.require_edit(): return
-            if not dnotes.get().strip(): return messagebox.showwarning('Discussion','Enter discussion / approval notes.')
-            with connect() as con:
-                con.execute('INSERT INTO commercial_discussions(service_id,discussion_date,person,method,amount,approved,notes,user) VALUES(?,?,?,?,?,?,?,?)',(r['id'],ddate.get(),dperson.get().strip(),dmethod.get(),money(damount.get()),dapproved.get(),dnotes.get().strip(),self.current_user['username']))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Commercial discussion: {dnotes.get().strip()}",self.current_user['username']))
-            self.show_service_detail(code)
-        tk.Button(discussion,text='+ Add Discussion',command=add_discussion,bg='#EAF2FF',fg=BLUE,bd=0,padx=14,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=8)
-
-        payment=tk.LabelFrame(comm,text=' Payment entry ',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold'))
-        payment.grid(row=14,column=0,columnspan=3,sticky='ew',padx=10,pady=8); payment.grid_columnconfigure((0,1,2),weight=1)
-        pdate=self.form_field(payment,'Payment Date',0,0); pdate.insert(0,today())
-        pamount=self.form_field(payment,'Amount Received',0,1)
-        pmode=self.form_field(payment,'Mode',0,2,['Bank Transfer','Cheque','Cash','UPI','Card','Other'])
-        pref=self.form_field(payment,'Reference',2,0); pnote=self.form_field(payment,'Notes',2,1)
-        def add_payment():
-            if not self.require_edit(): return
-            amount=money(pamount.get())
-            if amount<=0:return messagebox.showwarning('Payment','Enter an amount greater than zero.')
-            with connect() as con:
-                con.execute('INSERT INTO payments(service_id,payment_date,amount,mode,reference,notes,user) VALUES(?,?,?,?,?,?,?)',(r['id'],pdate.get(),amount,pmode.get(),pref.get().strip(),pnote.get().strip(),self.current_user['username']))
-                total=con.execute('SELECT COALESCE(SUM(amount),0) FROM payments WHERE service_id=?',(r['id'],)).fetchone()[0]
-                invoice=money(invamt.get()) or money(r['invoice_amount'])
-                new_status='Paid' if invoice>0 and total>=invoice else 'Part Paid'
-                con.execute('UPDATE services SET amount_received=?,payment_status=?,payment_reference=?,modified=? WHERE id=?',(total,new_status,pref.get().strip(),now(),r['id']))
-                con.execute('INSERT INTO history(service_id,event_date,note,user) VALUES(?,?,?,?)',(r['id'],now(),f"Payment recorded: ₹{amount:,.2f} ({pmode.get() or 'mode not specified'})",self.current_user['username']))
-            self.show_service_detail(code)
-        tk.Button(payment,text='+ Record Payment',command=add_payment,bg=GREEN,fg='white',bd=0,padx=14,pady=8).grid(row=4,column=2,sticky='e',padx=10,pady=8)
-
-        logs=tk.Frame(comm,bg=CARD); logs.grid(row=16,column=0,columnspan=3,sticky='nsew',padx=10,pady=8)
-        lcols=('Date','Type','Person / Mode','Amount','Status / Reference','Notes'); ltr=ttk.Treeview(logs,columns=lcols,show='headings',height=7)
-        for x in lcols:ltr.heading(x,text=x)
-        ltr.pack(fill='both',expand=True)
-        with connect() as con:
-            for x in con.execute('SELECT discussion_date,person,method,amount,approved,notes FROM commercial_discussions WHERE service_id=? ORDER BY id DESC',(r['id'],)):
-                ltr.insert('','end',values=(x['discussion_date'],'Discussion',x['person'] or x['method'],x['amount'],x['approved'],x['notes']))
-            for x in con.execute('SELECT payment_date,mode,amount,reference,notes FROM payments WHERE service_id=? ORDER BY id DESC',(r['id'],)):
-                ltr.insert('','end',values=(x['payment_date'],'Payment',x['mode'],x['amount'],x['reference'],' '+(x['notes'] or '')))
-
-        cols=('Date','User','Update'); tr=ttk.Treeview(hist,columns=cols,show='headings'); [tr.heading(c,text=c) for c in cols]; tr.column('Date',width=150); tr.column('User',width=100); tr.column('Update',width=800); tr.pack(fill='both',expand=True,padx=12,pady=12)
-        with connect() as con:
-            sid=r['id']
-            for x in con.execute('SELECT event_date,user,note FROM history WHERE service_id=? ORDER BY id DESC',(sid,)):tr.insert('','end',values=tuple(x))
+        def refresh(*_):
+            visible_rows.clear(); selected_codes.clear()
+            clauses=[]; args=[]
+            if status.get()!='All': clauses.append('s.status=?'); args.append(status.get())
+            if reason.get()!='All': clauses.append('s.reason=?'); args.append(reason.get())
+            if engineer.get()!='All': clauses.append('s.engineer=?'); args.append(engineer.get())
+            if payment.get()!='All': clauses.append('s.payment_status=?'); args.append(payment.get())
+            if date_from.get().strip(): clauses.append('date(s.opened)>=date(?)'); args.append(date_from.get().strip())
+            if date_to.get().strip(): clauses.append('date(s.opened)<=date(?)'); args.append(date_to.get().strip())
+            term='%'+q.get().strip()+'%'
+            if q.get().strip():
+                clauses.append("(s.code LIKE ? OR c.name LIKE ? OR e.code LIKE ? OR s.reason LIKE ? OR s.engineer LIKE ? OR s.complaint LIKE ?)")
+                args.extend([term]*6)
+            sql='''SELECT s.code,s.opened,COALESCE(c.name,'—'),COALESCE(e.code,'—'),COALESCE(s.reason,''),
+                          COALESCE(s.engineer,'Unassigned'),COALESCE(s.status,''),COALESCE(s.payment_status,'')
+                   FROM services s LEFT JOIN clients c ON c.id=s.client_id LEFT JOIN equipment e ON e.id=s.equipment_id'''
+            if clauses: sql+=' WHERE '+' AND '.join(clauses)
+            direction='ASC' if order.get()=='Oldest first' else 'DESC'
+            sql+=f' ORDER BY date(s.opened) {direction},s.id {direction}'
+            with connect() as con: visible_rows.extend(tuple(row) for row in con.execute(sql))
+            render_rows(); scroller.yview_moveto(0)
+        select_all.bind('<Button-1>',lambda _e:(selected_codes.difference_update(str(r[0]) for r in visible_rows) if update_selection() else selected_codes.update(str(r[0]) for r in visible_rows),render_rows(),'break')[-1])
+        for widget in (search,status,reason,engineer,payment,order):
+            if isinstance(widget,PremiumCombobox): widget.bind('<<ComboboxSelected>>',refresh)
+        refresh_id={'after':None}
+        def schedule_refresh(_event=None):
+            if refresh_id['after'] is not None:
+                try:self.after_cancel(refresh_id['after'])
+                except tk.TclError:pass
+            refresh_id['after']=self.after(220,refresh)
+        for widget in (search,from_entry,to_entry):
+            widget.bind('<KeyRelease>',schedule_refresh,add='+')
+            widget.bind('<FocusOut>',lambda _e:self.after_idle(refresh),add='+')
+        scroller.bind('<MouseWheel>',lambda e:scroller.yview_scroll(-1 if e.delta>0 else 1,'units'))
+        scroller.bind('<Button-4>',lambda _e:scroller.yview_scroll(-1,'units'))
+        scroller.bind('<Button-5>',lambda _e:scroller.yview_scroll(1,'units'))
+        refresh()
 
     def show_clients(self):
-        self.clear(); self.section_header('Clients','Client Master / Service Customers')
-        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
-        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
-        tk.Label(tools,text='Search Client',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left',padx=(10,5),pady=8)
-        q=tk.StringVar(); ent=ttk.Entry(tools,textvariable=q,width=42); ent.pack(side='left',pady=7)
-        tk.Label(tools,text='Name / Contact / Mobile / Email / City',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(side='left',padx=8)
-        tk.Button(tools,text='Export CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Clients.csv'),bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=6).pack(side='right',padx=4,pady=5)
-        tk.Button(tools,text='+ New Client',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.client_dialog).pack(side='right',padx=8,pady=5)
-        if self.current_user['role']=='Administrator':
-            tk.Button(tools,text='Merge Clients',bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=6,command=self.merge_clients_dialog).pack(side='right',padx=3,pady=5)
-        card=self.card(body); card.pack(fill='both',expand=True)
-        cols=('Client ID','Client Name','Contact Person','Mobile','Email','City'); tr=ttk.Treeview(card,columns=cols,show='headings')
-        widths=(90,230,160,120,220,130)
-        for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
-        tr.pack(fill='both',expand=True,padx=7,pady=7)
-        def load(*_):
-            for i in tr.get_children(): tr.delete(i)
-            term='%'+q.get().strip()+'%'
-            with connect() as con:
-                rows=con.execute('SELECT code,name,contact,mobile,email,city FROM clients WHERE ?="" OR name LIKE ? OR contact LIKE ? OR mobile LIKE ? OR email LIKE ? OR city LIKE ? ORDER BY id DESC',(q.get().strip(),term,term,term,term,term)).fetchall()
-            for r in rows: tr.insert('','end',values=tuple(r))
-        q.trace_add('write',load); load()
-        tr.bind('<Double-1>',lambda e:self.show_client_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
-
-    def show_client_360(self,code):
         self.clear()
+        self.section_header('Clients','Client Master / Service Customers',fixed=True)
+        tools=tk.Frame(self.dashboard_header_host,bg=CARD,highlightthickness=1,highlightbackground=BORDER)
+        tools.pack(fill='x',padx=10,pady=(0,8))
+        row=tk.Frame(tools,bg=CARD); row.pack(fill='x',padx=12,pady=(9,4))
+        q=tk.StringVar()
+        search=ttk.Entry(row,textvariable=q,width=30)
+        cities=['All']
         with connect() as con:
-            r=con.execute('SELECT * FROM clients WHERE code=?',(code,)).fetchone()
-            if not r:return
-            eq=con.execute('SELECT * FROM equipment WHERE client_id=? ORDER BY id DESC',(r['id'],)).fetchall()
-            svc=con.execute('''SELECT s.code,s.opened,e.code equipment,e.make,e.model,e.serial,s.reason,s.status,s.warranty,s.amc,s.foc_chargeable,s.payment_status
-                               FROM services s LEFT JOIN equipment e ON e.id=s.equipment_id WHERE s.client_id=? ORDER BY s.id DESC''',(r['id'],)).fetchall()
-        head=tk.Frame(self.content,bg='#164F7C',height=42); head.pack(fill='x'); head.pack_propagate(False)
-        tk.Label(head,text=f"Client Details  •  {r['code']}",bg='#164F7C',fg='white',font=('Segoe UI',14,'bold')).pack(side='left',padx=20)
-        tk.Label(head,text=r['name'],bg='#164F7C',fg='#DCECF8',font=('Segoe UI',11,'bold')).pack(side='left',padx=10)
-        tk.Button(head,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',bd=0,padx=12,pady=5).pack(side='right',padx=10,pady=6)
-        if self.can_edit(): tk.Button(head,text='Transfer Ownership',command=lambda:self.transfer_equipment_ownership(r['code']),bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=5).pack(side='right',padx=3,pady=6)
-        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=10,pady=(8,0))
-        self.metric(metrics,'Equipment',len(eq),BLUE); self.metric(metrics,'Total Services',len(svc),GREEN)
-        self.metric(metrics,'Open Calls',sum(1 for x in svc if x['status'] not in ('Closed','Cancelled')),ORANGE)
-        self.metric(metrics,'Payment Pending',sum(1 for x in svc if x['payment_status'] in ('Pending','Part Paid')),RED)
-        info=self.card(self.content); info.pack(fill='x',padx=10,pady=7)
-        details=[('Contact',r['contact']),('Mobile',r['mobile']),('Email',r['email']),('City',r['city']),('Address',r['address'])]
-        for i,(k,v) in enumerate(details):
-            tk.Label(info,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',11)).grid(row=0,column=i,sticky='w',padx=12,pady=(10,2))
-            tk.Label(info,text=v or '—',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).grid(row=1,column=i,sticky='w',padx=12,pady=(0,10))
-            info.grid_columnconfigure(i,weight=1)
-        tabs=CapsuleNotebook(self.content); tabs.pack(fill='both',expand=True,padx=10,pady=(0,10))
-        et=tk.Frame(tabs,bg=CARD); st=tk.Frame(tabs,bg=CARD); tabs.add(et,text=' Equipment '); tabs.add(st,text=' Service History ')
-        ecols=('SERVIX ID','Make','Model','Serial','Stock / External ID','Warranty Till','AMC Till'); etr=ttk.Treeview(et,columns=ecols,show='headings')
-        for x in ecols:etr.heading(x,text=x)
-        etr.pack(fill='both',expand=True,padx=12,pady=12)
-        for x in eq:etr.insert('','end',values=(x['code'],x['make'],x['model'],x['serial'],x['stock_id'],x['warranty_till'],x['amc_till']))
-        etr.bind('<Double-1>',lambda e:self.show_equipment_360(etr.item(etr.focus(),'values')[0]) if etr.focus() else None)
-        scols=('Service ID','Opened','Equipment','Make / Model','Serial','Reason','Status','Warranty','AMC','Billing','Payment'); strr=ttk.Treeview(st,columns=scols,show='headings')
-        for x in scols:strr.heading(x,text=x)
-        strr.pack(fill='both',expand=True,padx=12,pady=12)
-        for x in svc:strr.insert('','end',values=(x['code'],x['opened'],x['equipment'],f"{x['make']} {x['model']}",x['serial'],x['reason'],x['status'],x['warranty'],x['amc'],x['foc_chargeable'] or '—',x['payment_status'] or '—'))
-        strr.bind('<Double-1>',lambda e:self.show_service_detail(strr.item(strr.focus(),'values')[0]) if strr.focus() else None)
+            cities += sorted({str(r[0]) for r in con.execute("SELECT DISTINCT city FROM clients WHERE COALESCE(city,'')!=''")})
+        city=PremiumCombobox(row,width=13,state='readonly',values=cities); city.set('All')
+        order=PremiumCombobox(row,width=13,state='readonly',values=['Recently added','Name A–Z']); order.set('Recently added')
+        def field(parent,label,widget):
+            group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,11))
+            tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
+            widget.pack(anchor='w')
+        field(row,'Search name / contact / mobile / email',search)
+        field(row,'City',city); field(row,'Sort',order)
+        actions=tk.Frame(row,bg=CARD); actions.pack(side='right')
+        if self.current_user['role']=='Administrator':
+            tk.Button(actions,text='Merge Clients',bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,command=self.merge_clients_dialog,cursor='hand2').pack(side='right',padx=(4,0))
+        tk.Button(actions,text='+ New Client',bg=BLUE,fg='white',bd=0,padx=12,pady=6,command=self.client_dialog,cursor='hand2').pack(side='right',padx=(4,0))
+        row2=tk.Frame(tools,bg=CARD); row2.pack(fill='x',padx=12,pady=(3,9))
+        selection=tk.Frame(row2,bg=CARD); selection.pack(side='left')
+        selected_codes=set(); check_images=self._selection_images()
+        selected_label=tk.Label(selection,text='0 selected',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold')); selected_label.pack(side='left',padx=(0,9))
+        select_btn=tk.Button(selection,text='Select Visible',bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=5,cursor='hand2'); select_btn.pack(side='left')
+        btns=tk.Frame(row2,bg=CARD); btns.pack(side='right')
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=(0,10))
+        card=self.card(body); card.pack(fill='both',expand=True)
+        wrap=tk.Frame(card,bg=CARD); wrap.pack(fill='both',expand=True,padx=8,pady=8)
+        cols=('Client ID','Client Name','Contact Person','Mobile','Email','City')
+        tr=ttk.Treeview(wrap,columns=cols,show='tree headings',selectmode='extended')
+        tr.heading('#0',text=''); tr.column('#0',width=34,minwidth=34,stretch=False,anchor='center')
+        widths=(95,230,160,125,240,135)
+        for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
+        tr.grid(row=0,column=0,sticky='nsew')
+        vs=ttk.Scrollbar(wrap,orient='vertical',command=tr.yview,style='Dashboard.Vertical.TScrollbar')
+        hs=ttk.Scrollbar(wrap,orient='horizontal',command=tr.xview)
+        vs.grid(row=0,column=1,sticky='ns'); hs.grid(row=1,column=0,sticky='ew')
+        wrap.rowconfigure(0,weight=1); wrap.columnconfigure(0,weight=1)
+        tr.configure(yscrollcommand=vs.set,xscrollcommand=hs.set)
+        visible={}; muted=False
+        def update_marks():
+            for iid in tr.get_children():
+                code=str(tr.item(iid,'values')[0])
+                tr.item(iid,image=check_images[1] if code in selected_codes else check_images[0])
+            selected_label.configure(text=f'{len(selected_codes)} selected')
+            current=[str(tr.item(i,'values')[0]) for i in tr.get_children()]
+            all_checked=bool(current) and all(code in selected_codes for code in current)
+            select_btn.configure(text='Clear Visible' if all_checked else 'Select Visible')
+        def toggle_visible():
+            current=[str(tr.item(i,'values')[0]) for i in tr.get_children()]
+            if current and all(code in selected_codes for code in current):
+                selected_codes.difference_update(current)
+            else:selected_codes.update(current)
+            update_marks()
+        select_btn.configure(command=toggle_visible)
+        def toggle_checkbox(event):
+            if tr.identify_region(event.x,event.y)!='tree':return
+            iid=tr.identify_row(event.y)
+            if not iid:return
+            code=str(tr.item(iid,'values')[0])
+            if code in selected_codes:selected_codes.remove(code)
+            else:selected_codes.add(code)
+            update_marks()
+            return 'break'
+        def sync_rows(_event=None):
+            visible_codes={str(tr.item(i,'values')[0]) for i in tr.get_children()}
+            for code in visible_codes:selected_codes.discard(code)
+            for iid in tr.selection(): selected_codes.add(str(tr.item(iid,'values')[0]))
+            update_marks()
+        tr.bind('<Button-1>',toggle_checkbox,add='+')
+        tr.bind('<<TreeviewSelect>>',sync_rows,add='+')
+        def selected_rows():
+            if not selected_codes:return []
+            codes=list(selected_codes); marks=','.join('?' for _ in codes)
+            with connect() as con:
+                return [tuple(r) for r in con.execute(f'SELECT code,name,contact,mobile,email,city FROM clients WHERE code IN ({marks}) ORDER BY name',codes)]
+        def export_selected():
+            self._save_rows_csv('Selected Clients',['Client ID','Client Name','Contact Person','Mobile','Email','City'],selected_rows(),'SERVIX_Selected_Clients.csv')
+        def print_selected():
+            self._print_rows_pdf('Selected Clients',['Client ID','Client Name','Contact Person','Mobile','Email','City'],selected_rows(),'SERVIX_Selected_Clients.pdf')
+        tk.Button(btns,text='Print Selected PDF',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
+        tk.Button(btns,text='Export Selected CSV',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
+        tk.Button(btns,text='Export Current CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Clients.csv'),bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right')
 
-    def merge_clients_dialog(self):
-        if self.current_user['role']!='Administrator':
-            return messagebox.showwarning('Administrator required','Only an Administrator can merge Client records.')
-        with connect() as con: rows=con.execute('SELECT id,code,name,mobile,email FROM clients ORDER BY name,code').fetchall()
-        if len(rows)<2:return messagebox.showinfo('Merge Clients','At least two Client records are required.')
-        labels=[f"{r['code']} — {r['name']} — {r['mobile'] or r['email'] or 'No contact'}" for r in rows]; lookup={x:r for x,r in zip(labels,rows)}
-        d=tk.Toplevel(self); d.title('Merge Duplicate Clients'); center_window(d, 710, 470); d.configure(bg=CARD); d.transient(self); d.grab_set()
-        tk.Label(d,text='Merge Duplicate Clients',bg=CARD,fg=NAVY,font=('Segoe UI',12,'bold')).pack(anchor='w',padx=24,pady=(20,8))
-        tk.Label(d,text='Keep Client (master record)',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); keep=PremiumCombobox(d,values=labels,state='readonly'); keep.pack(fill='x',padx=24,pady=(2,10))
-        tk.Label(d,text='Merge Client (duplicate record)',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); source=PremiumCombobox(d,values=labels,state='readonly'); source.pack(fill='x',padx=24,pady=(2,10))
-        tk.Label(d,text='Merge reason *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
-        def merge():
-            if not keep.get() or not source.get() or keep.get()==source.get():return messagebox.showwarning('Merge Clients','Select two different Client records.',parent=d)
-            why=reason.get().strip()
-            if not why:return messagebox.showwarning('Reason required','Enter the reason for this Client merge.',parent=d)
-            k=lookup[keep.get()]; src=lookup[source.get()]
-            with connect() as con:
-                ec=con.execute('SELECT COUNT(*) FROM equipment WHERE client_id=?',(src['id'],)).fetchone()[0]; sc=con.execute('SELECT COUNT(*) FROM services WHERE client_id=?',(src['id'],)).fetchone()[0]
-            if not messagebox.askyesno('Confirm Client merge',f"KEEP: {k['code']} — {k['name']}\nMERGE: {src['code']} — {src['name']}\n\nMove {ec} equipment and {sc} service records to the kept Client?\n\nThe duplicate Client record will then be removed. This cannot be automatically undone.\n\nReason: {why}",parent=d):return
-            with connect() as con:
-                con.execute('UPDATE equipment SET client_id=?,modified=? WHERE client_id=?',(k['id'],now(),src['id']))
-                con.execute('UPDATE services SET client_id=?,modified=? WHERE client_id=?',(k['id'],now(),src['id']))
-                con.execute('DELETE FROM clients WHERE id=?',(src['id'],))
-            audit(self.current_user['username'],'client',k['code'],'MERGE',f"Merged {src['code']} — {src['name']} into {k['code']} — {k['name']}; equipment={ec}; services={sc}; reason: {why}")
-            d.destroy(); self.show_client_360(k['code'])
-        tk.Button(d,text='Merge Clients',command=merge,bg=RED,fg='white',bd=0,padx=18,pady=8).pack(pady=12)
-
-    def client_dialog(self):
-        if not self.require('clients') or not self.require_edit(): return
-        d=tk.Toplevel(self); d.title('Add Client'); center_window(d, 620, 630); d.configure(bg=CARD); vals={}; specs=[('name','Client / Company',True),('contact','Contact Person',False),('mobile','Mobile',False),('email','Email',False),('address','Address',False),('city','City',False),('notes','Notes',False)]
-        for i,(k,l,req) in enumerate(specs):tk.Label(d,text=l+(' *' if req else ''),bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=25,pady=(10,2)); vals[k]=ttk.Entry(d); vals[k].pack(fill='x',padx=25)
-        def save():
-            if not vals['name'].get() or (not vals['mobile'].get() and not vals['email'].get()):return messagebox.showwarning('Required','Client name and at least Mobile or Email are required.',parent=d)
-            with connect() as con:
-                dup=con.execute('SELECT code,name FROM clients WHERE (mobile<>"" AND mobile=?) OR (email<>"" AND LOWER(email)=LOWER(?))',(vals['mobile'].get().strip(),vals['email'].get().strip())).fetchone()
-                override_reason=''
-                if dup:
-                    choice=messagebox.askyesnocancel('Possible duplicate',f"Possible duplicate: {dup['code']} — {dup['name']}\n\nYES = View / use existing client\nNO = Request Create Anyway\nCANCEL = Return to this form",parent=d)
-                    if choice is None:return
-                    if choice:
-                        d.destroy(); return self.show_client_360(dup['code'])
-                    if self.current_user['role']!='Administrator':
-                        return messagebox.showwarning('Administrator required','Only an Administrator can create a Client when Mobile or Email already matches an existing Client.\n\nUse the existing Client or ask an Administrator to review the duplicate.',parent=d)
-                    override_reason=simpledialog.askstring('Duplicate override','Reason for creating a separate Client despite the duplicate match:',parent=d)
-                    if not override_reason or not override_reason.strip():
-                        return messagebox.showwarning('Reason required','A duplicate override reason is mandatory.',parent=d)
-                    if not messagebox.askyesno('Confirm duplicate override',f"Create a separate Client even though {dup['code']} — {dup['name']} has the same Mobile or Email?\n\nReason: {override_reason.strip()}",parent=d):return
-                ts=now(); code=next_code('CLI','clients'); con.execute('INSERT INTO clients(code,name,contact,mobile,email,address,city,notes,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?)',(code,*[vals[k].get().strip() for k in ('name','contact','mobile','email','address','city','notes')],ts,ts))
-            audit(self.current_user['username'],'client',code,'DUPLICATE_OVERRIDE' if override_reason else 'CREATE',f"Matched {dup['code']} — {dup['name']}; reason: {override_reason.strip()}" if override_reason else 'Client created')
-            d.destroy(); self.show_client_360(code)
-        tk.Button(d,text='Save Client',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=20)
+        def load(*_):
+            term='%'+q.get().strip()+'%'; clauses=[]; args=[]
+            if q.get().strip():
+                clauses.append("(name LIKE ? OR contact LIKE ? OR mobile LIKE ? OR email LIKE ? OR city LIKE ?)")
+                args.extend([term]*5)
+            if city.get()!='All':clauses.append('city=?');args.append(city.get())
+            where=' WHERE '+' AND '.join(clauses) if clauses else ''
+            sort='name COLLATE NOCASE ASC' if order.get()=='Name A–Z' else 'id DESC'
+            sql='SELECT code,name,contact,mobile,email,city FROM clients'+where+f' ORDER BY {sort}'
+            for iid in tr.get_children():tr.delete(iid)
+            with connect() as con:rows=con.execute(sql,args).fetchall()
+            for row_data in rows:
+                vals=tuple(row_data); code=str(vals[0])
+                tr.insert('','end',values=vals,image=check_images[1] if code in selected_codes else check_images[0])
+            update_marks()
+        q.trace_add('write',load)
+        city.bind('<<ComboboxSelected>>',load); order.bind('<<ComboboxSelected>>',load)
+        tr.bind('<Double-1>',lambda e:self.show_client_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+        load()
 
     def show_equipment(self):
-        self.clear(); self.section_header('Equipment','Permanent Equipment Master / Service History')
-        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
-        tools=tk.Frame(body,bg=CARD,highlightthickness=1,highlightbackground=BORDER); tools.pack(fill='x',pady=(0,6))
-        tk.Label(tools,text='Search Equipment',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(side='left',padx=(10,5),pady=8)
-        q=tk.StringVar(); ttk.Entry(tools,textvariable=q,width=42).pack(side='left',pady=7)
-        tk.Label(tools,text='Equipment ID / Client / Make / Model / Serial No.',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(side='left',padx=8)
-        tk.Button(tools,text='Export CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Equipment.csv'),bg='#EAF2FF',fg=BLUE,bd=0,padx=11,pady=6).pack(side='right',padx=4,pady=5)
-        tk.Button(tools,text='+ New Equipment',bg=BLUE,fg='white',bd=0,padx=13,pady=6,command=self.equipment_dialog).pack(side='right',padx=8,pady=5)
-        card=self.card(body); card.pack(fill='both',expand=True)
-        cols=('Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'); tr=ttk.Treeview(card,columns=cols,show='headings')
-        widths=(100,220,120,120,140,110,105,105)
-        for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
-        tr.pack(fill='both',expand=True,padx=7,pady=7)
-        def load(*_):
-            for i in tr.get_children(): tr.delete(i)
-            term='%'+q.get().strip()+'%'
-            with connect() as con:
-                rows=con.execute('''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till FROM equipment e LEFT JOIN clients c ON c.id=e.client_id WHERE ?="" OR e.code LIKE ? OR c.name LIKE ? OR e.make LIKE ? OR e.model LIKE ? OR e.serial LIKE ? ORDER BY e.id DESC''',(q.get().strip(),term,term,term,term,term)).fetchall()
-            for r in rows: tr.insert('','end',values=tuple(r))
-        q.trace_add('write',load); load()
-        tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
-
-    def transfer_equipment_ownership(self,code):
-        if not self.require('equipment') or not self.require_edit(): return
-        with connect() as con:
-            eq=con.execute('SELECT e.*,c.code client_code,c.name client_name FROM equipment e JOIN clients c ON c.id=e.client_id WHERE e.code=?',(code,)).fetchone()
-            clients=con.execute('SELECT id,code,name FROM clients WHERE id<>? ORDER BY name,code',(eq['client_id'],)).fetchall() if eq else []
-        if not eq:return
-        if not clients:return messagebox.showinfo('Transfer Ownership','No other Client is available for transfer.')
-        labels=[f"{x['code']} — {x['name']}" for x in clients]; lookup={v:x for v,x in zip(labels,clients)}
-        d=tk.Toplevel(self); d.title('Transfer Equipment Ownership'); center_window(d, 660, 470); d.configure(bg=CARD); d.transient(self); d.grab_set()
-        tk.Label(d,text=f"Transfer Ownership • {eq['code']}",bg=CARD,fg=NAVY,font=('Segoe UI',12,'bold')).pack(anchor='w',padx=24,pady=(20,5))
-        tk.Label(d,text=f"Current owner: {eq['client_code']} — {eq['client_name']}",bg=CARD,fg=MUTED,font=('Segoe UI',11)).pack(anchor='w',padx=24,pady=(0,12))
-        tk.Label(d,text='New Client *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); new=PremiumCombobox(d,values=labels,state='readonly'); new.pack(fill='x',padx=24,pady=(2,10))
-        tk.Label(d,text='Effective Date (YYYY-MM-DD) *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); date_e=ttk.Entry(d); date_e.insert(0,today()); date_e.pack(fill='x',padx=24,pady=(2,10))
-        tk.Label(d,text='Transfer Reason *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
-        def save():
-            if not new.get() or not date_e.get().strip() or not reason.get().strip():return messagebox.showwarning('Required','New Client, effective date and transfer reason are required.',parent=d)
-            try: datetime.datetime.strptime(date_e.get().strip(),'%Y-%m-%d')
-            except ValueError:return messagebox.showwarning('Date','Effective date must be YYYY-MM-DD.',parent=d)
-            dest=lookup[new.get()]
-            if not messagebox.askyesno('Confirm Ownership Transfer',f"Equipment {eq['code']} will move from\n{eq['client_code']} — {eq['client_name']}\nto\n{dest['code']} — {dest['name']}\n\nExisting Service Requests will keep their original Client history.\nEffective: {date_e.get().strip()}\nReason: {reason.get().strip()}",parent=d):return
-            with connect() as con:
-                con.execute('INSERT INTO equipment_ownership_history(equipment_id,from_client_id,to_client_id,effective_date,reason,username,created) VALUES(?,?,?,?,?,?,?)',(eq['id'],eq['client_id'],dest['id'],date_e.get().strip(),reason.get().strip(),self.current_user['username'],now()))
-                con.execute('UPDATE equipment SET client_id=?,modified=? WHERE id=?',(dest['id'],now(),eq['id']))
-            audit(self.current_user['username'],'equipment',eq['code'],'OWNERSHIP_TRANSFER',f"{eq['client_code']} -> {dest['code']}; effective={date_e.get().strip()}; reason={reason.get().strip()}")
-            d.destroy(); self.show_equipment_360(eq['code'])
-        tk.Button(d,text='Transfer Ownership',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=8).pack(pady=10)
-
-    def update_coverage_dialog(self,code):
-        if not self.require('warranty') or not self.require_edit(): return
-        with connect() as con: eq=con.execute('SELECT id,code,make,model,warranty_till,amc_till FROM equipment WHERE code=?',(code,)).fetchone()
-        if not eq:return
-        d=tk.Toplevel(self); d.title('Update Warranty / AMC Coverage'); center_window(d, 670, 540); d.configure(bg=CARD); d.transient(self); d.grab_set()
-        tk.Label(d,text=f"Coverage Update • {eq['code']} • {eq['make']} {eq['model']}",bg=CARD,fg=NAVY,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24,pady=(18,10))
-        tk.Label(d,text='Coverage Type *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); typ=PremiumCombobox(d,state='readonly',values=['Warranty','AMC']); typ.pack(fill='x',padx=24,pady=(2,8)); typ.set('Warranty')
-        tk.Label(d,text='New Coverage Till (YYYY-MM-DD) *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); till=ttk.Entry(d); till.pack(fill='x',padx=24,pady=(2,8))
-        tk.Label(d,text='Reference / Contract No.',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); ref=ttk.Entry(d); ref.pack(fill='x',padx=24,pady=(2,8))
-        tk.Label(d,text='Reason *',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
-        def save():
-            if not till.get().strip() or not reason.get().strip():return messagebox.showwarning('Required','New coverage date and reason are required.',parent=d)
-            try: datetime.datetime.strptime(till.get().strip(),'%Y-%m-%d')
-            except ValueError:return messagebox.showwarning('Date','Coverage Till must be YYYY-MM-DD.',parent=d)
-            field='warranty_till' if typ.get()=='Warranty' else 'amc_till'; old=eq[field] or ''
-            if old==till.get().strip():return messagebox.showinfo('No change','The new coverage date is the same as the current date.',parent=d)
-            if not messagebox.askyesno('Confirm Coverage Update',f"{typ.get()} coverage will change from {old or 'Not Set'} to {till.get().strip()}.\n\nReason: {reason.get().strip()}",parent=d):return
-            with connect() as con:
-                con.execute(f'UPDATE equipment SET {field}=?,modified=? WHERE id=?',(till.get().strip(),now(),eq['id']))
-                con.execute('INSERT INTO equipment_coverage_history(equipment_id,coverage_type,previous_till,new_till,reference,reason,username,created) VALUES(?,?,?,?,?,?,?,?)',(eq['id'],typ.get(),old,till.get().strip(),ref.get().strip(),reason.get().strip(),self.current_user['username'],now()))
-            audit(self.current_user['username'],'equipment',code,'COVERAGE_UPDATE',f"{typ.get()}: {old or 'Not Set'} -> {till.get().strip()}; ref={ref.get().strip()}; reason={reason.get().strip()}")
-            d.destroy(); self.show_warranty()
-        tk.Button(d,text='Save Coverage Update',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=8).pack(pady=10)
-
-    def show_equipment_360(self,code):
         self.clear()
+        self.section_header('Equipment','Permanent Equipment Master / Service History',fixed=True)
+        tools=tk.Frame(self.dashboard_header_host,bg=CARD,highlightthickness=1,highlightbackground=BORDER)
+        tools.pack(fill='x',padx=10,pady=(0,8))
+        row=tk.Frame(tools,bg=CARD); row.pack(fill='x',padx=12,pady=(9,4))
+        q=tk.StringVar(); search=ttk.Entry(row,textvariable=q,width=26)
         with connect() as con:
-            r=con.execute('''SELECT e.*,c.code client_code,c.name client_name FROM equipment e LEFT JOIN clients c ON c.id=e.client_id WHERE e.code=?''',(code,)).fetchone()
-            if not r:return
-            svc=con.execute('''SELECT code,opened,reason,complaint,warranty,amc,engineer,status,work_done,final_result,foc_chargeable,payment_status,dispatch_date
-                               FROM services WHERE equipment_id=? ORDER BY id DESC''',(r['id'],)).fetchall()
-            parts=con.execute('''SELECT p.part_no,p.description,p.qty,p.chargeable,p.amount,s.code service_code
-                                 FROM parts p JOIN services s ON s.id=p.service_id WHERE s.equipment_id=? ORDER BY p.id DESC''',(r['id'],)).fetchall()
-            coverage=con.execute('''SELECT coverage_type,previous_till,new_till,reference,reason,username,created FROM equipment_coverage_history WHERE equipment_id=? ORDER BY id DESC''',(r['id'],)).fetchall()
-            owners=con.execute('''SELECT h.effective_date,fc.code from_code,fc.name from_name,tc.code to_code,tc.name to_name,h.reason,h.username
-                                  FROM equipment_ownership_history h LEFT JOIN clients fc ON fc.id=h.from_client_id LEFT JOIN clients tc ON tc.id=h.to_client_id
-                                  WHERE h.equipment_id=? ORDER BY h.id DESC''',(r['id'],)).fetchall()
-        head=tk.Frame(self.content,bg='#164F7C',height=42); head.pack(fill='x'); head.pack_propagate(False)
-        tk.Label(head,text=f"Equipment Details  •  {r['code']}",bg='#164F7C',fg='white',font=('Segoe UI',14,'bold')).pack(side='left',padx=20)
-        tk.Label(head,text=f"{r['make']} {r['model']}  •  S/N {r['serial'] or 'Not Available'}",bg='#164F7C',fg='#DCECF8',font=('Segoe UI',11,'bold')).pack(side='left',padx=10)
-        tk.Button(head,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',bd=0,padx=12,pady=5).pack(side='right',padx=10,pady=6)
-        metrics=tk.Frame(self.content,bg=BG); metrics.pack(fill='x',padx=22)
-        self.metric(metrics,'Lifetime Services',len(svc),BLUE); self.metric(metrics,'Warranty Calls',sum(1 for x in svc if x['warranty']=='Yes'),GREEN)
-        self.metric(metrics,'AMC Calls',sum(1 for x in svc if x['amc']=='Yes'),CYAN); self.metric(metrics,'Parts Recorded',len(parts),ORANGE)
-        info=self.card(self.content); info.pack(fill='x',padx=28,pady=14)
-        vals=[('Client',f"{r['client_code']} — {r['client_name']}"),('Stock / External ID',r['stock_id']),('Type',r['equipment_type']),('Location',r['location']),('Warranty Till',r['warranty_till']),('AMC Till',r['amc_till'])]
-        for i,(k,v) in enumerate(vals):
-            tk.Label(info,text=k,bg=CARD,fg=MUTED,font=('Segoe UI',11)).grid(row=0,column=i,sticky='w',padx=10,pady=(10,2)); tk.Label(info,text=v or '—',bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).grid(row=1,column=i,sticky='w',padx=10,pady=(0,10)); info.grid_columnconfigure(i,weight=1)
-        tabs=CapsuleNotebook(self.content); tabs.pack(fill='both',expand=True,padx=28,pady=(0,22))
-        ht=tk.Frame(tabs,bg=CARD); pt=tk.Frame(tabs,bg=CARD); ct=tk.Frame(tabs,bg=CARD); ot=tk.Frame(tabs,bg=CARD); tabs.add(ht,text=' Lifetime Service History '); tabs.add(pt,text=' Parts History '); tabs.add(ct,text=' Coverage History '); tabs.add(ot,text=' Ownership History ')
-        hcols=('Service ID','Opened','Reason','Complaint','Warranty','AMC','Engineer','Status','Work Done','Result','Billing','Payment','Dispatch'); htr=ttk.Treeview(ht,columns=hcols,show='headings')
-        for x in hcols:htr.heading(x,text=x)
-        htr.pack(fill='both',expand=True,padx=12,pady=12)
-        for x in svc:htr.insert('','end',values=tuple(x))
-        htr.bind('<Double-1>',lambda e:self.show_service_detail(htr.item(htr.focus(),'values')[0]) if htr.focus() else None)
-        pcols=('Service ID','Part No.','Description','Qty','FOC / Chargeable','Amount'); ptr=ttk.Treeview(pt,columns=pcols,show='headings')
-        for x in pcols:ptr.heading(x,text=x)
-        ptr.pack(fill='both',expand=True,padx=12,pady=12)
-        for x in parts:ptr.insert('','end',values=(x['service_code'],x['part_no'],x['description'],x['qty'],x['chargeable'],x['amount']))
-        ccols=('Changed','Type','Previous Till','New Till','Reference','Reason','Changed By'); ctr=ttk.Treeview(ct,columns=ccols,show='headings')
-        for x in ccols:ctr.heading(x,text=x)
-        ctr.pack(fill='both',expand=True,padx=12,pady=12)
-        for x in coverage:ctr.insert('','end',values=(x['created'],x['coverage_type'],x['previous_till'] or '—',x['new_till'] or '—',x['reference'] or '—',x['reason'],x['username']))
-        ocols=('Effective Date','Previous Owner','New Owner','Reason','Changed By'); otr=ttk.Treeview(ot,columns=ocols,show='headings')
-        for x in ocols:otr.heading(x,text=x)
-        otr.pack(fill='both',expand=True,padx=12,pady=12)
-        for x in owners:otr.insert('','end',values=(x['effective_date'],f"{x['from_code'] or '—'} — {x['from_name'] or '—'}",f"{x['to_code']} — {x['to_name']}",x['reason'],x['username']))
-
-    def equipment_dialog(self):
-        if not self.require('equipment') or not self.require_edit(): return
-        d=tk.Toplevel(self); d.title('Add Equipment'); center_window(d, 710, 760); d.configure(bg=CARD)
-        with connect() as con:clients=[(r['id'],f"{r['code']} — {r['name']}") for r in con.execute('SELECT id,code,name FROM clients ORDER BY name')]
-        cmap={v:k for k,v in clients}; vals={}; specs=[('client','Client',list(cmap)),('make','Make',None),('model','Model',None),('serial','Serial Number',None),('stock','Stock / External Equipment ID',None),('type','Equipment Type',None),('sold','Sold By',['Us','Other','Unknown']),('warranty','Warranty Till',None),('amc','AMC Till',None),('location','Location / Department',None)]
-        for k,l,v in specs:tk.Label(d,text=l+(' *' if k in ('client','make','model') else ''),bg=CARD,fg=TEXT,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=25,pady=(7,2)); w=PremiumCombobox(d,values=v,state='readonly') if v is not None else ttk.Entry(d); w.pack(fill='x',padx=25); vals[k]=w
-        def save():
-            if not vals['client'].get() or not vals['make'].get() or not vals['model'].get():return messagebox.showwarning('Required','Client, Make and Model are mandatory.',parent=d)
+            makes=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT make FROM equipment WHERE COALESCE(make,'')!=''")})
+        make=PremiumCombobox(row,width=12,state='readonly',values=makes); make.set('All')
+        warranty=PremiumCombobox(row,width=12,state='readonly',values=['All','Active','Expired','Not set']); warranty.set('All')
+        amc=PremiumCombobox(row,width=12,state='readonly',values=['All','Active','Expired','Not set']); amc.set('All')
+        order=PremiumCombobox(row,width=13,state='readonly',values=['Recently added','Equipment ID A–Z']); order.set('Recently added')
+        def field(parent,label,widget):
+            group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,10))
+            tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
+            widget.pack(anchor='w')
+        field(row,'Search ID / client / model / serial',search)
+        field(row,'Make',make); field(row,'Warranty',warranty); field(row,'AMC',amc); field(row,'Sort',order)
+        row2=tk.Frame(tools,bg=CARD); row2.pack(fill='x',padx=12,pady=(3,9))
+        selected_codes=set(); check_images=self._selection_images()
+        selected_label=tk.Label(row2,text='0 selected',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold')); selected_label.pack(side='left',padx=(0,9))
+        select_btn=tk.Button(row2,text='Select Visible',bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=5,cursor='hand2'); select_btn.pack(side='left')
+        btns=tk.Frame(row2,bg=CARD); btns.pack(side='right')
+        body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=(0,10))
+        card=self.card(body); card.pack(fill='both',expand=True)
+        wrap=tk.Frame(card,bg=CARD); wrap.pack(fill='both',expand=True,padx=8,pady=8)
+        cols=('Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To')
+        tr=ttk.Treeview(wrap,columns=cols,show='tree headings',selectmode='extended')
+        tr.heading('#0',text=''); tr.column('#0',width=34,minwidth=34,stretch=False,anchor='center')
+        widths=(105,220,125,135,140,115,120,120)
+        for col,w in zip(cols,widths):tr.heading(col,text=col);tr.column(col,width=w,minwidth=72,anchor='w')
+        tr.grid(row=0,column=0,sticky='nsew')
+        vs=ttk.Scrollbar(wrap,orient='vertical',command=tr.yview,style='Dashboard.Vertical.TScrollbar')
+        hs=ttk.Scrollbar(wrap,orient='horizontal',command=tr.xview)
+        vs.grid(row=0,column=1,sticky='ns');hs.grid(row=1,column=0,sticky='ew')
+        wrap.rowconfigure(0,weight=1);wrap.columnconfigure(0,weight=1)
+        tr.configure(yscrollcommand=vs.set,xscrollcommand=hs.set)
+        def update_marks():
+            for iid in tr.get_children():
+                code=str(tr.item(iid,'values')[0])
+                tr.item(iid,image=check_images[1] if code in selected_codes else check_images[0])
+            selected_label.configure(text=f'{len(selected_codes)} selected')
+            current=[str(tr.item(i,'values')[0]) for i in tr.get_children()]
+            all_checked=bool(current) and all(code in selected_codes for code in current)
+            select_btn.configure(text='Clear Visible' if all_checked else 'Select Visible')
+        def toggle_visible():
+            current=[str(tr.item(i,'values')[0]) for i in tr.get_children()]
+            if current and all(code in selected_codes for code in current):selected_codes.difference_update(current)
+            else:selected_codes.update(current)
+            update_marks()
+        select_btn.configure(command=toggle_visible)
+        def toggle_checkbox(event):
+            if tr.identify_region(event.x,event.y)!='tree':return
+            iid=tr.identify_row(event.y)
+            if not iid:return
+            code=str(tr.item(iid,'values')[0])
+            if code in selected_codes:selected_codes.remove(code)
+            else:selected_codes.add(code)
+            update_marks();return 'break'
+        def sync_rows(_event=None):
+            visible_codes={str(tr.item(i,'values')[0]) for i in tr.get_children()}
+            for code in visible_codes:selected_codes.discard(code)
+            for iid in tr.selection():selected_codes.add(str(tr.item(iid,'values')[0]))
+            update_marks()
+        tr.bind('<Button-1>',toggle_checkbox,add='+');tr.bind('<<TreeviewSelect>>',sync_rows,add='+')
+        def selected_rows():
+            if not selected_codes:return []
+            codes=list(selected_codes); marks=','.join('?' for _ in codes)
             with connect() as con:
-                if vals['serial'].get():
-                    dup=con.execute('SELECT code FROM equipment WHERE LOWER(TRIM(serial))=LOWER(TRIM(?))',(vals['serial'].get(),)).fetchone()
-                    if dup:return messagebox.showwarning('Existing equipment',f"Serial already exists as {dup['code']}. Reuse that permanent SERVIX Equipment ID instead of creating a duplicate.",parent=d)
-                ts=now(); con.execute('''INSERT INTO equipment(code,client_id,make,model,serial,stock_id,equipment_type,sold_by,warranty_till,amc_till,location,created,modified) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)''',(next_code('SEQ','equipment'),cmap[vals['client'].get()],vals['make'].get(),vals['model'].get(),vals['serial'].get(),vals['stock'].get(),vals['type'].get(),vals['sold'].get(),vals['warranty'].get(),vals['amc'].get(),vals['location'].get(),ts,ts))
-            d.destroy(); self.show_equipment()
-        tk.Button(d,text='Save Equipment',command=save,bg=BLUE,fg='white',bd=0,padx=18,pady=9).pack(pady=18)
+                return [tuple(r) for r in con.execute(f'''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till
+                  FROM equipment e LEFT JOIN clients c ON c.id=e.client_id WHERE e.code IN ({marks}) ORDER BY e.code''',codes)]
+        def export_selected():
+            self._save_rows_csv('Selected Equipment',['Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'],selected_rows(),'SERVIX_Selected_Equipment.csv')
+        def print_selected():
+            self._print_rows_pdf('Selected Equipment',['Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'],selected_rows(),'SERVIX_Selected_Equipment.pdf')
+        tk.Button(btns,text='Print Selected PDF',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
+        tk.Button(btns,text='Export Selected CSV',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
+        tk.Button(btns,text='Export Current CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Equipment.csv'),bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right')
 
-    def simple_summary(self,title,subtitle,rows):
-        self.clear(); self.heading(title,subtitle); holder=tk.Frame(self.content,bg=BG); holder.pack(fill='x',padx=22)
-        for name,val,color in rows:self.metric(holder,name,val,color)
-        box=self.card(self.content); box.pack(fill='both',expand=True,padx=28,pady=18); tk.Label(box,text='Use Service Calls and Equipment records for detailed entries. More dedicated controls will be added in the next build.',bg=CARD,fg=MUTED,font=('Segoe UI',10)).pack(pady=35)
+        def load(*_):
+            term='%'+q.get().strip()+'%';clauses=[];args=[]
+            if q.get().strip():
+                clauses.append("(e.code LIKE ? OR c.name LIKE ? OR e.make LIKE ? OR e.model LIKE ? OR e.serial LIKE ? OR e.stock_id LIKE ?)")
+                args.extend([term]*6)
+            if make.get()!='All':clauses.append('e.make=?');args.append(make.get())
+            for expression,var in (("warranty_till",warranty),("amc_till",amc)):
+                if var.get()=='Active':clauses.append(f"e.{expression}!='' AND date(e.{expression})>=date('now')")
+                elif var.get()=='Expired':clauses.append(f"e.{expression}!='' AND date(e.{expression})<date('now')")
+                elif var.get()=='Not set':clauses.append(f"(e.{expression} IS NULL OR e.{expression}='')")
+            where=' WHERE '+' AND '.join(clauses) if clauses else ''
+            sort='e.code COLLATE NOCASE ASC' if order.get()=='Equipment ID A–Z' else 'e.id DESC'
+            sql='''SELECT e.code,c.name,e.make,e.model,e.serial,e.stock_id,e.warranty_till,e.amc_till
+                   FROM equipment e LEFT JOIN clients c ON c.id=e.client_id'''+where+f' ORDER BY {sort}'
+            for iid in tr.get_children():tr.delete(iid)
+            with connect() as con:rows=con.execute(sql,args).fetchall()
+            for row_data in rows:
+                vals=tuple(row_data);code=str(vals[0])
+                tr.insert('','end',values=vals,image=check_images[1] if code in selected_codes else check_images[0])
+            update_marks()
+        q.trace_add('write',load)
+        for widget in (make,warranty,amc,order):widget.bind('<<ComboboxSelected>>',load)
+        tr.bind('<Double-1>',lambda e:self.show_equipment_360(tr.item(tr.focus(),'values')[0]) if tr.focus() else None)
+        load()
+
     def show_warranty(self):
         self.clear(); self.section_header('Warranty & AMC','Equipment Coverage / Expiry Control')
         body=tk.Frame(self.content,bg=BG); body.pack(fill='both',expand=True,padx=10,pady=8)
