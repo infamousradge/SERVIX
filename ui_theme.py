@@ -42,15 +42,14 @@ def configure_theme(root):
     style.configure('Search.Treeview', font=('Segoe UI', 10), rowheight=36,
                     background='white', fieldbackground='white', borderwidth=0,
                     relief='flat')
-    # The Dashboard uses a slim thumb without the old arrow buttons or boxed
-    # trough. Other modules keep their existing scrollbar style for now.
-    style.configure('Dashboard.Vertical.TScrollbar', gripcount=0, width=11,
-                    background='#9FB5CB', troughcolor='#EAF0F6',
-                    bordercolor='#F3F7FB', lightcolor='#9FB5CB',
+    # One quiet, slim scrollbar style is shared by every page.
+    style.configure('Vertical.TScrollbar', gripcount=0, width=11,
+                    background='#9FB5CB', troughcolor=BG,
+                    bordercolor=BG, lightcolor='#9FB5CB',
                     darkcolor='#9FB5CB', arrowsize=0, relief='flat')
-    style.map('Dashboard.Vertical.TScrollbar',
+    style.map('Vertical.TScrollbar',
               background=[('pressed', '#718DAA'), ('active', '#829DB8')])
-    style.layout('Dashboard.Vertical.TScrollbar', [
+    style.layout('Vertical.TScrollbar', [
         ('Vertical.Scrollbar.trough', {
             'sticky': 'ns',
             'children': [('Vertical.Scrollbar.thumb', {'expand': '1', 'sticky': 'nswe'})]
@@ -79,7 +78,7 @@ def configure_theme(root):
                     bordercolor='#D7E3F0', lightcolor='#D7E3F0', darkcolor='#D7E3F0',
                     arrowsize=15, arrowcolor=BLUE)
     style.map('TCombobox', fieldbackground=[('readonly', 'white'), ('focus', 'white')],
-              bordercolor=[('focus', BLUE), ('readonly', '#D7E3F0')],
+              bordercolor=[('focus', '#D7E3F0'), ('readonly', '#D7E3F0')],
               arrowcolor=[('active', '#0564B5'), ('readonly', BLUE)],
               selectbackground=[('readonly', '#EAF3FC')],
               selectforeground=[('readonly', TEXT)])
