@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import tkinter as tk
+from tkinter import ttk
 from types import SimpleNamespace
 
 import database
@@ -50,6 +51,15 @@ def main():
                     window.update()
                     assert window.sidebar.winfo_width() == 288
                     assert window.content.winfo_width() > 900
+                    if method in ('show_dashboard','show_services','show_clients','show_equipment'):
+                        assert window.dashboard_header_host.winfo_ismapped(), f'{method} header should stay outside the page scroller'
+                    if method == 'show_services':
+                        selectors=[w for w in walk(window.dashboard_header_host) if isinstance(w,PremiumCombobox)]
+                        assert len(selectors) >= 5, 'Service Calls should expose the expanded filter set'
+                    if method in ('show_clients','show_equipment'):
+                        tables=[w for w in walk(window.content) if isinstance(w,ttk.Treeview)]
+                        assert len(tables)==1 and tables[0].cget('selectmode')=='extended'
+                        assert 'tree' in tables[0].cget('show'), f'{method} rows should display selection checks'
                 window.search.delete(0,'end'); window.search.insert(0,'SRV-TEST')
                 window.global_search(); window.update()
                 assert any(hasattr(w,'get_children') and w.get_children() for w in walk(window.content)), 'Live search should show matching rows'
@@ -59,6 +69,8 @@ def main():
                     getattr(window, method)(code)
                     window.update()
                     for notebook in [w for w in walk(window.content) if isinstance(w, CapsuleNotebook)]:
+                        if method == 'show_service_detail':
+                            assert len(notebook.notebook.tabs()) == 12, 'Service Request should keep all workflow tabs'
                         for button in notebook.buttons:
                             assert button.winfo_x() + button.winfo_width() <= notebook.bar.winfo_width(), button.label
                             notebook.select(button.page)
