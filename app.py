@@ -833,35 +833,27 @@ class Servix(tk.Tk):
         filters.pack(fill='x',padx=10,pady=(0,8))
         row1=tk.Frame(filters,bg=CARD); row1.pack(fill='x',padx=12,pady=(9,3))
         row2=tk.Frame(filters,bg=CARD); row2.pack(fill='x',padx=12,pady=(2,8))
+        def field(parent,label,factory):
+            group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,10))
+            tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
+            widget=factory(group); widget.pack(anchor='w')
+            return widget
         q=tk.StringVar()
-        search=ttk.Entry(row1,textvariable=q,width=27)
-        status=PremiumCombobox(row1,width=13,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened'])
+        search=field(row1,'Search ID / client / equipment',lambda p:ttk.Entry(p,textvariable=q,width=27))
+        status=field(row1,'Status',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['All','New','Acknowledged','Assigned','Equipment Awaited','Received','Visit Scheduled','Under Diagnosis','Awaiting Customer','Awaiting Approval','Awaiting Parts','Repair in Progress','Testing','Ready for Dispatch','Dispatched','Resolved','Closed','Cancelled','Reopened']))
         with connect() as con:
             reasons=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT reason FROM services WHERE COALESCE(reason,'')!=''")})
             engineers=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT engineer FROM services WHERE COALESCE(engineer,'')!=''")})
-        reason=PremiumCombobox(row1,width=13,state='readonly',values=reasons)
-        engineer=PremiumCombobox(row1,width=13,state='readonly',values=engineers)
+        reason=field(row1,'Service reason',lambda p:PremiumCombobox(p,width=13,state='readonly',values=reasons))
+        engineer=field(row1,'Engineer',lambda p:PremiumCombobox(p,width=13,state='readonly',values=engineers))
         status.set('All'); reason.set('All'); engineer.set('All')
-        def field(parent,label,widget):
-            group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,10))
-            tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
-            widget.pack(anchor='w')
-            return group
-        field(row1,'Search ID / client / equipment',search)
-        field(row1,'Status',status)
-        field(row1,'Service reason',reason)
-        field(row1,'Engineer',engineer)
 
         date_from=tk.StringVar(); date_to=tk.StringVar()
-        from_entry=ttk.Entry(row2,textvariable=date_from,width=14)
-        to_entry=ttk.Entry(row2,textvariable=date_to,width=14)
-        payment=PremiumCombobox(row2,width=13,state='readonly',values=['All','Paid','Pending','Part Paid','Invoice Raised','To Be Invoiced','Not Applicable'])
-        order=PremiumCombobox(row2,width=13,state='readonly',values=['Newest first','Oldest first'])
+        from_entry=field(row2,'Opened from (YYYY-MM-DD)',lambda p:ttk.Entry(p,textvariable=date_from,width=14))
+        to_entry=field(row2,'Opened to (YYYY-MM-DD)',lambda p:ttk.Entry(p,textvariable=date_to,width=14))
+        payment=field(row2,'Payment',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['All','Paid','Pending','Part Paid','Invoice Raised','To Be Invoiced','Not Applicable']))
+        order=field(row2,'Entry date order',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['Newest first','Oldest first']))
         payment.set('All'); order.set('Newest first')
-        field(row2,'Opened from (YYYY-MM-DD)',from_entry)
-        field(row2,'Opened to (YYYY-MM-DD)',to_entry)
-        field(row2,'Payment',payment)
-        field(row2,'Entry date order',order)
 
         check_images=self._selection_images()
         selection=tk.Frame(row2,bg=CARD); selection.pack(side='left',padx=(8,0),pady=(13,0))
@@ -994,18 +986,17 @@ class Servix(tk.Tk):
         tools.pack(fill='x',padx=10,pady=(0,8))
         row=tk.Frame(tools,bg=CARD); row.pack(fill='x',padx=12,pady=(9,4))
         q=tk.StringVar()
-        search=ttk.Entry(row,textvariable=q,width=30)
         cities=['All']
         with connect() as con:
             cities += sorted({str(r[0]) for r in con.execute("SELECT DISTINCT city FROM clients WHERE COALESCE(city,'')!=''")})
-        city=PremiumCombobox(row,width=13,state='readonly',values=cities); city.set('All')
-        order=PremiumCombobox(row,width=13,state='readonly',values=['Recently added','Name A–Z']); order.set('Recently added')
-        def field(parent,label,widget):
+        def field(parent,label,factory):
             group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,11))
             tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
-            widget.pack(anchor='w')
-        field(row,'Search name / contact / mobile / email',search)
-        field(row,'City',city); field(row,'Sort',order)
+            widget=factory(group); widget.pack(anchor='w')
+            return widget
+        search=field(row,'Search name / contact / mobile / email',lambda p:ttk.Entry(p,textvariable=q,width=30))
+        city=field(row,'City',lambda p:PremiumCombobox(p,width=13,state='readonly',values=cities)); city.set('All')
+        order=field(row,'Sort',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['Recently added','Name A–Z'])); order.set('Recently added')
         actions=tk.Frame(row,bg=CARD); actions.pack(side='right')
         if self.current_user['role']=='Administrator':
             tk.Button(actions,text='Merge Clients',bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,command=self.merge_clients_dialog,cursor='hand2').pack(side='right',padx=(4,0))
@@ -1102,20 +1093,19 @@ class Servix(tk.Tk):
         tools.pack(fill='x',padx=10,pady=(0,8))
         row=tk.Frame(tools,bg=CARD); row.pack(fill='x',padx=12,pady=(9,4))
         row2=tk.Frame(tools,bg=CARD); row2.pack(fill='x',padx=12,pady=(3,9))
-        q=tk.StringVar(); search=ttk.Entry(row,textvariable=q,width=26)
+        q=tk.StringVar()
         with connect() as con:
             makes=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT make FROM equipment WHERE COALESCE(make,'')!=''")})
-        make=PremiumCombobox(row,width=12,state='readonly',values=makes); make.set('All')
-        warranty=PremiumCombobox(row,width=12,state='readonly',values=['All','Active','Expired','Not set']); warranty.set('All')
-        amc=PremiumCombobox(row2,width=12,state='readonly',values=['All','Active','Expired','Not set']); amc.set('All')
-        order=PremiumCombobox(row2,width=13,state='readonly',values=['Recently added','Equipment ID A–Z']); order.set('Recently added')
-        def field(parent,label,widget):
+        def field(parent,label,factory):
             group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,10))
             tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
-            widget.pack(anchor='w')
-        field(row,'Search ID / client / model / serial',search)
-        field(row,'Make',make); field(row,'Warranty',warranty)
-        field(row2,'AMC',amc); field(row2,'Sort',order)
+            widget=factory(group); widget.pack(anchor='w')
+            return widget
+        search=field(row,'Search ID / client / model / serial',lambda p:ttk.Entry(p,textvariable=q,width=26))
+        make=field(row,'Make',lambda p:PremiumCombobox(p,width=12,state='readonly',values=makes)); make.set('All')
+        warranty=field(row,'Warranty',lambda p:PremiumCombobox(p,width=12,state='readonly',values=['All','Active','Expired','Not set'])); warranty.set('All')
+        amc=field(row2,'AMC',lambda p:PremiumCombobox(p,width=12,state='readonly',values=['All','Active','Expired','Not set'])); amc.set('All')
+        order=field(row2,'Sort',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['Recently added','Equipment ID A–Z'])); order.set('Recently added')
         selected_codes=set(); check_images=self._selection_images()
         selected_label=tk.Label(row2,text='0 selected',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold')); selected_label.pack(side='left',padx=(0,9))
         select_btn=tk.Button(row2,text='Select Visible',bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=5,cursor='hand2'); select_btn.pack(side='left')
