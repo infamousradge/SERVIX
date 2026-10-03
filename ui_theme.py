@@ -66,7 +66,14 @@ def configure_theme(root):
                     background='#EAF3FC', foreground=NAVY, borderwidth=0)
     style.map('TButton', background=[('pressed', '#D4E8FB'), ('active', '#DDEEFF')])
     style.configure('TEntry', font=('Segoe UI', 10), padding=(9, 6),
-                    fieldbackground='white', borderwidth=1, relief='flat')
+                    fieldbackground='white', borderwidth=1, relief='flat',
+                    bordercolor='#D7E3F0', lightcolor='#D7E3F0', darkcolor='#D7E3F0')
+    # Keep text-field edges quiet on focus; capsule selectors draw their own
+    # rounded focus ring, while entries avoid the harsh rectangular flash.
+    style.map('TEntry', fieldbackground=[('focus','white')],
+              bordercolor=[('focus','#D7E3F0'),('!focus','#D7E3F0')],
+              lightcolor=[('focus','#D7E3F0'),('!focus','#D7E3F0')],
+              darkcolor=[('focus','#D7E3F0'),('!focus','#D7E3F0')])
     style.configure('TCombobox', font=('Segoe UI', 10), padding=(9, 6),
                     fieldbackground='white', background='#EAF3FC', foreground=TEXT,
                     bordercolor='#D7E3F0', lightcolor='#D7E3F0', darkcolor='#D7E3F0',
