@@ -326,6 +326,8 @@ class Servix(tk.Tk):
     def section_header(self,title,subtitle='',fixed=True):
         parent=self.dashboard_header_host if fixed else self.content
         if fixed:
+            for child in self.dashboard_header_host.winfo_children():
+                child.destroy()
             self.dashboard_header_host.grid()
             style='Vertical.TScrollbar'
             self.page_scroll.configure(style=style)
@@ -739,6 +741,32 @@ class Servix(tk.Tk):
             self._selection_icon_images=tuple(images)
         return self._selection_icon_images
 
+    def _toolbar_icon(self,kind,color='white'):
+        if not hasattr(self,'_toolbar_icon_cache'): self._toolbar_icon_cache={}
+        key=(kind,color)
+        if key in self._toolbar_icon_cache:return self._toolbar_icon_cache[key]
+        size,scale=20,4
+        image=Image.new('RGBA',(size*scale,size*scale),(0,0,0,0)); draw=ImageDraw.Draw(image)
+        c=color; sw=2*scale
+        if kind=='plus':
+            draw.ellipse((2*scale,2*scale,18*scale,18*scale),outline=c,width=sw)
+            draw.line((10*scale,6*scale,10*scale,14*scale),fill=c,width=sw)
+            draw.line((6*scale,10*scale,14*scale,10*scale),fill=c,width=sw)
+        elif kind=='print':
+            draw.rounded_rectangle((5*scale,2*scale,15*scale,8*scale),radius=scale,outline=c,width=sw)
+            draw.rounded_rectangle((3*scale,7*scale,17*scale,14*scale),radius=2*scale,outline=c,width=sw)
+            draw.rectangle((6*scale,11*scale,14*scale,18*scale),outline=c,width=sw)
+            draw.line((8*scale,14*scale,12*scale,14*scale),fill=c,width=scale)
+        else:
+            draw.rounded_rectangle((4*scale,2*scale,15*scale,18*scale),radius=2*scale,outline=c,width=sw)
+            draw.line((7*scale,7*scale,12*scale,7*scale),fill=c,width=scale)
+            draw.line((7*scale,10*scale,12*scale,10*scale),fill=c,width=scale)
+            draw.line((7*scale,13*scale,12*scale,13*scale),fill=c,width=scale)
+            draw.line((8*scale,16*scale,12*scale,16*scale),fill=c,width=scale)
+        photo=ImageTk.PhotoImage(image.resize((size,size),Image.Resampling.LANCZOS),master=self)
+        self._toolbar_icon_cache[key]=photo
+        return photo
+
     def _save_rows_csv(self,title,headers,rows,filename):
         if not rows:
             messagebox.showinfo(title,'Select one or more records first.'); return
@@ -816,7 +844,7 @@ class Servix(tk.Tk):
         if item:self.show_service_detail(tree.item(item,'values')[0])
 
     def form_field(self,parent,label,row,col,values=None,width=30,required=False):
-        tk.Label(parent,text=label+(' *' if required else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=row,column=col,sticky='w',padx=10,pady=(8,3)); w=ttk.Combobox(parent,values=values,width=width,state='readonly') if values is not None else ttk.Entry(parent,width=width); w.grid(row=row+1,column=col,sticky='ew',padx=10,pady=(0,8)); return w
+        tk.Label(parent,text=label+(' *' if required else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).grid(row=row,column=col,sticky='w',padx=10,pady=(8,3)); w=PremiumCombobox(parent,values=values,width=width,state='readonly') if values is not None else ttk.Entry(parent,width=width); w.grid(row=row+1,column=col,sticky='ew',padx=10,pady=(0,8)); return w
 
     def show_new_service(self):
         if not self.require('services'): return
@@ -912,7 +940,7 @@ class Servix(tk.Tk):
                 tk.Label(d,text=label,bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=24,pady=(8,2)); vals[key]=ttk.Entry(d); vals[key].pack(fill='x',padx=24)
             no_serial=tk.BooleanVar(value=False)
             tk.Checkbutton(d,text='Serial number not available',variable=no_serial,bg=CARD,fg=TEXT,activebackground=CARD).pack(anchor='w',padx=20,pady=8)
-            sold=tk.StringVar(value='Unknown'); row=tk.Frame(d,bg=CARD); row.pack(fill='x',padx=24); tk.Label(row,text='Sold By',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(side='left'); ttk.Combobox(row,textvariable=sold,values=['Us','Other','Unknown'],state='readonly',width=15).pack(side='right')
+            sold=tk.StringVar(value='Unknown'); row=tk.Frame(d,bg=CARD); row.pack(fill='x',padx=24); tk.Label(row,text='Sold By',bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(side='left'); PremiumCombobox(row,textvariable=sold,values=['Us','Other','Unknown'],state='readonly',width=15).pack(side='right')
             def save_equipment():
                 make=vals['make'].get().strip(); model=vals['model'].get().strip(); serial=vals['serial'].get().strip()
                 if not make or not model:return messagebox.showwarning('Required','Make and Model are mandatory.',parent=d)
@@ -1155,12 +1183,12 @@ class Servix(tk.Tk):
                 WHERE i.active=1 GROUP BY i.id ORDER BY i.part_name""").fetchall()
         invmap={f"{x['code']} — {x['part_name']} ({x['stock']:g} {x['unit']})":x for x in inv}
         tk.Label(pform,text='Inventory Part',bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=0,sticky='w',padx=4)
-        partsel=ttk.Combobox(pform,state='readonly',values=list(invmap),width=38); partsel.grid(row=1,column=0,padx=4,sticky='ew')
+        partsel=PremiumCombobox(pform,state='readonly',values=list(invmap),width=38); partsel.grid(row=1,column=0,padx=4,sticky='ew')
         pent={}
         for i,(key,label,width) in enumerate([('qty','Qty',8),('amount','Amount',10),('remarks','Remarks',22)],1):
             tk.Label(pform,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8)).grid(row=0,column=i,sticky='w',padx=4)
             pent[key]=ttk.Entry(pform,width=width); pent[key].grid(row=1,column=i,padx=4,sticky='ew')
-        pcharge=ttk.Combobox(pform,width=15,state='readonly',values=['FOC','Chargeable']); pcharge.set('Chargeable'); pcharge.grid(row=1,column=4,padx=4)
+        pcharge=PremiumCombobox(pform,width=15,state='readonly',values=['FOC','Chargeable']); pcharge.set('Chargeable'); pcharge.grid(row=1,column=4,padx=4)
         def refresh_parts():
             ptr.delete(*ptr.get_children())
             with connect() as con:
@@ -1392,8 +1420,8 @@ class Servix(tk.Tk):
         labels=[f"{r['code']} — {r['name']} — {r['mobile'] or r['email'] or 'No contact'}" for r in rows]; lookup={x:r for x,r in zip(labels,rows)}
         d=tk.Toplevel(self); d.title('Merge Duplicate Clients'); d.geometry('650x360'); d.configure(bg=CARD); d.transient(self); d.grab_set()
         tk.Label(d,text='Merge Duplicate Clients',bg=CARD,fg=NAVY,font=('Segoe UI',12,'bold')).pack(anchor='w',padx=24,pady=(20,8))
-        tk.Label(d,text='Keep Client (master record)',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); keep=ttk.Combobox(d,values=labels,state='readonly'); keep.pack(fill='x',padx=24,pady=(2,10))
-        tk.Label(d,text='Merge Client (duplicate record)',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); source=ttk.Combobox(d,values=labels,state='readonly'); source.pack(fill='x',padx=24,pady=(2,10))
+        tk.Label(d,text='Keep Client (master record)',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); keep=PremiumCombobox(d,values=labels,state='readonly'); keep.pack(fill='x',padx=24,pady=(2,10))
+        tk.Label(d,text='Merge Client (duplicate record)',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); source=PremiumCombobox(d,values=labels,state='readonly'); source.pack(fill='x',padx=24,pady=(2,10))
         tk.Label(d,text='Merge reason *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
         def merge():
             if not keep.get() or not source.get() or keep.get()==source.get():return messagebox.showwarning('Merge Clients','Select two different Client records.',parent=d)
@@ -1447,7 +1475,7 @@ class Servix(tk.Tk):
         d=tk.Toplevel(self); d.title('Transfer Equipment Ownership'); d.geometry('600x360'); d.configure(bg=CARD); d.transient(self); d.grab_set()
         tk.Label(d,text=f"Transfer Ownership • {eq['code']}",bg=CARD,fg=NAVY,font=('Segoe UI',12,'bold')).pack(anchor='w',padx=24,pady=(20,5))
         tk.Label(d,text=f"Current owner: {eq['client_code']} — {eq['client_name']}",bg=CARD,fg=MUTED,font=('Segoe UI',9)).pack(anchor='w',padx=24,pady=(0,12))
-        tk.Label(d,text='New Client *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); new=ttk.Combobox(d,values=labels,state='readonly'); new.pack(fill='x',padx=24,pady=(2,10))
+        tk.Label(d,text='New Client *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); new=PremiumCombobox(d,values=labels,state='readonly'); new.pack(fill='x',padx=24,pady=(2,10))
         tk.Label(d,text='Effective Date (YYYY-MM-DD) *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); date_e=ttk.Entry(d); date_e.insert(0,today()); date_e.pack(fill='x',padx=24,pady=(2,10))
         tk.Label(d,text='Transfer Reason *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
         def save():
@@ -1469,7 +1497,7 @@ class Servix(tk.Tk):
         if not eq:return
         d=tk.Toplevel(self); d.title('Update Warranty / AMC Coverage'); d.geometry('610x430'); d.configure(bg=CARD); d.transient(self); d.grab_set()
         tk.Label(d,text=f"Coverage Update • {eq['code']} • {eq['make']} {eq['model']}",bg=CARD,fg=NAVY,font=('Segoe UI',11,'bold')).pack(anchor='w',padx=24,pady=(18,10))
-        tk.Label(d,text='Coverage Type *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); typ=ttk.Combobox(d,state='readonly',values=['Warranty','AMC']); typ.pack(fill='x',padx=24,pady=(2,8)); typ.set('Warranty')
+        tk.Label(d,text='Coverage Type *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); typ=PremiumCombobox(d,state='readonly',values=['Warranty','AMC']); typ.pack(fill='x',padx=24,pady=(2,8)); typ.set('Warranty')
         tk.Label(d,text='New Coverage Till (YYYY-MM-DD) *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); till=ttk.Entry(d); till.pack(fill='x',padx=24,pady=(2,8))
         tk.Label(d,text='Reference / Contract No.',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); ref=ttk.Entry(d); ref.pack(fill='x',padx=24,pady=(2,8))
         tk.Label(d,text='Reason *',bg=CARD,fg=TEXT,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=24); reason=ttk.Entry(d); reason.pack(fill='x',padx=24,pady=(2,12))
@@ -1534,7 +1562,7 @@ class Servix(tk.Tk):
         d=tk.Toplevel(self); d.title('Add Equipment'); d.geometry('650x650'); d.configure(bg=CARD)
         with connect() as con:clients=[(r['id'],f"{r['code']} — {r['name']}") for r in con.execute('SELECT id,code,name FROM clients ORDER BY name')]
         cmap={v:k for k,v in clients}; vals={}; specs=[('client','Client',list(cmap)),('make','Make',None),('model','Model',None),('serial','Serial Number',None),('stock','Stock / External Equipment ID',None),('type','Equipment Type',None),('sold','Sold By',['Us','Other','Unknown']),('warranty','Warranty Till',None),('amc','AMC Till',None),('location','Location / Department',None)]
-        for k,l,v in specs:tk.Label(d,text=l+(' *' if k in ('client','make','model') else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=25,pady=(7,2)); w=ttk.Combobox(d,values=v,state='readonly') if v is not None else ttk.Entry(d); w.pack(fill='x',padx=25); vals[k]=w
+        for k,l,v in specs:tk.Label(d,text=l+(' *' if k in ('client','make','model') else ''),bg=CARD,fg=TEXT,font=('Segoe UI',9,'bold')).pack(anchor='w',padx=25,pady=(7,2)); w=PremiumCombobox(d,values=v,state='readonly') if v is not None else ttk.Entry(d); w.pack(fill='x',padx=25); vals[k]=w
         def save():
             if not vals['client'].get() or not vals['make'].get() or not vals['model'].get():return messagebox.showwarning('Required','Client, Make and Model are mandatory.',parent=d)
             with connect() as con:
@@ -1554,13 +1582,16 @@ class Servix(tk.Tk):
         self.clear()
         h=self.section_header('Service Calls','Search / Review / Complete Service History',fixed=True)
         if self.can_edit():
-            tk.Button(h,text='+ New Service',command=self.show_new_service,bg=GREEN,fg='white',
-                      font=('Segoe UI',11,'bold'),bd=0,padx=13,pady=5,cursor='hand2').pack(side='right',padx=12,pady=5)
+            icon=self._toolbar_icon('plus','white')
+            action=tk.Button(h,text='New Service',image=icon,compound='left',command=self.show_new_service,bg=BLUE,fg='white',
+                             font=('Segoe UI',10,'bold'),bd=0,padx=13,pady=7,cursor='hand2')
+            action.image=icon; action.pack(side='right',padx=12,pady=4)
 
         filters=self.card(self.dashboard_header_host)
         filters.pack(fill='x',padx=10,pady=(0,8))
         row1=tk.Frame(filters,bg=CARD); row1.pack(fill='x',padx=12,pady=(9,3))
-        row2=tk.Frame(filters,bg=CARD); row2.pack(fill='x',padx=12,pady=(2,8))
+        row2=tk.Frame(filters,bg=CARD); row2.pack(fill='x',padx=12,pady=(2,3))
+        row3=tk.Frame(filters,bg=CARD); row3.pack(fill='x',padx=12,pady=(2,8))
         def field(parent,label,factory):
             group=tk.Frame(parent,bg=CARD); group.pack(side='left',padx=(0,10))
             tk.Label(group,text=label,bg=CARD,fg=MUTED,font=('Segoe UI',8,'bold')).pack(anchor='w',padx=2,pady=(0,3))
@@ -1572,31 +1603,41 @@ class Servix(tk.Tk):
         with connect() as con:
             reasons=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT reason FROM services WHERE COALESCE(reason,'')!=''")})
             engineers=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT engineer FROM services WHERE COALESCE(engineer,'')!=''")})
-        reason=field(row1,'Service reason',lambda p:PremiumCombobox(p,width=13,state='readonly',values=reasons))
-        engineer=field(row1,'Engineer',lambda p:PremiumCombobox(p,width=13,state='readonly',values=engineers))
+            priorities=['All']+sorted({str(r[0]) for r in con.execute("SELECT DISTINCT priority FROM services WHERE COALESCE(priority,'')!=''")})
+            client_rows=con.execute('SELECT id,code,name FROM clients ORDER BY name').fetchall()
+            equipment_rows=con.execute("SELECT id,code,make,model,serial FROM equipment ORDER BY make,model").fetchall()
+        client_by_label={f"{r['code']} — {r['name']}":r['id'] for r in client_rows}
+        equipment_by_label={f"{r['code']} — {r['make']} {r['model']} / {r['serial'] or 'No serial'}":r['id'] for r in equipment_rows}
+        reason=field(row1,'Service reason',lambda p:PremiumCombobox(p,width=15,state='readonly',values=reasons))
+        engineer=field(row1,'Engineer',lambda p:PremiumCombobox(p,width=15,state='readonly',values=engineers))
+        client_filter=field(row2,'Client',lambda p:PremiumCombobox(p,width=23,state='readonly',values=['All']+list(client_by_label)))
+        equipment_filter=field(row2,'Equipment',lambda p:PremiumCombobox(p,width=25,state='readonly',values=['All']+list(equipment_by_label)))
+        priority=field(row2,'Priority',lambda p:PremiumCombobox(p,width=12,state='readonly',values=priorities))
+        coverage=field(row2,'Coverage',lambda p:PremiumCombobox(p,width=14,state='readonly',values=['All','Warranty','AMC','FOC','Chargeable']))
         status.set('All'); reason.set('All'); engineer.set('All')
+        client_filter.set('All'); equipment_filter.set('All'); priority.set('All'); coverage.set('All')
 
         date_from=tk.StringVar(); date_to=tk.StringVar()
-        from_entry=field(row2,'Opened from (YYYY-MM-DD)',lambda p:ttk.Entry(p,textvariable=date_from,width=14))
-        to_entry=field(row2,'Opened to (YYYY-MM-DD)',lambda p:ttk.Entry(p,textvariable=date_to,width=14))
-        payment=field(row2,'Payment',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['All','Paid','Pending','Part Paid','Invoice Raised','To Be Invoiced','Not Applicable']))
-        order=field(row2,'Entry date order',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['Newest first','Oldest first']))
+        from_entry=field(row3,'Opened from (YYYY-MM-DD)',lambda p:ttk.Entry(p,textvariable=date_from,width=14))
+        to_entry=field(row3,'Opened to (YYYY-MM-DD)',lambda p:ttk.Entry(p,textvariable=date_to,width=14))
+        payment=field(row3,'Payment',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['All','Paid','Pending','Part Paid','Invoice Raised','To Be Invoiced','Not Applicable']))
+        order=field(row3,'Entry date order',lambda p:PremiumCombobox(p,width=13,state='readonly',values=['Newest first','Oldest first']))
         payment.set('All'); order.set('Newest first')
 
         check_images=self._selection_images()
-        selection=tk.Frame(row2,bg=CARD); selection.pack(side='left',padx=(8,0),pady=(13,0))
+        selection=tk.Frame(row3,bg=CARD); selection.pack(side='left',padx=(8,0),pady=(13,0))
         select_all=tk.Label(selection,image=check_images[0],bg=CARD,cursor='hand2')
         select_all.pack(side='left',padx=(0,5))
-        select_text=tk.Label(selection,text='Select all visible',bg=CARD,fg=TEXT,font=('Segoe UI',9),cursor='hand2')
+        select_text=tk.Label(selection,text='Select all',bg=CARD,fg=TEXT,font=('Segoe UI',9),cursor='hand2')
         select_text.pack(side='left')
         selected_count=tk.Label(selection,text='0 selected',bg=CARD,fg=MUTED,font=('Segoe UI',9,'bold'))
         selected_count.pack(side='left',padx=(8,6))
-        btns=tk.Frame(row2,bg=CARD); btns.pack(side='right',pady=(13,0))
+        btns=tk.Frame(row3,bg=CARD); btns.pack(side='right',pady=(13,0))
         holder=self.card(self.content); holder.pack(fill='both',expand=True,padx=10,pady=(0,10))
         scroller=tk.Canvas(holder,bg=CARD,highlightthickness=0)
-        sb=ttk.Scrollbar(holder,orient='vertical',command=scroller.yview,style='Dashboard.Vertical.TScrollbar')
-        scroller.pack(side='left',fill='both',expand=True,padx=(8,0),pady=8)
-        sb.pack(side='right',fill='y',padx=(0,8),pady=8); scroller.configure(yscrollcommand=sb.set)
+        sb=ttk.Scrollbar(holder,orient='vertical',command=scroller.yview,style='Vertical.TScrollbar')
+        scroller.pack(side='left',fill='both',expand=True,padx=(3,0),pady=0)
+        sb.pack(side='right',fill='y',padx=(0,2),pady=0); scroller.configure(yscrollcommand=sb.set)
         records=tk.Frame(scroller,bg=CARD); win=scroller.create_window((0,0),window=records,anchor='nw')
         records.bind('<Configure>',lambda _e:scroller.configure(scrollregion=scroller.bbox('all')))
         scroller.bind('<Configure>',lambda e:scroller.itemconfigure(win,width=e.width))
@@ -1640,9 +1681,17 @@ class Servix(tk.Tk):
                     return 'break'
                 def open_row(_event=None,key=str(code)):
                     self.show_service_detail(key); return 'break'
+                def scroll_service_list(event):
+                    if getattr(event,'num',None)==4: units=-2
+                    elif getattr(event,'num',None)==5: units=2
+                    else: units=-1 if event.delta>0 else 1
+                    scroller.yview_scroll(units,'units')
+                    return 'break'
                 def bind_card(widget):
                     widget.bind('<Button-1>',toggle)
                     widget.bind('<Double-1>',open_row)
+                    for sequence in ('<MouseWheel>','<Button-4>','<Button-5>'):
+                        widget.bind(sequence,scroll_service_list,add='+')
                     for child in widget.winfo_children(): bind_card(child)
                 bind_card(card)
 
@@ -1657,9 +1706,12 @@ class Servix(tk.Tk):
             self._save_rows_csv('Selected Service Calls',
                 ['Service ID','Opened','Client','Equipment','Reason','Engineer','Status','Payment'],
                 selected_service_rows(),'SERVIX_Selected_Service_Calls.csv')
-        print_btn=tk.Button(btns,text='Print Selected PDF',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2')
-        print_btn.pack(side='right',padx=(5,0))
-        tk.Button(btns,text='Export Selected CSV',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right')
+        print_icon=self._toolbar_icon('print','white')
+        print_btn=tk.Button(btns,text='Print PDF',image=print_icon,compound='left',command=print_selected,bg=BLUE,fg='white',bd=0,padx=9,pady=6,cursor='hand2')
+        print_btn.image=print_icon; print_btn.pack(side='right',padx=(5,0))
+        export_icon=self._toolbar_icon('export',BLUE)
+        export_btn=tk.Button(btns,text='Export CSV',image=export_icon,compound='left',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=9,pady=6,cursor='hand2')
+        export_btn.image=export_icon; export_btn.pack(side='right')
 
         def refresh(*_):
             visible_rows.clear(); selected_codes.clear()
@@ -1667,6 +1719,11 @@ class Servix(tk.Tk):
             if status.get()!='All': clauses.append('s.status=?'); args.append(status.get())
             if reason.get()!='All': clauses.append('s.reason=?'); args.append(reason.get())
             if engineer.get()!='All': clauses.append('s.engineer=?'); args.append(engineer.get())
+            if client_filter.get()!='All': clauses.append('s.client_id=?'); args.append(client_by_label[client_filter.get()])
+            if equipment_filter.get()!='All': clauses.append('s.equipment_id=?'); args.append(equipment_by_label[equipment_filter.get()])
+            if priority.get()!='All': clauses.append('s.priority=?'); args.append(priority.get())
+            coverage_clauses={'Warranty':"s.warranty='Yes'",'AMC':"s.amc='Yes'",'FOC':"s.foc_chargeable='FOC'",'Chargeable':"s.foc_chargeable='Chargeable'"}
+            if coverage.get() in coverage_clauses: clauses.append(coverage_clauses[coverage.get()])
             if payment.get()!='All': clauses.append('s.payment_status=?'); args.append(payment.get())
             if date_from.get().strip(): clauses.append('date(s.opened)>=date(?)'); args.append(date_from.get().strip())
             if date_to.get().strip(): clauses.append('date(s.opened)<=date(?)'); args.append(date_to.get().strip())
@@ -1691,7 +1748,7 @@ class Servix(tk.Tk):
             return 'break'
         select_all.bind('<Button-1>',toggle_all_visible)
         select_text.bind('<Button-1>',toggle_all_visible)
-        for widget in (search,status,reason,engineer,payment,order):
+        for widget in (search,status,reason,engineer,client_filter,equipment_filter,priority,coverage,payment,order):
             if isinstance(widget,PremiumCombobox): widget.bind('<<ComboboxSelected>>',refresh)
         refresh_id={'after':None}
         def schedule_refresh(_event=None):
@@ -1702,9 +1759,13 @@ class Servix(tk.Tk):
         for widget in (search,from_entry,to_entry):
             widget.bind('<KeyRelease>',schedule_refresh,add='+')
             widget.bind('<FocusOut>',lambda _e:self.after_idle(refresh),add='+')
-        scroller.bind('<MouseWheel>',lambda e:scroller.yview_scroll(-1 if e.delta>0 else 1,'units'))
-        scroller.bind('<Button-4>',lambda _e:scroller.yview_scroll(-1,'units'))
-        scroller.bind('<Button-5>',lambda _e:scroller.yview_scroll(1,'units'))
+        def scroll_service_list(event):
+            if getattr(event,'num',None)==4: units=-2
+            elif getattr(event,'num',None)==5: units=2
+            else: units=-1 if event.delta>0 else 1
+            scroller.yview_scroll(units,'units')
+            return 'break'
+        for sequence in ('<MouseWheel>','<Button-4>','<Button-5>'): scroller.bind(sequence,scroll_service_list,add='+')
         refresh()
 
     def show_clients(self):
@@ -1728,7 +1789,9 @@ class Servix(tk.Tk):
         actions=tk.Frame(row,bg=CARD); actions.pack(side='right')
         if self.current_user['role']=='Administrator':
             tk.Button(actions,text='Merge Clients',bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,command=self.merge_clients_dialog,cursor='hand2').pack(side='right',padx=(4,0))
-        tk.Button(actions,text='+ New Client',bg=BLUE,fg='white',bd=0,padx=12,pady=6,command=self.client_dialog,cursor='hand2').pack(side='right',padx=(4,0))
+        new_icon=self._toolbar_icon('plus','white')
+        new_btn=tk.Button(actions,text='New Client',image=new_icon,compound='left',bg=BLUE,fg='white',bd=0,padx=12,pady=6,command=self.client_dialog,cursor='hand2')
+        new_btn.image=new_icon; new_btn.pack(side='right',padx=(4,0))
         row2=tk.Frame(tools,bg=CARD); row2.pack(fill='x',padx=12,pady=(3,9))
         selection=tk.Frame(row2,bg=CARD); selection.pack(side='left')
         selected_codes=set(); check_images=self._selection_images()
@@ -1744,7 +1807,7 @@ class Servix(tk.Tk):
         widths=(95,230,160,125,240,135)
         for col,w in zip(cols,widths): tr.heading(col,text=col); tr.column(col,width=w,minwidth=70,anchor='w')
         tr.grid(row=0,column=0,sticky='nsew')
-        vs=ttk.Scrollbar(wrap,orient='vertical',command=tr.yview,style='Dashboard.Vertical.TScrollbar')
+        vs=ttk.Scrollbar(wrap,orient='vertical',command=tr.yview,style='Vertical.TScrollbar')
         hs=ttk.Scrollbar(wrap,orient='horizontal',command=tr.xview)
         vs.grid(row=0,column=1,sticky='ns'); hs.grid(row=1,column=0,sticky='ew')
         wrap.rowconfigure(0,weight=1); wrap.columnconfigure(0,weight=1)
@@ -1790,9 +1853,15 @@ class Servix(tk.Tk):
             self._save_rows_csv('Selected Clients',['Client ID','Client Name','Contact Person','Mobile','Email','City'],selected_rows(),'SERVIX_Selected_Clients.csv')
         def print_selected():
             self._print_rows_pdf('Selected Clients',['Client ID','Client Name','Contact Person','Mobile','Email','City'],selected_rows(),'SERVIX_Selected_Clients.pdf')
-        tk.Button(btns,text='Print Selected PDF',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
-        tk.Button(btns,text='Export Selected CSV',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
-        tk.Button(btns,text='Export Current CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Clients.csv'),bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right')
+        print_icon=self._toolbar_icon('print','white')
+        print_btn=tk.Button(btns,text='Print Selected PDF',image=print_icon,compound='left',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2')
+        print_btn.image=print_icon; print_btn.pack(side='right',padx=(5,0))
+        export_icon=self._toolbar_icon('export',BLUE)
+        export_btn=tk.Button(btns,text='Export Selected CSV',image=export_icon,compound='left',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2')
+        export_btn.image=export_icon; export_btn.pack(side='right',padx=(5,0))
+        current_icon=self._toolbar_icon('export',NAVY)
+        current_btn=tk.Button(btns,text='Export Current CSV',image=current_icon,compound='left',command=lambda:self.export_tree_csv(tr,'SERVIX_Clients.csv'),bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=6,cursor='hand2')
+        current_btn.image=current_icon; current_btn.pack(side='right')
 
         def load(*_):
             term='%'+q.get().strip()+'%'; clauses=[]; args=[]
@@ -1847,7 +1916,7 @@ class Servix(tk.Tk):
         widths=(105,220,125,135,140,115,120,120)
         for col,w in zip(cols,widths):tr.heading(col,text=col);tr.column(col,width=w,minwidth=72,anchor='w')
         tr.grid(row=0,column=0,sticky='nsew')
-        vs=ttk.Scrollbar(wrap,orient='vertical',command=tr.yview,style='Dashboard.Vertical.TScrollbar')
+        vs=ttk.Scrollbar(wrap,orient='vertical',command=tr.yview,style='Vertical.TScrollbar')
         hs=ttk.Scrollbar(wrap,orient='horizontal',command=tr.xview)
         vs.grid(row=0,column=1,sticky='ns');hs.grid(row=1,column=0,sticky='ew')
         wrap.rowconfigure(0,weight=1);wrap.columnconfigure(0,weight=1)
@@ -1890,9 +1959,15 @@ class Servix(tk.Tk):
             self._save_rows_csv('Selected Equipment',['Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'],selected_rows(),'SERVIX_Selected_Equipment.csv')
         def print_selected():
             self._print_rows_pdf('Selected Equipment',['Equipment ID','Client','Make','Model','Serial No.','External ID','Warranty Up To','AMC Up To'],selected_rows(),'SERVIX_Selected_Equipment.pdf')
-        tk.Button(btns,text='Print Selected PDF',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
-        tk.Button(btns,text='Export Selected CSV',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right',padx=(5,0))
-        tk.Button(btns,text='Export Current CSV',command=lambda:self.export_tree_csv(tr,'SERVIX_Equipment.csv'),bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=6,cursor='hand2').pack(side='right')
+        print_icon=self._toolbar_icon('print','white')
+        print_btn=tk.Button(btns,text='Print Selected PDF',image=print_icon,compound='left',command=print_selected,bg=BLUE,fg='white',bd=0,padx=11,pady=6,cursor='hand2')
+        print_btn.image=print_icon; print_btn.pack(side='right',padx=(5,0))
+        export_icon=self._toolbar_icon('export',BLUE)
+        export_btn=tk.Button(btns,text='Export Selected CSV',image=export_icon,compound='left',command=export_selected,bg='#EAF2FF',fg=BLUE,bd=0,padx=10,pady=6,cursor='hand2')
+        export_btn.image=export_icon; export_btn.pack(side='right',padx=(5,0))
+        current_icon=self._toolbar_icon('export',NAVY)
+        current_btn=tk.Button(btns,text='Export Current CSV',image=current_icon,compound='left',command=lambda:self.export_tree_csv(tr,'SERVIX_Equipment.csv'),bg='#F1F6FB',fg=NAVY,bd=0,padx=10,pady=6,cursor='hand2')
+        current_btn.image=current_icon; current_btn.pack(side='right')
 
         def load(*_):
             term='%'+q.get().strip()+'%';clauses=[];args=[]

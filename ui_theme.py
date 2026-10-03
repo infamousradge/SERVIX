@@ -55,6 +55,18 @@ def configure_theme(root):
             'children': [('Vertical.Scrollbar.thumb', {'expand': '1', 'sticky': 'nswe'})]
         })
     ])
+    style.configure('Horizontal.TScrollbar', gripcount=0, width=10,
+                    background='#9FB5CB', troughcolor=BG,
+                    bordercolor=BG, lightcolor='#9FB5CB',
+                    darkcolor='#9FB5CB', arrowsize=0, relief='flat')
+    style.map('Horizontal.TScrollbar',
+              background=[('pressed', '#718DAA'), ('active', '#829DB8')])
+    style.layout('Horizontal.TScrollbar', [
+        ('Horizontal.Scrollbar.trough', {
+            'sticky': 'we',
+            'children': [('Horizontal.Scrollbar.thumb', {'expand': '1', 'sticky': 'nswe'})]
+        })
+    ])
     style.configure('Search.Treeview.Heading', font=('Segoe UI', 10, 'bold'),
                     background='#EAF3FC', foreground='#294B6B', padding=(12, 10),
                     borderwidth=0, relief='flat')
@@ -500,7 +512,7 @@ class PremiumCombobox(tk.Canvas):
         # the option sheet reads as the lower half of the same control.
         scale=3; surface=Image.new('RGBA',(desired_width*scale,desired_height*scale),(0,0,0,0)); painter=ImageDraw.Draw(surface)
         painter.rounded_rectangle((3*scale,3*scale,(desired_width-3)*scale,(desired_height-2)*scale),radius=13*scale,fill='#D3DFEB')
-        painter.rounded_rectangle((2*scale,0,(desired_width-4)*scale,(desired_height-6)*scale),radius=13*scale,fill='white',outline='#D8E4F0',width=scale)
+        painter.rounded_rectangle((2*scale,0,(desired_width-4)*scale,(desired_height-6)*scale),radius=13*scale,fill='#FCFDFF',outline='#D8E4F0',width=scale)
         painter.rectangle((3*scale,0,(desired_width-5)*scale,15*scale),fill='white')
         painter.line((3*scale,0,(desired_width-5)*scale,0),fill='#D8E4F0',width=scale)
         self._popup_surface=ImageTk.PhotoImage(surface.resize((desired_width,desired_height),Image.Resampling.LANCZOS),master=self)
