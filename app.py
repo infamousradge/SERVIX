@@ -605,7 +605,7 @@ class Servix(tk.Tk):
         dash_sort=PremiumCombobox(dashboard_filters,width=18,state='readonly',values=['Newest entry first','Oldest entry first']); dash_sort.set('Newest entry first'); dash_sort.pack(side='left',padx=6)
         recent_list=tk.Frame(recent,bg=CARD)
         recent_list.pack(fill='x',padx=14,pady=(0,12))
-        grid_weights=(1.05,2.0,1.45,1.3,1.15,0.9)
+        grid_weights=(15,28,20,18,16,12)
         headings=('SERVICE / DATE','CLIENT / EQUIPMENT','REQUEST','ENGINEER','STATUS','PAYMENT')
         header=tk.Frame(recent_list,bg='#EEF4FA')
         header.pack(fill='x',pady=(0,4))
