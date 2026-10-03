@@ -33,10 +33,19 @@ def main():
             window = app.Servix()
         window.report_callback_exception = lambda *error: errors.append(error)
         try:
-            window.update_idletasks()
+            window.geometry('1280x760')
+            window.update()
             window.page_canvas.configure(scrollregion=(0,0,window.page_canvas.winfo_width(),2000))
             window.page_canvas.yview_moveto(0)
-            window._route_mousewheel(SimpleNamespace(x_root=-10,y_root=-10,state=0,num=None,delta=-120))
+            original_winfo_containing = window.winfo_containing
+            window.winfo_containing = lambda _x, _y: window.page_canvas
+            try:
+                window._route_mousewheel(SimpleNamespace(
+                    x_root=window.page_canvas.winfo_rootx()+10,
+                    y_root=window.page_canvas.winfo_rooty()+10,
+                    state=0, num=None, delta=-120))
+            finally:
+                window.winfo_containing = original_winfo_containing
             assert window.page_canvas.yview()[0] > 0, 'Mouse wheel should scroll the page canvas'
             for size in ('1280x760', '1536x960'):
                 window.geometry(size)
