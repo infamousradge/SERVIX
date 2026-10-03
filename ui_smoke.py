@@ -58,9 +58,9 @@ def main():
                         assert len(selectors) >= 5, 'Service Calls should expose the expanded filter set'
                     if method in ('show_clients','show_equipment'):
                         tables=[w for w in walk(window.content) if isinstance(w,ttk.Treeview)]
-                        modes=[t.cget('selectmode') for t in tables]
+                        modes=[str(t.cget('selectmode')) for t in tables]
                         assert len(tables)==1 and modes==['extended'], f'{method}: expected one extended-select table, found {len(tables)} with modes {modes}'
-                        assert 'tree' in tables[0].cget('show'), f'{method} rows should display selection checks'
+                        assert 'tree' in str(tables[0].cget('show')), f'{method} rows should display selection checks'
                 window.search.delete(0,'end'); window.search.insert(0,'SRV-TEST')
                 window.global_search(); window.update()
                 assert any(hasattr(w,'get_children') and w.get_children() for w in walk(window.content)), 'Live search should show matching rows'
