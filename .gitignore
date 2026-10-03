@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.spec
+installer-output/
+data/
+attachments/
+exports/
+backups/
+assets/installer-*.png
+installer-preview/

@@ -2,7 +2,7 @@ name: Build SERVIX Windows App
 
 on:
   push:
-    branches: [ main, feature/service-workflow-v2 ]
+    branches: [ main, feature/service-workflow-v2, feature/classic-blue-ui ]
   workflow_dispatch:
 
 jobs:
@@ -25,10 +25,19 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Check database transactions and file release
+        run: python -m unittest test_database test_demo_data -v
+
+      - name: Prepare SERVIX branding and Windows icons
+        run: python branding_assets.py
+
+      - name: Check desktop layouts and tab navigation
+        run: python ui_smoke.py
+
       - name: Build SERVIX EXE
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --windowed --name SERVIX app.py
+          pyinstaller --noconfirm --clean --windowed --name SERVIX --icon assets/servix.ico --add-data "assets;assets" app.py
 
       - name: Smoke test packaged SERVIX startup
         shell: pwsh
@@ -44,6 +53,9 @@ jobs:
           choco install innosetup --no-progress -y
           & "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" installer\\SERVIX.iss
 
+      - name: Verify installer, installed app, and uninstall
+        run: python installer_smoke.py
+
       - name: Package Windows build
         shell: pwsh
         run: |
@@ -54,6 +66,14 @@ jobs:
         with:
           name: SERVIX-Setup
           path: installer-output/SERVIX-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload real installer screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: SERVIX-Installer-Preview
+          path: installer-preview/*.png
           if-no-files-found: error
           retention-days: 30
 
