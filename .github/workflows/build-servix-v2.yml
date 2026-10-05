@@ -35,7 +35,7 @@ jobs:
       - name: Generate Windows app icons
         shell: pwsh
         run: |
-          & .\node_modules\.bin\tauri.cmd icon assets/app-icon-source.png
+          & .\node_modules\.bin\tauri.cmd icon assets/app-icon-source.svg
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build SERVIX V2 NSIS installer
