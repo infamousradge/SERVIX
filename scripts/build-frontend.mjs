@@ -27,6 +27,7 @@ if (!existsSync(reactUmd) || !existsSync(reactDomUmd)) {
 
 await copyFile(path.join(root, 'index.html'), path.join(web, 'index.html'));
 await copyFile(path.join(root, 'src', 'styles.css'), path.join(web, 'assets', 'app.css'));
+await copyFile(path.join(root, 'src', 'brand.css'), path.join(web, 'assets', 'brand.css'));
 await copyFile(reactUmd, path.join(web, 'assets', 'vendor', 'react.production.min.js'));
 await copyFile(reactDomUmd, path.join(web, 'assets', 'vendor', 'react-dom.production.min.js'));
 const logoSource = path.join(root, 'assets', 'logo.png');
