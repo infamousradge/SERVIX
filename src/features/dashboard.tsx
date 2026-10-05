@@ -5,7 +5,7 @@ function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(
  const topClients=Object.entries(data.services.reduce((a:any,s)=>{a[s.client]=(a[s.client]||0)+1;return a},{})).sort((a:any,b:any)=>b[1]-a[1]).slice(0,5).map(([label,value]:any)=>({label,value}));
  const topParts=Object.entries(data.partUsage.reduce((a:any,p)=>{a[p.itemName]=(a[p.itemName]||0)+p.quantity;return a},{})).sort((a:any,b:any)=>b[1]-a[1]).slice(0,5).map(([label,value]:any)=>({label,value}));
  return <div className="module-content dashboard-view">
-  <PageHeader title="Dashboard" subtitle="Live overview of service operations and incoming work" actions={<button className="primary-button" onClick={()=>onNavigate('service-calls')}><Icon name="plus"/> New Service Call</button>}/>
+  <PageHeader title="Dashboard" subtitle="Live overview of service operations and incoming work" actions={<button className="primary-button" onClick={()=>onNavigate('service-calls')}><Icon name="plus"/> Manual Service Call</button>}/>
   <div className="kpi-grid">
    <KpiCard label="Open" value={counts.open} icon="service" tone="blue" onClick={()=>onNavigate('service-calls')}/>
    <KpiCard label="In Progress" value={counts.inProgress} icon="service" tone="orange" onClick={()=>onNavigate('service-calls')}/>
@@ -15,7 +15,7 @@ function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(
   </div>
   <div className="dashboard-grid two">
    <section className="card chart-card"><div className="card-head"><div><h3>Service Calls Trend</h3><p>Recent activity</p></div><span className="soft-chip">Live</span></div><Sparkline values={[9,12,11,16,14,18,21,19,24,20,25,23]}/><div className="trend-labels"><span>Earlier</span><strong>Current period</strong></div></section>
-   <section className="card"><div className="card-head"><div><h3>Coverage Mix</h3><p>Current service-call coverage</p></div></div><Donut segments={coverage} totalLabel="Calls"/></section>
+   <section className="card coverage-summary-card"><div className="card-head"><div><h3>Coverage Mix</h3><p>Warranty, AMC and out-of-coverage calls</p></div></div><Donut segments={coverage} totalLabel="Calls"/></section>
   </div>
   <div className="dashboard-grid three">
    <section className={`card sync-card ${data.sync.status==='overdue'?'attention':''}`}><div className="card-head"><div><h3>Google Form Sync</h3><p>Incoming request source</p></div><StatusBadge value={data.sync.status==='up-to-date'?'Up to date':data.sync.status==='not-configured'?'Not configured':'Warning'}/></div><div className="sync-time"><span>Last successful sync</span><strong>{data.sync.lastSuccessfulSync||'Not yet synced'}</strong></div><div className="sync-stat"><span>{data.sync.newCount} new requests</span><button className="secondary-button" onClick={onSync}><Icon name="refresh"/> Sync Now</button></div></section>

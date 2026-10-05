@@ -32,6 +32,10 @@ await copyFile(path.join(root, 'src', 'detail.css'), path.join(web, 'assets', 'd
 await copyFile(path.join(root, 'src', 'refinements.css'), path.join(web, 'assets', 'refinements.css'));
 await copyFile(reactUmd, path.join(web, 'assets', 'vendor', 'react.production.min.js'));
 await copyFile(reactDomUmd, path.join(web, 'assets', 'vendor', 'react-dom.production.min.js'));
-const logoSource = path.join(root, 'assets', 'logo.png');
+
+const transparentLogo = path.join(root, 'assets', 'logo-transparent.png');
+const originalLogo = path.join(root, 'assets', 'logo.png');
+const logoSource = existsSync(transparentLogo) ? transparentLogo : originalLogo;
 if (existsSync(logoSource)) await copyFile(logoSource, path.join(web, 'assets', 'servix-logo.png'));
+
 console.log('SERVIX frontend built at web/.');

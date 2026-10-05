@@ -32,10 +32,16 @@ jobs:
       - name: Install frontend and Tauri dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Prepare SERVIX brand assets
+        shell: pwsh
+        run: |
+          .\scripts\prepare-brand-assets.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Generate Windows app icons
         shell: pwsh
         run: |
-          & .\node_modules\.bin\tauri.cmd icon assets/app-icon-source.svg
+          & .\node_modules\.bin\tauri.cmd icon assets/app-icon-generated.png
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build SERVIX V2 NSIS installer
