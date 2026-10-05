@@ -46,6 +46,8 @@ def seed(x: int, y: int) -> None:
         queue.append((x, y))
 
 
+# Remove only the connected near-white exterior so the original SERVIX artwork
+# is preserved while the surrounding white canvas becomes transparent.
 for x in range(w):
     seed(x, 0)
     seed(x, h - 1)
@@ -64,17 +66,47 @@ while queue:
                 visited[idx] = 1
                 queue.append((nx, ny))
 
-img.save(TRANSPARENT, "PNG", optimize=True)
+# The old SERVIX sidebar artwork used a white SERVIX wordmark/tagline on the
+# dark navy shell while retaining the original cyan/green X. Recreate that
+# treatment from the locked original logo instead of using a white rectangle.
+sidebar = img.copy()
+spx = sidebar.load()
+wordmark_top = int(h * 0.70)
+tagline_top = int(h * 0.89)
+x_start = int(w * 0.715)
+for y in range(wordmark_top, h):
+    for x in range(w):
+        r, g, b, a = spx[x, y]
+        if a == 0:
+            continue
+        if y >= tagline_top:
+            # Soft white tagline, matching the old dark-sidebar treatment.
+            spx[x, y] = (232, 243, 252, a)
+        elif x < x_start:
+            # SERVI becomes white; the colourful X stays untouched.
+            spx[x, y] = (247, 251, 255, a)
 
-# Installed Windows icon uses the emblem from the exact approved SERVIX artwork.
-left = int(w * 0.08)
-top = int(h * 0.02)
-right = int(w * 0.92)
-bottom = int(h * 0.73)
+sidebar.save(TRANSPARENT, "PNG", optimize=True)
+
+# Generate the Windows icon from the actual emblem bounds in the original
+# artwork. This avoids the previous loose crop that made the installed icon
+# look different from the old SERVIX mark.
+alpha = img.getchannel("A")
+upper = alpha.crop((0, 0, w, int(h * 0.705)))
+bbox = upper.getbbox()
+if not bbox:
+    raise SystemExit("Unable to locate SERVIX emblem in source logo")
+left, top, right, bottom = bbox
+pad_x = max(6, int((right - left) * 0.025))
+pad_y = max(6, int((bottom - top) * 0.025))
+left = max(0, left - pad_x)
+top = max(0, top - pad_y)
+right = min(w, right + pad_x)
+bottom = min(int(h * 0.715), bottom + pad_y)
 emblem = img.crop((left, top, right, bottom))
 
 canvas = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
-padding = 66
+padding = 54
 available = 1024 - padding * 2
 ratio = min(available / emblem.width, available / emblem.height)
 size = (max(1, round(emblem.width * ratio)), max(1, round(emblem.height * ratio)))
@@ -82,6 +114,6 @@ emblem = emblem.resize(size, Image.Resampling.LANCZOS)
 canvas.alpha_composite(emblem, ((1024 - size[0]) // 2, (1024 - size[1]) // 2))
 canvas.save(ICON, "PNG", optimize=True)
 
-print(f"Prepared SERVIX transparent logo: {TRANSPARENT}")
-print(f"Prepared SERVIX Windows icon: {ICON}")
+print(f"Prepared SERVIX dark-shell logo: {TRANSPARENT}")
+print(f"Prepared SERVIX Windows emblem icon: {ICON}")
 print(f"Prepared bundled Manrope font: {MANROPE}")

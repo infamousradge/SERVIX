@@ -31,6 +31,7 @@ await copyFile(path.join(root, 'src', 'fonts.css'), path.join(web, 'assets', 'fo
 await copyFile(path.join(root, 'src', 'brand.css'), path.join(web, 'assets', 'brand.css'));
 await copyFile(path.join(root, 'src', 'detail.css'), path.join(web, 'assets', 'detail.css'));
 await copyFile(path.join(root, 'src', 'refinements.css'), path.join(web, 'assets', 'refinements.css'));
+await copyFile(path.join(root, 'src', 'scale100.css'), path.join(web, 'assets', 'scale100.css'));
 await copyFile(reactUmd, path.join(web, 'assets', 'vendor', 'react.production.min.js'));
 await copyFile(reactDomUmd, path.join(web, 'assets', 'vendor', 'react-dom.production.min.js'));
 
