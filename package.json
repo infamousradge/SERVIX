@@ -7,7 +7,7 @@
     "frontend:build": "node scripts/build-frontend.mjs",
     "frontend:preview": "node scripts/serve-preview.mjs",
     "tauri": "tauri",
-    "brand:prepare": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-brand-assets.ps1",
+    "brand:prepare": "python scripts/prepare-brand-assets.py",
     "icons": "npm run brand:prepare && tauri icon assets/app-icon-generated.png",
     "desktop:dev": "npm run icons && npm run frontend:build && tauri dev --config src-tauri/tauri.conf.json",
     "desktop:build": "npm run icons && npm run frontend:build && tauri build --config src-tauri/tauri.conf.json --bundles nsis"
