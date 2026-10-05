@@ -2,6 +2,7 @@ mod commands;
 mod database;
 mod models;
 mod security;
+mod service_detail;
 mod state;
 
 use tauri::Manager;
@@ -28,7 +29,11 @@ pub fn run() {
             commands::create_service_call,
             commands::create_user,
             commands::update_intake_status,
-            commands::sync_google_form
+            commands::sync_google_form,
+            service_detail::get_service_detail,
+            service_detail::update_service_detail,
+            service_detail::add_service_part,
+            service_detail::add_service_note
         ])
         .run(tauri::generate_context!())
         .expect("SERVIX failed to start");
