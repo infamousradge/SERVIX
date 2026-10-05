@@ -37,6 +37,12 @@ jobs:
           tar -xzf $archive -C .
           if ($LASTEXITCODE -ne 0) { throw "Could not extract SERVIX V2 source tar.gz" }
 
+          # The permanent V2 build workflow is installed separately through the GitHub connector,
+          # because an Actions GITHUB_TOKEN cannot create or update workflow files.
+          if (Test-Path '.github/workflows/build-servix-v2.yml') {
+            Remove-Item '.github/workflows/build-servix-v2.yml' -Force
+          }
+
           # Remove legacy Python application and temporary transfer material.
           $legacyFiles = @(
             'app.py','attachment_utils.py','database.py','requirements.txt','run_servix.bat',
@@ -58,9 +64,6 @@ jobs:
           git config user.name "SERVIX Build Bot"
           git config user.email "actions@users.noreply.github.com"
           git add -A
-          # GitHub Actions tokens cannot create/update workflow files. Keep workflow changes out of this commit;
-          # the permanent build workflow is installed separately after bootstrap.
-          git restore --staged .github/workflows 2>$null
           git status --short
           git commit -m "Bootstrap fresh SERVIX V2 Tauri React SQLite source"
           git push origin HEAD:servix-rebuild-v2
