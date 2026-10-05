@@ -31,7 +31,7 @@ jobs:
           $archive = Join-Path $env:RUNNER_TEMP 'servix-v2-source.tar.gz'
           [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($base64))
           $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          $expected = '394d5c902a7de15bb6f23311f2eb276387f4df775dc6771cb432893c9a3a9597'
+          $expected = '282c53518eb9f277fdebd0f845f3635daf17303260ed6cee9647b9e52af6a689'
           Write-Host "SERVIX source SHA256: $actual"
           if ($actual -ne $expected) { throw "SERVIX source archive checksum mismatch" }
           tar -xzf $archive -C .
