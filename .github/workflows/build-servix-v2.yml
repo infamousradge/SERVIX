@@ -1,0 +1,60 @@
+name: Build SERVIX V2 Windows
+
+on:
+  push:
+    branches:
+      - servix-rebuild-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout SERVIX V2
+        uses: actions/checkout@v4
+        with:
+          ref: servix-rebuild-v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install frontend and Tauri dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate Windows app icons
+        shell: pwsh
+        run: |
+          & .\node_modules\.bin\tauri.cmd icon assets/app-icon-source.png
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build SERVIX V2 NSIS installer
+        shell: pwsh
+        run: |
+          & .\node_modules\.bin\tauri.cmd build --config src-tauri/tauri.conf.json --bundles nsis
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify exactly one Windows installer
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem 'src-tauri/target/release/bundle/nsis/*.exe' -File -ErrorAction SilentlyContinue)
+          if ($files.Count -ne 1) { throw "Expected exactly one SERVIX V2 EXE, found $($files.Count)" }
+          $files | ForEach-Object { Write-Host "Created: $($_.FullName) ($($_.Length) bytes)" }
+
+      - name: Upload SERVIX V2 Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: SERVIX-V2-Windows-EXE
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 30
