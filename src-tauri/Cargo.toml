@@ -2,7 +2,7 @@
 name = "servix-desktop"
 version = "0.1.0"
 description = "SERVIX offline-first service management desktop application"
-authors = ["HAC Acoustic Technologies"]
+authors = ["Yogesh Gaurav"]
 edition = "2021"
 rust-version = "1.77.2"
 
