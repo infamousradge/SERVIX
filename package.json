@@ -1,0 +1,22 @@
+{
+  "name": "servix-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SERVIX service-management desktop application",
+  "scripts": {
+    "frontend:build": "node scripts/build-frontend.mjs",
+    "frontend:preview": "node scripts/serve-preview.mjs",
+    "tauri": "tauri",
+    "icons": "tauri icon assets/logo.png",
+    "desktop:dev": "npm run icons && npm run frontend:build && tauri dev --config src-tauri/tauri.conf.json",
+    "desktop:build": "npm run icons && npm run frontend:build && tauri build --config src-tauri/tauri.conf.json --bundles nsis"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "typescript": "5.8.3"
+  }
+}

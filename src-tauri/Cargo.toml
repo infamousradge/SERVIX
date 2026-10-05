@@ -1,0 +1,32 @@
+[package]
+name = "servix-desktop"
+version = "0.1.0"
+description = "SERVIX offline-first service management desktop application"
+authors = ["HAC Acoustic Technologies"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "servix_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "=2.11.5", features = [] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+rusqlite = { version = "=0.32.1", features = ["bundled"] }
+argon2 = "=0.5.3"
+rand = "=0.8.7"
+chrono = { version = "=0.4.45", features = ["serde"] }
+
+[profile.release]
+opt-level = 0
+lto = false
+codegen-units = 256
+incremental = false
+debug = 0
+strip = "symbols"
+panic = "abort"

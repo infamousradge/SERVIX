@@ -1,0 +1,6 @@
+node_modules/
+web/
+src-tauri/target/
+*.sqlite3
+*.db
+.DS_Store
