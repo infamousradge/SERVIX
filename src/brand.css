@@ -1,12 +1,15 @@
-.sidebar-brand{height:92px;padding:0 14px;justify-content:flex-start}
-.sidebar-brand .brand-logo{width:100%;height:66px;padding:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible;justify-content:flex-start}
-.sidebar-brand .brand-logo img{width:100%;height:100%;object-fit:contain;object-position:left center;border-radius:0}
+.sidebar{position:relative;z-index:20}
+.workspace{position:relative;z-index:1;overflow:hidden}
+.sidebar-brand{height:86px;flex:0 0 86px;padding:8px 14px 7px;justify-content:flex-start;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-brand .brand-logo{width:100%;max-width:186px;height:70px;padding:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden;justify-content:flex-start}
+.sidebar-brand .brand-logo img{width:100%;height:100%;object-fit:contain;object-position:left center;border-radius:0;display:block}
 .sidebar-brand .brand-copy{display:none}
+.sidebar nav{flex:1;min-height:0}
 .login-brand{justify-content:center;margin-bottom:24px}
-.login-brand .brand-logo{width:min(260px,72vw);height:86px;padding:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
-.login-brand .brand-logo img{width:100%;height:100%;object-fit:contain;object-position:center;border-radius:0}
+.login-brand .brand-logo{width:min(275px,74vw);height:96px;padding:0;border-radius:0;background:transparent;box-shadow:none;overflow:hidden}
+.login-brand .brand-logo img{width:100%;height:100%;object-fit:contain;object-position:center;border-radius:0;display:block}
 .login-brand>div:last-child:not(.brand-mark){display:none}
-.sidebar-collapsed .sidebar-brand{height:78px;padding:0 8px;justify-content:center}
+.sidebar-collapsed .sidebar-brand{height:78px;flex-basis:78px;padding:7px;justify-content:center}
 .sidebar-collapsed .sidebar-brand .brand-logo{width:58px;height:58px}
 .sidebar-collapsed .sidebar-brand .brand-logo img{object-position:center}
-@media(max-width:980px){.sidebar-brand{height:78px;padding:0 8px;justify-content:center}.sidebar-brand .brand-logo{width:58px;height:58px}.sidebar-brand .brand-logo img{object-position:center}}
+@media(max-width:980px){.sidebar-brand{height:78px;flex-basis:78px;padding:7px;justify-content:center}.sidebar-brand .brand-logo{width:58px;height:58px}.sidebar-brand .brand-logo img{object-position:center}}
