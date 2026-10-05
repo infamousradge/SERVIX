@@ -1,1 +1,1 @@
-SERVIX V2 source staging complete. Retry bootstrap with all four source parts and Windows tar extraction.
+SERVIX V2 tar.gz source staging complete. Bootstrap and first Windows build may run now.
