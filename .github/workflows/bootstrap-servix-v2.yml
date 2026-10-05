@@ -1,0 +1,71 @@
+name: Bootstrap SERVIX V2 source
+
+on:
+  push:
+    branches:
+      - servix-rebuild-v2
+    paths:
+      - '.bootstrap-v2/**'
+      - '.github/workflows/bootstrap-servix-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout rebuild branch
+        uses: actions/checkout@v4
+        with:
+          ref: servix-rebuild-v2
+          fetch-depth: 0
+
+      - name: Reconstruct and unpack clean V2 source
+        shell: pwsh
+        run: |
+          $parts = @(Get-ChildItem '.bootstrap-v2/part-*' -File | Sort-Object Name)
+          if ($parts.Count -ne 4) { throw "Expected 4 V2 archive parts, found $($parts.Count)" }
+
+          $base64 = ''
+          foreach ($part in $parts) { $base64 += Get-Content $part.FullName -Raw }
+          $zip = Join-Path $env:RUNNER_TEMP 'servix-v2-source.zip'
+          [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String($base64))
+
+          $extract = Join-Path $env:RUNNER_TEMP 'servix-v2-source'
+          if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+
+          $legacyFiles = @(
+            'app.py','attachment_utils.py','database.py','requirements.txt','run_servix.bat',
+            'service_report.py','service_repository.py','SERVIX_V2_START.txt'
+          )
+          foreach ($item in $legacyFiles) { if (Test-Path $item) { Remove-Item $item -Force } }
+          foreach ($dir in @('installer','.servix-v2-src','.bootstrap-v2')) {
+            if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+          }
+          if (Test-Path '.github/workflows/build-windows.yml') { Remove-Item '.github/workflows/build-windows.yml' -Force }
+
+          Copy-Item (Join-Path $extract '*') '.' -Recurse -Force
+
+          # The bootstrap workflow removes itself. The extracted V2 build workflow takes over.
+          if (Test-Path '.github/workflows/bootstrap-servix-v2.yml') {
+            Remove-Item '.github/workflows/bootstrap-servix-v2.yml' -Force
+          }
+
+          if (-not (Test-Path 'package.json')) { throw 'V2 package.json was not extracted' }
+          if (-not (Test-Path 'src-tauri/src/commands.rs')) { throw 'V2 Rust command layer was not extracted' }
+          if (-not (Test-Path 'src/main.tsx')) { throw 'V2 React shell was not extracted' }
+          if (-not (Test-Path 'assets/logo.png')) { throw 'Existing SERVIX app logo was not preserved' }
+
+      - name: Commit clean V2 source to rebuild branch
+        shell: pwsh
+        run: |
+          git config user.name 'SERVIX Build Bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add -A
+          git status --short
+          git commit -m 'Bootstrap fresh SERVIX V2 Tauri React SQLite source'
+          git push origin HEAD:servix-rebuild-v2
