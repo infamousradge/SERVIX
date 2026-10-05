@@ -28,10 +28,10 @@ jobs:
           $parts = Get-ChildItem '.servix-v2-bootstrap/part-*' | Sort-Object Name
           if ($parts.Count -ne 4) { throw "Expected 4 SERVIX source parts, found $($parts.Count)" }
           $base64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          $zip = Join-Path $env:RUNNER_TEMP 'servix-v2.zip'
-          [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String($base64))
-          tar -xf $zip -C .
-          if ($LASTEXITCODE -ne 0) { throw "Could not extract SERVIX V2 source archive" }
+          $archive = Join-Path $env:RUNNER_TEMP 'servix-v2-source.tar.gz'
+          [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($base64))
+          tar -xzf $archive -C .
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract SERVIX V2 source tar.gz" }
           Remove-Item '.servix-v2-bootstrap' -Recurse -Force
           if (Test-Path '.servix-v2-src') { Remove-Item '.servix-v2-src' -Recurse -Force }
 
