@@ -30,7 +30,8 @@ jobs:
           $base64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           $zip = Join-Path $env:RUNNER_TEMP 'servix-v2.zip'
           [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String($base64))
-          Expand-Archive -Path $zip -DestinationPath . -Force
+          tar -xf $zip -C .
+          if ($LASTEXITCODE -ne 0) { throw "Could not extract SERVIX V2 source archive" }
           Remove-Item '.servix-v2-bootstrap' -Recurse -Force
           if (Test-Path '.servix-v2-src') { Remove-Item '.servix-v2-src' -Recurse -Force }
 
