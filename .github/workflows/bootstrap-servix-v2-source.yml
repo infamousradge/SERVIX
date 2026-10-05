@@ -30,6 +30,10 @@ jobs:
           $base64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
           $archive = Join-Path $env:RUNNER_TEMP 'servix-v2-source.tar.gz'
           [IO.File]::WriteAllBytes($archive, [Convert]::FromBase64String($base64))
+          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = '394d5c902a7de15bb6f23311f2eb276387f4df775dc6771cb432893c9a3a9597'
+          Write-Host "SERVIX source SHA256: $actual"
+          if ($actual -ne $expected) { throw "SERVIX source archive checksum mismatch" }
           tar -xzf $archive -C .
           if ($LASTEXITCODE -ne 0) { throw "Could not extract SERVIX V2 source tar.gz" }
           Remove-Item '.servix-v2-bootstrap' -Recurse -Force
