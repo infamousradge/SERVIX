@@ -1,7 +1,8 @@
 param()
 $ErrorActionPreference = 'Stop'
 
-Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Drawing.Common
+$drawingAssembly = [System.Drawing.Bitmap].Assembly.Location
 
 $code = @"
 using System;
@@ -82,7 +83,7 @@ public static class ServixBrandTools
 }
 "@
 
-Add-Type -TypeDefinition $code -ReferencedAssemblies System.Drawing
+Add-Type -TypeDefinition $code -ReferencedAssemblies $drawingAssembly
 
 $root = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $root 'assets\logo.png'
@@ -95,14 +96,14 @@ $logo = [ServixBrandTools]::RemoveConnectedNearWhite($source)
 try {
     $logo.Save($transparentPath, [System.Drawing.Imaging.ImageFormat]::Png)
 
-    # The installed Windows icon uses the emblem portion of the exact SERVIX artwork.
-    $crop = New-Object System.Drawing.Rectangle(
+    # Installed Windows icon uses the emblem from the exact approved SERVIX artwork.
+    $crop = [System.Drawing.Rectangle]::new(
         [int]($logo.Width * 0.08),
         [int]($logo.Height * 0.02),
         [int]($logo.Width * 0.84),
         [int]($logo.Height * 0.71)
     )
-    $icon = New-Object System.Drawing.Bitmap(1024, 1024, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $icon = [System.Drawing.Bitmap]::new(1024, 1024, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     try {
         $g = [System.Drawing.Graphics]::FromImage($icon)
         try {
@@ -116,7 +117,7 @@ try {
             $ratio = [Math]::Min($available / $crop.Width, $available / $crop.Height)
             $drawW = [int]($crop.Width * $ratio)
             $drawH = [int]($crop.Height * $ratio)
-            $dest = New-Object System.Drawing.Rectangle(
+            $dest = [System.Drawing.Rectangle]::new(
                 [int]((1024 - $drawW) / 2),
                 [int]((1024 - $drawH) / 2),
                 $drawW,
@@ -131,5 +132,7 @@ try {
 }
 finally { $logo.Dispose() }
 
+if (-not (Test-Path $transparentPath)) { throw 'Transparent SERVIX logo was not created.' }
+if (-not (Test-Path $iconPath)) { throw 'SERVIX Windows icon source was not created.' }
 Write-Host "Prepared SERVIX transparent logo: $transparentPath"
 Write-Host "Prepared SERVIX Windows icon: $iconPath"
