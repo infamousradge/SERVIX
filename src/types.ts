@@ -11,6 +11,16 @@ type ServiceCall = {
   priority:string; serviceLocation:string; dueDate:string; coverage:CoverageType; foc:boolean; quoteStatus:string; paymentStatus:string;
   lastUpdated:string; partsUsed?:number; receivedCondition?:string;
 };
+type ServicePart = { id:number; itemName:string; make:string; model:string; partNumber:string; quantity:number; remarks:string; usedAt:string };
+type ServiceEvent = { id:number; eventType:string; oldValue:string; newValue:string; note:string; actor:string; createdAt:string };
+type ServiceDetail = {
+  id:number; serviceId:string; openedDate:string; client:string; equipment:string; make:string; model:string; serialNumber:string;
+  reason:string; complaint:string; engineer:string; status:ServiceStatus; priority:string; serviceLocation:string; dueDate:string;
+  coverage:CoverageType; foc:boolean; quoteStatus:string; paymentStatus:string; diagnosis:string; workPerformed:string;
+  testingVerification:string; finalResult:string; recommendations:string; receivedCondition:string; receivedAccessories:string;
+  receivedRemarks:string; completionDate:string; attachmentCount:number; parts:ServicePart[]; events:ServiceEvent[]; updatedAt:string;
+};
+type ServiceDetailDraft = Omit<ServiceDetail,'serviceId'|'openedDate'|'client'|'equipment'|'make'|'model'|'serialNumber'|'attachmentCount'|'parts'|'events'|'updatedAt'>;
 type IntakeItem = {
   id:number; receivedAt:string; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string;
   serialNumber:string; complaint:string; matchSummary:string; matchTone:'good'|'neutral'|'warn'; status:IntakeStatus; linkedServiceId?:string;
