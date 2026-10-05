@@ -17,7 +17,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "HAC Acoustic Technologies",
+    "publisher": "Yogesh Gaurav",
     "category": "Business",
     "shortDescription": "Premium offline-first service management",
     "longDescription": "SERVIX is a standalone Windows service-management application for service calls, client and equipment history, intake, documents, parts usage and operational analytics.",
