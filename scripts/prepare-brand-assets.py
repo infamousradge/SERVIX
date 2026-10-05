@@ -1,14 +1,30 @@
 from collections import deque
 from pathlib import Path
+from urllib.request import urlretrieve
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "assets" / "logo.png"
-TRANSPARENT = ROOT / "assets" / "logo-transparent.png"
-ICON = ROOT / "assets" / "app-icon-generated.png"
+ASSETS = ROOT / "assets"
+SOURCE = ASSETS / "logo.png"
+TRANSPARENT = ASSETS / "logo-transparent.png"
+ICON = ASSETS / "app-icon-generated.png"
+MANROPE = ASSETS / "Manrope-wght.ttf"
+MANROPE_LICENSE = ASSETS / "Manrope-OFL.txt"
 
 if not SOURCE.exists():
     raise SystemExit(f"SERVIX source logo not found: {SOURCE}")
+
+# Bundle Manrope so SERVIX keeps the same typography even while fully offline.
+if not MANROPE.exists():
+    urlretrieve(
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/Manrope%5Bwght%5D.ttf",
+        MANROPE,
+    )
+if not MANROPE_LICENSE.exists():
+    urlretrieve(
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/OFL.txt",
+        MANROPE_LICENSE,
+    )
 
 img = Image.open(SOURCE).convert("RGBA")
 w, h = img.size
@@ -50,7 +66,7 @@ while queue:
 
 img.save(TRANSPARENT, "PNG", optimize=True)
 
-# Use only the emblem from the exact approved SERVIX artwork for the installed app icon.
+# Installed Windows icon uses the emblem from the exact approved SERVIX artwork.
 left = int(w * 0.08)
 top = int(h * 0.02)
 right = int(w * 0.92)
@@ -68,3 +84,4 @@ canvas.save(ICON, "PNG", optimize=True)
 
 print(f"Prepared SERVIX transparent logo: {TRANSPARENT}")
 print(f"Prepared SERVIX Windows icon: {ICON}")
+print(f"Prepared bundled Manrope font: {MANROPE}")

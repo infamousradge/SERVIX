@@ -27,6 +27,7 @@ if (!existsSync(reactUmd) || !existsSync(reactDomUmd)) {
 
 await copyFile(path.join(root, 'index.html'), path.join(web, 'index.html'));
 await copyFile(path.join(root, 'src', 'styles.css'), path.join(web, 'assets', 'app.css'));
+await copyFile(path.join(root, 'src', 'fonts.css'), path.join(web, 'assets', 'fonts.css'));
 await copyFile(path.join(root, 'src', 'brand.css'), path.join(web, 'assets', 'brand.css'));
 await copyFile(path.join(root, 'src', 'detail.css'), path.join(web, 'assets', 'detail.css'));
 await copyFile(path.join(root, 'src', 'refinements.css'), path.join(web, 'assets', 'refinements.css'));
@@ -37,5 +38,12 @@ const transparentLogo = path.join(root, 'assets', 'logo-transparent.png');
 const originalLogo = path.join(root, 'assets', 'logo.png');
 const logoSource = existsSync(transparentLogo) ? transparentLogo : originalLogo;
 if (existsSync(logoSource)) await copyFile(logoSource, path.join(web, 'assets', 'servix-logo.png'));
+
+const manropeSource = path.join(root, 'assets', 'Manrope-wght.ttf');
+if (!existsSync(manropeSource)) {
+  console.error('Bundled Manrope font is missing. Run the brand preparation step first.');
+  process.exit(1);
+}
+await copyFile(manropeSource, path.join(web, 'assets', 'manrope.ttf'));
 
 console.log('SERVIX frontend built at web/.');
