@@ -8,6 +8,13 @@ async function invokeNative<T>(command:string,args:Record<string,unknown>={}):Pr
   return fn(command,args) as Promise<T>;
 }
 
+function mockDetail(id:number):ServiceDetail{
+  const s=mockState.services.find(x=>x.id===id);
+  if(!s) throw new Error('Service call not found.');
+  const parts=mockState.partUsage.filter(p=>p.serviceId===s.serviceId).map(p=>({id:p.id,itemName:p.itemName,make:p.make,model:p.model,partNumber:p.partNumber,quantity:p.quantity,remarks:p.remarks,usedAt:p.date}));
+  return {id:s.id,serviceId:s.serviceId,openedDate:s.openedDate,client:s.client,equipment:s.equipment,make:s.make||'',model:s.model||'',serialNumber:s.serialNumber||'',reason:s.reason,complaint:s.complaint,engineer:s.engineer,status:s.status,priority:s.priority,serviceLocation:s.serviceLocation,dueDate:s.dueDate,coverage:s.coverage,foc:s.foc,quoteStatus:s.quoteStatus,paymentStatus:s.paymentStatus,diagnosis:'',workPerformed:'',testingVerification:'',finalResult:'',recommendations:'',receivedCondition:'',receivedAccessories:'',receivedRemarks:'',completionDate:'',attachmentCount:0,parts,events:[{id:1,eventType:'Created',oldValue:'',newValue:s.serviceId,note:'Service call created',actor:'Administrator',createdAt:s.lastUpdated}],updatedAt:s.lastUpdated};
+}
+
 const ServixApi = {
   async systemStatus():Promise<SystemStatus>{
     if(isDesktop) return invokeNative<SystemStatus>('system_status');
@@ -30,6 +37,26 @@ const ServixApi = {
     const next=24882+mockState.services.length;
     const item:ServiceCall={id,serviceId:`SRV-${next}`,openedDate:draft.openedDate,client:draft.client,equipment:draft.equipment,make:draft.make,model:draft.model,serialNumber:draft.serialNumber,reason:draft.reason,complaint:draft.complaint,engineer:draft.engineer,status:draft.status,priority:draft.priority,serviceLocation:draft.serviceLocation,dueDate:draft.dueDate,coverage:draft.coverage,foc:draft.foc,quoteStatus:draft.quoteStatus,paymentStatus:draft.paymentStatus,lastUpdated:new Date().toLocaleString()};
     mockState.services.unshift(item); return item;
+  },
+  async getServiceDetail(id:number):Promise<ServiceDetail>{
+    if(isDesktop) return invokeNative<ServiceDetail>('get_service_detail',{id});
+    return mockDetail(id);
+  },
+  async updateServiceDetail(draft:ServiceDetailDraft):Promise<ServiceDetail>{
+    if(isDesktop) return invokeNative<ServiceDetail>('update_service_detail',{draft});
+    const s=mockState.services.find(x=>x.id===draft.id); if(!s) throw new Error('Service call not found.');
+    Object.assign(s,{reason:draft.reason,complaint:draft.complaint,engineer:draft.engineer,status:draft.status,priority:draft.priority,serviceLocation:draft.serviceLocation,dueDate:draft.dueDate,coverage:draft.coverage,foc:draft.foc,quoteStatus:draft.quoteStatus,paymentStatus:draft.paymentStatus,lastUpdated:new Date().toLocaleString()});
+    return {...mockDetail(draft.id),...draft,updatedAt:new Date().toLocaleString()};
+  },
+  async addServicePart(draft:{serviceCallId:number;itemName:string;make:string;model:string;partNumber:string;quantity:number;remarks:string}):Promise<ServiceDetail>{
+    if(isDesktop) return invokeNative<ServiceDetail>('add_service_part',{draft});
+    const service=mockState.services.find(x=>x.id===draft.serviceCallId); if(!service) throw new Error('Service call not found.');
+    mockState.partUsage.unshift({id:Date.now(),date:new Date().toISOString().slice(0,10),serviceId:service.serviceId,client:service.client,equipment:service.equipment,itemName:draft.itemName,make:draft.make,model:draft.model,partNumber:draft.partNumber,quantity:draft.quantity,remarks:draft.remarks});
+    return mockDetail(draft.serviceCallId);
+  },
+  async addServiceNote(serviceCallId:number,note:string):Promise<ServiceDetail>{
+    if(isDesktop) return invokeNative<ServiceDetail>('add_service_note',{serviceCallId,note});
+    const d=mockDetail(serviceCallId);d.events.unshift({id:Date.now(),eventType:'Note',oldValue:'',newValue:'',note,actor:'Administrator',createdAt:new Date().toLocaleString()});return d;
   },
   async createUser(draft:{username:string;displayName:string;password:string;role:string}):Promise<UserRecord>{
     if(isDesktop) return invokeNative<UserRecord>('create_user',{draft});
