@@ -1,6 +1,6 @@
 type ReportTable = { headers:string[]; rows:(string|number)[][] };
 
-function buildReportTable(tab:string,services:ServiceCall[],parts:PartUsage[]):ReportTable{
+function buildReportTable(tab:string,services:ServiceCall[],parts:PartUsage[],calibrations:CalibrationRecord[]=[]):ReportTable{
  if(tab==='Parts Usage') return {headers:['Date','Service ID','Client','Part','Part Number','Quantity'],rows:parts.map(p=>[p.date,p.serviceId,p.client,p.itemName,p.partNumber,p.quantity])};
  if(tab==='Clients'||tab==='Equipment'||tab==='Engineers'){
   const groups=new Map<string,{label:string;client:string;calls:number;open:number;closed:number}>();
@@ -11,6 +11,8 @@ function buildReportTable(tab:string,services:ServiceCall[],parts:PartUsage[]):R
   });
   return {headers:[tab==='Clients'?'Client':tab==='Equipment'?'Equipment / Serial':'Engineer',...(tab==='Equipment'?['Client']:[]),'Calls','Active','Closed'],rows:Array.from(groups.values()).map(g=>[g.label,...(tab==='Equipment'?[g.client]:[]),g.calls,g.open,g.closed])};
  }
+ if(tab==='Calibration')return {headers:['Service ID','Client','Equipment / Serial','Engineer','Status','Calibration Date','Certificate / Reference','Result','Next Due'],rows:services.filter(s=>s.reason==='Calibration').map(s=>{const r=calibrations.find(r=>r.serviceCallId===s.id);return [s.serviceId,s.client,s.equipment+(s.serialNumber?' • '+s.serialNumber:''),s.engineer,s.status,r?.calibrationDate||'',r?.certificate||'',r?.result||'Not recorded',r?.nextDue||'']})};
+ if(tab==='Warranty / AMC'){const groups=new Map<string,ServiceCall[]>();services.forEach(s=>{const key=String(s.equipmentId??s.client+'|'+s.equipment+'|'+s.serialNumber);groups.set(key,[...(groups.get(key)||[]),s])});return {headers:['Equipment / Serial','Client','Warranty Calls','AMC Calls','Out of Coverage Calls','FOC Calls'],rows:Array.from(groups.values()).map(items=>[items[0].equipment+' • '+(items[0].serialNumber||'—'),items[0].client,...['Warranty','AMC','Out of Coverage'].map(c=>items.filter(s=>s.coverage===c).length),items.filter(s=>s.foc).length])}}
  if(tab==='Commercial')return {headers:['Service ID','Client','Opened','Quote Status','Payment Status','FOC'],rows:services.map(s=>[s.serviceId,s.client,s.openedDate,s.quoteStatus,s.paymentStatus,s.foc?'Yes':'No'])};
  const rows=tab==='Calibration'?services.filter(s=>s.reason.trim().toLowerCase()==='calibration'):services;
  return {headers:['Service ID','Opened','Client','Equipment / Serial','Reason','Status','Coverage'],rows:rows.map(s=>[s.serviceId,s.openedDate,s.client,s.equipment+(s.serialNumber?' • '+s.serialNumber:''),s.reason,s.status,s.coverage])};

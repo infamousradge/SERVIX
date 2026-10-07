@@ -58,3 +58,7 @@ html{font-size:20px}body{font-size:.8125rem}.icon{width:1.15rem;height:1.15rem;f
 @media print{.report-print-sheet th,.report-print-sheet td{width:auto!important}}
 
 .primary-filter-grid{grid-template-columns:1.6fr 1.2fr 1.2fr 1fr .9fr .9fr}.primary-filter-grid .filter-search{grid-column:auto}.advanced-filter-grid{margin-top:.75rem;border-top:1px solid #e1e9f3;padding-top:.75rem}.filter-panel-heading>div{display:flex;gap:.7rem}@media(max-width:1500px){.primary-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+@media print{html,body{background:#fff!important}}
+@media print{html,body{height:auto!important;min-height:0!important;min-width:0!important;max-height:none!important;overflow:visible!important;margin:0!important}}
+@media print{@page{@bottom-left{content:"HAC Acoustic Technologies";font:8pt Arial;color:#62758a}@bottom-right{content:"Page " counter(page) " of " counter(pages);font:8pt Arial;color:#62758a}}}
