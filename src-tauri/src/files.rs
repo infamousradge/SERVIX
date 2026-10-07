@@ -88,3 +88,18 @@ pub fn choose_backup_path(state:State<'_,AppState>,folder:bool)->Result<Option<S
  #[cfg(not(target_os="windows"))]
  {let _=folder;Err("File picker is available on Windows.".into())}
 }
+
+pub fn safety_backup(db:&Connection,path:&Path,reason:&str)->Result<String,String>{let parent=path.parent().ok_or("Data folder unavailable")?;save_package(db,&parent.join("attachments"),&parent.join("backups").join(reason))}
+
+pub fn automatic_backup(db:&Connection,path:&Path)->Result<(),String>{
+ let enabled:String=db.query_row("SELECT value FROM settings WHERE key='auto_backup_enabled'",[],|r|r.get(0)).unwrap_or_else(|_|"1".into());if enabled!="1"{return Ok(())}
+ let count:i64=db.query_row("SELECT COUNT(*) FROM users",[],|r|r.get(0)).map_err(err)?;if count==0{return Ok(())}
+ let parent=path.parent().ok_or("Data folder unavailable")?;let folder=parent.join("backups").join("automatic");fs::create_dir_all(&folder).map_err(err)?;
+ let today=format!("SERVIX-{}",Local::now().format("%Y%m%d"));let present=fs::read_dir(&folder).map_err(err)?.filter_map(Result::ok).any(|f|f.file_name().to_string_lossy().starts_with(&today)&&f.path().extension().map(|s|s=="servixbackup").unwrap_or(false));if !present{save_package(db,&parent.join("attachments"),&folder)?;}
+ let keep:usize=db.query_row("SELECT value FROM settings WHERE key='auto_backup_keep'",[],|r|r.get::<_,String>(0)).ok().and_then(|s|s.parse().ok()).unwrap_or(7).clamp(2,90);
+ let mut backups=fs::read_dir(&folder).map_err(err)?.filter_map(Result::ok).map(|e|e.path()).filter(|p|p.file_name().map(|n|n.to_string_lossy().starts_with("SERVIX-")).unwrap_or(false)&&p.extension().map(|s|s=="servixbackup").unwrap_or(false)).collect::<Vec<_>>();backups.sort();let remove=backups.len().saturating_sub(keep);for p in backups.into_iter().take(remove){fs::remove_file(p).map_err(err)?}Ok(())
+}
+#[tauri::command]
+pub fn backup_preferences(state:State<'_,AppState>)->Result<serde_json::Value,String>{user(&state,true,false)?;let db=state.db.lock().map_err(err)?;let enabled:String=db.query_row("SELECT value FROM settings WHERE key='auto_backup_enabled'",[],|r|r.get(0)).unwrap_or_else(|_|"1".into());let keep:String=db.query_row("SELECT value FROM settings WHERE key='auto_backup_keep'",[],|r|r.get(0)).unwrap_or_else(|_|"7".into());let warning:String=db.query_row("SELECT value FROM settings WHERE key='auto_backup_warning'",[],|r|r.get(0)).unwrap_or_default();Ok(serde_json::json!({"enabled":enabled=="1","keep":keep.parse::<usize>().unwrap_or(7),"warning":warning}))}
+#[tauri::command]
+pub fn save_backup_preferences(state:State<'_,AppState>,enabled:bool,keep:usize)->Result<(),String>{let u=user(&state,true,false)?;if !(2..=90).contains(&keep){return Err("Retain between 2 and 90 automatic backups.".into())}let mut db=state.db.lock().map_err(err)?;let tx=db.transaction().map_err(err)?;for(k,v)in [("auto_backup_enabled",if enabled{"1".into()}else{"0".into()}),("auto_backup_keep",keep.to_string())]{tx.execute("INSERT INTO settings(key,value,updated_at) VALUES(?1,?2,datetime('now','localtime')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",params![k,v]).map_err(err)?;}tx.execute("INSERT INTO audit_log(entity,action,actor_id,summary,created_at) VALUES('Backup','Preferences',?1,?2,datetime('now','localtime'))",params![u.id,format!("Automatic backup: {enabled}; retained copies: {keep}")]).map_err(err)?;tx.commit().map_err(err)}

@@ -32,6 +32,7 @@
     "src/features/parts.tsx",
     "src/features/documents.tsx",
     "src/features/reports.tsx",
+    "src/data-tools.tsx",
     "src/features/data.tsx",
     "src/features/settings.tsx",
     "src/main.tsx"

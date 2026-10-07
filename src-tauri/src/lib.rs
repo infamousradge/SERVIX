@@ -1,4 +1,6 @@
 mod commands;
+mod accounts;
+mod data_io;
 mod operations;
 mod files;
 mod database;
@@ -28,6 +30,8 @@ pub fn run() {
             files::add_document,
             files::read_document,
             files::create_backup,
+            files::backup_preferences,
+            files::save_backup_preferences,
             files::preview_restore,
             files::restore_backup,
             operations::get_operations,
@@ -45,6 +49,12 @@ pub fn run() {
             commands::create_service_call,
             commands::review_service_duplicates,
             commands::create_user,
+            accounts::update_account,
+            accounts::change_password,
+            data_io::preview_csv,
+            data_io::commit_csv,
+            data_io::export_dataset,
+            data_io::data_history,
             commands::save_intake_review,
             commands::update_intake_status,
             commands::get_google_sync_config,
