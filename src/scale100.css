@@ -138,26 +138,49 @@
 /* At 1920x1080 @ 100% the CSS viewport is wide enough to trigger this.
    125% scaling stays below this breakpoint and retains the approved density. */
 @media (min-width:1700px){
-  :root{--page-top:24px;--page-bottom:32px;--row-h:62px}
+  /* 1920x1080 at Windows 100% has substantially more CSS space than the
+     approved 125% view. Restore some of the physical breathing room without
+     changing typography or stretching the whole interface. */
+  :root{--page-top:28px;--page-bottom:38px;--row-h:66px;--control-h:41px}
+  .workspace{grid-template-rows:68px 1fr!important}
+  .topbar{height:68px!important;padding-left:30px!important;padding-right:30px!important}
   .module-content{
     max-width:none!important;
     width:100%!important;
     margin:0!important;
-    padding-left:28px!important;
-    padding-right:28px!important;
+    padding-left:30px!important;
+    padding-right:30px!important;
   }
-  .topbar{padding-left:28px!important;padding-right:28px!important}
-  .page-header{margin-bottom:19px!important}
-  .toolbar{min-height:58px!important;padding-top:10px!important;padding-bottom:10px!important}
-  .card{padding:18px 19px!important}
-  .form-section{padding:16px!important;margin-bottom:13px!important}
-  .detail-card{padding:17px!important}
+  .page-header{margin-bottom:22px!important}
+  .page-header p{margin-top:6px!important}
+  .toolbar{min-height:62px!important;padding:11px 12px!important;margin-bottom:13px!important}
+  .results-summary{min-height:32px!important;padding-bottom:10px!important}
+  .card{padding:20px 21px!important}
+  .card-head{margin-bottom:14px!important}
+  .dashboard-grid{gap:15px!important;margin-bottom:15px!important}
+  .kpi-grid{gap:13px!important;margin-bottom:16px!important}
+  .kpi-card{min-height:96px!important;padding:16px 17px!important}
+  .compact-list button{padding-top:12px!important;padding-bottom:12px!important}
+  .alert{padding:12px!important}
+  .sparkline{height:132px!important}
+  .form-section{padding:18px!important;margin-bottom:15px!important}
+  .section-title{margin-bottom:14px!important}
+  .field input,.field select{height:40px!important}
+  .field textarea{min-height:86px!important}
+  .choice-group button{height:34px!important}
+  .detail-card{padding:19px!important}
+  .detail-tabs button{height:38px!important}
+  .profile-hero{padding:18px 19px!important}
+  .profile-metrics>div{min-height:74px!important;padding:13px 14px!important}
+  .profile-panel{padding:16px 17px!important}
+  .tr{min-height:66px!important}
+  .tr.th{min-height:44px!important}
   .search-box{max-width:620px!important}
   .dashboard-grid.two{grid-template-columns:minmax(0,1.32fr) minmax(360px,.68fr)!important}
   .dashboard-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))!important}
   .dashboard-grid.three>:last-child{grid-column:auto!important}
-  .settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-  .data-table{max-height:calc(100vh - 252px)!important}
+  .settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:15px!important}
+  .data-table{max-height:calc(100vh - 270px)!important}
 }
 
 /* Collapsed/sidebar fallback remains compact without allowing nav into the logo zone. */
