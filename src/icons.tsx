@@ -20,6 +20,12 @@ const iconPaths:Record<string,string[]>={
   close:['M18 6L6 18','M6 6l12 12'],
   print:['M6 9V2h12v7','M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2','M6 14h12v8H6z'],
   export:['M12 3v12','M7 8l5-5 5 5','M5 21h14a2 2 0 0 0 2-2v-4','M3 15v4a2 2 0 0 0 2 2'],
+  status:['M4 12a8 8 0 1 0 8-8','M4 4v6h6','M9 12l2 2 4-5'],
+  payment:['M3 6h18v12H3z','M3 10h18','M16 14h2'],
+  quote:['M6 3h9l3 3v15H6z','M14 3v4h4','M9 11h6','M9 15h6'],
+  flag:['M5 21V4','M5 5h11l-2 4 2 4H5'],
+  calendar:['M4 5h16v16H4z','M8 3v4','M16 3v4','M4 10h16'],
+  tag:['M20 13l-7 7-9-9V4h7z','M8.5 8.5h.01'],
   user:['M20 21a8 8 0 0 0-16 0','M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z']
 };
 function Icon({name,size=18,className=''}:{name:string,size?:number,className?:string}){

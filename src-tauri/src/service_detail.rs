@@ -342,11 +342,16 @@ pub fn update_service_detail(
 
     let mut db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     ensure_schema(&db)?;
-    let old_status: String = db
-        .query_row("SELECT status FROM service_calls WHERE id=?1", params![draft.id], |r| r.get(0))
+    let old: (String,String,String,String,String,String,String,i64) = db
+        .query_row(
+            "SELECT status,payment_status,quote_status,coverage,priority,engineer,due_date,foc FROM service_calls WHERE id=?1",
+            params![draft.id],
+            |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?,r.get(5)?,r.get(6)?,r.get(7)?))
+        )
         .optional()
         .map_err(|e| format!("Database error: {e}"))?
         .ok_or_else(|| "Service call not found.".to_string())?;
+    let (old_status,old_payment,old_quote,old_coverage,old_priority,old_engineer,old_due_date,old_foc)=old;
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let tx = db.transaction().map_err(|e| format!("Database error: {e}"))?;
     tx.execute(
@@ -364,10 +369,30 @@ pub fn update_service_detail(
         params![draft.id,draft.diagnosis.trim(),draft.work_performed.trim(),draft.testing_verification.trim(),draft.final_result.trim(),draft.recommendations.trim(),draft.received_condition.trim(),draft.received_accessories.trim(),draft.received_remarks.trim(),draft.completion_date,now],
     )
     .map_err(|e| format!("Database error: {e}"))?;
-    if old_status != draft.status {
+    let changes = [
+        ("Status", old_status.as_str(), draft.status.as_str(), "Service status changed"),
+        ("Payment", old_payment.as_str(), draft.payment_status.as_str(), "Payment status changed"),
+        ("Quote", old_quote.as_str(), draft.quote_status.as_str(), "Quote status changed"),
+        ("Coverage", old_coverage.as_str(), draft.coverage.as_str(), "Coverage changed"),
+        ("Priority", old_priority.as_str(), draft.priority.as_str(), "Priority changed"),
+        ("Engineer", old_engineer.as_str(), draft.engineer.trim(), "Assigned engineer changed"),
+        ("Due Date", old_due_date.as_str(), draft.due_date.as_str(), "Due date changed"),
+    ];
+    for (event_type, old_value, new_value, note) in changes {
+        if old_value != new_value {
+            tx.execute(
+                "INSERT INTO service_events(service_call_id,event_type,old_value,new_value,note,actor_id,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7)",
+                params![draft.id,event_type,old_value,new_value,note,actor_id,now],
+            )
+            .map_err(|e| format!("Database error: {e}"))?;
+        }
+    }
+    let old_foc_text = if old_foc != 0 { "Yes" } else { "No" };
+    let new_foc_text = if draft.foc { "Yes" } else { "No" };
+    if old_foc_text != new_foc_text {
         tx.execute(
-            "INSERT INTO service_events(service_call_id,event_type,old_value,new_value,note,actor_id,created_at) VALUES(?1,'Status',?2,?3,'Status changed',?4,?5)",
-            params![draft.id,old_status,draft.status,actor_id,now],
+            "INSERT INTO service_events(service_call_id,event_type,old_value,new_value,note,actor_id,created_at) VALUES(?1,'FOC',?2,?3,'FOC status changed',?4,?5)",
+            params![draft.id,old_foc_text,new_foc_text,actor_id,now],
         )
         .map_err(|e| format!("Database error: {e}"))?;
     }
