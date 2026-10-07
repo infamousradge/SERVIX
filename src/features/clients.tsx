@@ -6,8 +6,8 @@ function ClientsView({data}:{data:DashboardData}){
  const relatedServices=selected?data.services.filter(s=>(s.clientId!=null?s.clientId===selected.id:s.client===selected.name)):[];
  const selectedEquipment=equipmentFilter==='all'?null:relatedEquipment.find(e=>e.id===equipmentFilter)||null;
  const filteredServices=equipmentFilter==='all'?relatedServices:relatedServices.filter(s=>s.equipmentId===equipmentFilter);
- const serviceIds=new Set(filteredServices.map(s=>s.serviceId));
- const filteredHistory=equipmentFilter==='all'?history:history.filter(ev=>serviceIds.has(ev.serviceId));
+ const serviceIds=new Set(filteredServices.map(s=>s.id));
+ const filteredHistory=equipmentFilter==='all'?history:history.filter(ev=>serviceIds.has(ev.serviceCallId));
  const openClient=async(x:ClientRecord)=>{setSelected(x);setEquipmentFilter('all');setHistory([]);setHistoryError('');setHistoryBusy(true);try{setHistory(await ServixApi.getClientHistory(x.id))}catch(e:any){setHistoryError(e?.message||String(e))}finally{setHistoryBusy(false)}};
  const historyRows=filteredHistory.map(ev=>({dateTime:ev.createdAt,user:ev.actor,action:ev.eventType,serviceId:ev.serviceId,details:ev.note||([ev.oldValue,ev.newValue].filter(Boolean).join(' → '))||'Record activity',context:ev.equipment+(ev.serialNumber?' • S/N '+ev.serialNumber:'')+' • '+ev.reason,status:ev.serviceStatus}));
  return <div className="module-content module-list-view">
@@ -32,7 +32,7 @@ function ClientsView({data}:{data:DashboardData}){
 
     <section className="client-history-section">
      <div className="client-history-head"><div><h4>{selectedEquipment?(selectedEquipment.make+' '+selectedEquipment.model).trim()+' History':'Client Service History'}</h4><p>{selectedEquipment?selectedEquipment.servixEquipmentId+' • S/N '+(selectedEquipment.serialNumber||'—'):'All equipment and Service ID activity for this client'}</p></div><div className="history-actions"><span className="soft-chip">{filteredHistory.length} events</span><button type="button" className="small-button history-action-button" disabled={!filteredHistory.length} onClick={()=>printHistoryDocument(selectedEquipment?'Equipment Service History':'Client Service History',selectedEquipment?(selectedEquipment.servixEquipmentId+' • '+selected.name):(selected.name+' • '+selected.code),historyRows,['Services: '+filteredServices.length])}><Icon name="print" size={14}/> Print</button><button type="button" className="small-button history-action-button" disabled={!filteredHistory.length} onClick={()=>historyRowsToCsv((selectedEquipment?selectedEquipment.servixEquipmentId:selected.code)+'-history',historyRows)}><Icon name="export" size={14}/> CSV</button></div></div>
-     <div className="client-service-strip">{filteredServices.slice(0,8).map(s=><div key={s.id}><span><strong>{s.serviceId}</strong><small>{s.openedDate+' • '+s.reason}</small></span><StatusBadge value={s.status}/></div>)}{!filteredServices.length&&<p className="quiet-empty">No Service Calls for this selection.</p>}</div>
+     <div className="client-service-strip">{filteredServices.map(s=><div key={s.id}><span><strong>{s.serviceId}</strong><small>{s.openedDate+' • '+s.reason}</small></span><StatusBadge value={s.status}/></div>)}{!filteredServices.length&&<p className="quiet-empty">No Service Calls for this selection.</p>}</div>
      {historyBusy?
       <div className="history-loading"><div className="boot-spinner"/><span>Loading history…</span></div>:
       historyError?<div className="form-error">{historyError}</div>:
