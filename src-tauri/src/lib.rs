@@ -55,6 +55,7 @@ pub fn run() {
             data_io::commit_csv,
             data_io::export_dataset,
             data_io::data_history,
+            data_io::record_csv_export,
             commands::save_intake_review,
             commands::update_intake_status,
             commands::get_google_sync_config,
