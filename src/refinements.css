@@ -287,3 +287,16 @@ button,input,select,textarea{font-family:var(--font-ui)}
 .simple-history-event{min-width:0}.simple-history-event>div{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.simple-history-event>div>strong{font-size:10.8px;color:#2d3d50}.simple-history-event p{font-size:10.4px;line-height:1.42;color:#516174;margin:3px 0}.simple-history-event>small{font-size:9px;color:#8995a5}
 @media(max-width:900px){.client-device-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.client-service-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.client-summary-strip{align-items:flex-start;flex-direction:column}.client-summary-metrics{justify-content:flex-start}}
 @media(max-width:620px){.client-device-grid,.client-service-strip{grid-template-columns:1fr}.simple-history-row{grid-template-columns:80px minmax(0,1fr)}.simple-history-row>.status-badge{grid-column:2}.client-history-head{flex-direction:column}}
+
+
+/* Google Form / Sheet intake configuration */
+.google-config-modal{width:min(1120px,96vw)!important}
+.google-config-layout{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:11px}
+.google-source-grid{margin-bottom:10px}.credential-box{min-height:128px!important;font-family:Consolas,"Courier New",monospace!important;font-size:9.5px!important;line-height:1.35!important}
+.google-clear-credential{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:10px;color:#68778a}
+.google-security-note{display:flex;align-items:flex-start;gap:9px;margin-top:10px;padding:10px 11px;border:1px solid #cfe0f1;background:#f2f7fd;border-radius:10px;color:#3672b8}
+.google-security-note strong{display:block;font-size:10.5px;color:#30445c}.google-security-note p{font-size:9.6px;line-height:1.45;margin:3px 0 0;color:#728198}
+.google-map-note{display:flex;align-items:flex-start;gap:6px;margin-top:10px;padding-top:9px;border-top:1px solid #e9eef3;font-size:9.7px;color:#778598}.google-map-note strong{color:#42536a;white-space:nowrap}
+.sync-success{margin-top:10px;padding:9px 11px;border:1px solid #bfe0cb;background:#effaf4;color:#28784b;border-radius:9px;font-size:10.5px;font-weight:650}
+.google-setting-card .card-head{align-items:flex-start}
+@media(max-width:900px){.google-config-layout{grid-template-columns:1fr}}

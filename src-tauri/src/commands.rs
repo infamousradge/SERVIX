@@ -1,4 +1,9 @@
 use chrono::{Duration, Local, NaiveDateTime};
+use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use reqwest::blocking::Client as HttpClient;
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use tauri::State;
 
@@ -71,6 +76,175 @@ fn normalize_mobile(value: &str) -> String {
 fn normalize_email(value: &str) -> String {
     value.trim().to_lowercase()
 }
+
+#[derive(Debug, Deserialize)]
+struct GoogleServiceAccount {
+    client_email: String,
+    private_key: String,
+    #[serde(default = "default_google_token_uri")]
+    token_uri: String,
+}
+
+fn default_google_token_uri() -> String {
+    "https://oauth2.googleapis.com/token".into()
+}
+
+#[derive(serde::Serialize)]
+struct GoogleJwtClaims {
+    iss: String,
+    scope: String,
+    aud: String,
+    exp: usize,
+    iat: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleTokenResponse {
+    access_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleValueRange {
+    #[serde(default)]
+    values: Vec<Vec<serde_json::Value>>,
+}
+
+fn google_config(conn: &Connection) -> GoogleSyncConfig {
+    let credential_json = setting(conn, "google_service_account_json", "");
+    let account = serde_json::from_str::<GoogleServiceAccount>(&credential_json).ok();
+    GoogleSyncConfig {
+        sheet_id: setting(conn, "google_sheet_id", "1dXiMB7ls1vAzFL3PHYTOMQDnI-JUtVltVGVuGhu4IJo"),
+        sheet_name: setting(conn, "google_sheet_name", "Form Responses 1"),
+        service_account_configured: account.is_some(),
+        service_account_email: account.map(|x| x.client_email).unwrap_or_default(),
+        timestamp_header: setting(conn, "google_map_timestamp", "Timestamp"),
+        client_header: setting(conn, "google_map_client", "Organisation / Client Name"),
+        contact_header: setting(conn, "google_map_contact", "Contact Person Name"),
+        mobile_header: setting(conn, "google_map_mobile", "Mobile Number"),
+        email_header: setting(conn, "google_map_email", "Email"),
+        equipment_header: setting(conn, "google_map_equipment", "Equipment / Device"),
+        make_header: setting(conn, "google_map_make", "Make"),
+        model_header: setting(conn, "google_map_model", "Model"),
+        serial_header: setting(conn, "google_map_serial", "Serial Number"),
+        reason_header: setting(conn, "google_map_reason", "Reason for Sending"),
+        complaint_header: setting(conn, "google_map_complaint", "Problem / Complaint"),
+    }
+}
+
+fn upsert_setting(conn: &Connection, key: &str, value: &str, now: &str) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO settings(key,value,updated_at) VALUES(?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at",
+        params![key,value,now],
+    ).map_err(db_err)?;
+    Ok(())
+}
+
+fn cell_text(value: Option<&serde_json::Value>) -> String {
+    match value {
+        Some(serde_json::Value::String(s)) => s.trim().to_string(),
+        Some(serde_json::Value::Number(n)) => n.to_string(),
+        Some(serde_json::Value::Bool(b)) => b.to_string(),
+        Some(v) if !v.is_null() => v.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn mapped_value(row: &[serde_json::Value], index: &HashMap<String, usize>, header: &str) -> String {
+    index.get(header).and_then(|i| row.get(*i)).map(|v| cell_text(Some(v))).unwrap_or_default()
+}
+
+fn google_access_token(account: &GoogleServiceAccount) -> Result<String, String> {
+    let now = chrono::Utc::now().timestamp().max(0) as usize;
+    let claims = GoogleJwtClaims {
+        iss: account.client_email.clone(),
+        scope: "https://www.googleapis.com/auth/spreadsheets.readonly".into(),
+        aud: account.token_uri.clone(),
+        iat: now,
+        exp: now + 3600,
+    };
+    let key = EncodingKey::from_rsa_pem(account.private_key.as_bytes())
+        .map_err(|_| "The Google service-account private key is invalid.".to_string())?;
+    let assertion = encode(&Header::new(Algorithm::RS256), &claims, &key)
+        .map_err(|e| format!("Could not sign Google authorization request: {e}"))?;
+    let client = HttpClient::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Could not initialize Google connection: {e}"))?;
+    let response = client.post(&account.token_uri)
+        .form(&[
+            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+            ("assertion", assertion.as_str()),
+        ])
+        .send()
+        .map_err(|e| format!("Google authorization failed: {e}"))?;
+    if !response.status().is_success() {
+        let status=response.status();
+        let body=response.text().unwrap_or_default();
+        return Err(format!("Google authorization failed ({status}): {}", body.chars().take(240).collect::<String>()));
+    }
+    response.json::<GoogleTokenResponse>()
+        .map(|x| x.access_token)
+        .map_err(|e| format!("Google authorization response could not be read: {e}"))
+}
+
+fn fetch_google_sheet(config: &GoogleSyncConfig, credential_json: &str) -> Result<Vec<Vec<serde_json::Value>>, String> {
+    let account: GoogleServiceAccount = serde_json::from_str(credential_json)
+        .map_err(|_| "Google service-account JSON is missing or invalid. Open Users & Settings → Google Form Intake.".to_string())?;
+    let token = google_access_token(&account)?;
+    let safe_sheet = config.sheet_name.replace(''', "''");
+    let range = format!("'{}'!A:ZZ", safe_sheet);
+    let url = format!(
+        "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE",
+        urlencoding::encode(&config.sheet_id),
+        urlencoding::encode(&range)
+    );
+    let client = HttpClient::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .build()
+        .map_err(|e| format!("Could not initialize Google Sheets connection: {e}"))?;
+    let response = client.get(url).bearer_auth(token).send()
+        .map_err(|e| format!("Could not reach Google Sheets: {e}"))?;
+    if !response.status().is_success() {
+        let status=response.status();
+        let body=response.text().unwrap_or_default();
+        return Err(format!("Google Sheets returned {status}: {}", body.chars().take(320).collect::<String>()));
+    }
+    response.json::<GoogleValueRange>()
+        .map(|x| x.values)
+        .map_err(|e| format!("Google Sheet response could not be read: {e}"))
+}
+
+fn classify_intake_match(
+    db: &Connection,
+    mobile: &str,
+    email: &str,
+    serial: &str,
+    client_name: &str,
+    equipment: &str,
+) -> Result<(String,String), String> {
+    let nm = normalize_mobile(mobile);
+    let ne = normalize_email(email);
+    let client_count: i64 = db.query_row(
+        "SELECT COUNT(*) FROM clients WHERE active=1 AND ((?1<>'' AND replace(replace(replace(replace(replace(mobile,' ',''),'-',''),'+',''),'(',''),')','')=?1) OR (?2<>'' AND lower(trim(email))=?2))",
+        params![nm,ne], |r| r.get(0)
+    ).map_err(db_err)?;
+    let serial_count: i64 = if serial.trim().is_empty() {0} else {
+        db.query_row("SELECT COUNT(*) FROM equipment WHERE active=1 AND lower(trim(serial_number))=lower(trim(?1))",params![serial.trim()],|r|r.get(0)).map_err(db_err)?
+    };
+    let open_count: i64 = if !serial.trim().is_empty() {
+        db.query_row("SELECT COUNT(*) FROM service_calls WHERE status<>'Closed' AND lower(trim(serial_number))=lower(trim(?1))",params![serial.trim()],|r|r.get(0)).map_err(db_err)?
+    } else {
+        db.query_row("SELECT COUNT(*) FROM service_calls WHERE status<>'Closed' AND lower(trim(client_name))=lower(trim(?1)) AND lower(trim(equipment_name))=lower(trim(?2))",params![client_name.trim(),equipment.trim()],|r|r.get(0)).map_err(db_err)?
+    };
+    if open_count>0 { return Ok(("Possible duplicate open Service Call".into(),"warn".into())); }
+    if serial_count>1 { return Ok(("Possible duplicate equipment serial".into(),"warn".into())); }
+    if serial_count==1 && client_count>0 { return Ok(("Existing Client + Equipment Found".into(),"good".into())); }
+    if serial_count==1 { return Ok(("Existing Equipment Found — verify client".into(),"warn".into())); }
+    if client_count>1 { return Ok(("Possible duplicate client records".into(),"warn".into())); }
+    if client_count==1 { return Ok(("Existing Client Found".into(),"good".into())); }
+    Ok(("New Client".into(),"neutral".into()))
+}
+
 
 #[tauri::command]
 pub fn system_status(state: State<'_, AppState>) -> Result<SystemStatus, String> {
@@ -812,35 +986,150 @@ pub fn update_intake_status(
 }
 
 #[tauri::command]
-pub fn sync_google_form(state: State<'_, AppState>) -> Result<SyncStatus, String> {
-    let _ = require_user(&state)?;
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| "Database lock failed".to_string())?;
-    let configured = setting(&db, "google_form_configured", "false") == "true";
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    if !configured {
-        db.execute(
-            "INSERT INTO sync_log(started_at,completed_at,success,error_message) VALUES(?1,?1,0,'Google Form intake is not configured')",
-            params![now],
-        )
-        .map_err(db_err)?;
-        let mut status = sync_status(&db)?;
-        status.message = "Google Form intake is not configured yet. Configure the source and field mapping in Settings.".into();
-        return Ok(status);
-    }
-
-    // The Google source adapter is intentionally isolated here. Until credentials/source mapping
-    // are configured, this command only records a successful connectivity cycle without inventing data.
-    db.execute(
-        "INSERT INTO sync_log(started_at,completed_at,success,fetched_count,new_count) VALUES(?1,?1,1,0,0)",
-        params![now],
-    )
-    .map_err(db_err)?;
-    sync_status(&db)
+pub fn get_google_sync_config(state: State<'_, AppState>) -> Result<GoogleSyncConfig, String> {
+    let _ = require_admin(&state)?;
+    let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    Ok(google_config(&db))
 }
 
+#[tauri::command]
+pub fn save_google_sync_config(
+    state: State<'_, AppState>,
+    draft: GoogleSyncConfigDraft,
+) -> Result<GoogleSyncConfig, String> {
+    let actor = require_admin(&state)?;
+    if draft.sheet_id.trim().is_empty() || draft.sheet_name.trim().is_empty() {
+        return Err("Google Sheet ID and sheet tab name are required.".into());
+    }
+    for (label,value) in [
+        ("Timestamp",draft.timestamp_header.as_str()),
+        ("Client",draft.client_header.as_str()),
+        ("Mobile",draft.mobile_header.as_str()),
+        ("Email",draft.email_header.as_str()),
+        ("Equipment",draft.equipment_header.as_str()),
+        ("Serial Number",draft.serial_header.as_str()),
+        ("Complaint",draft.complaint_header.as_str()),
+    ] {
+        if value.trim().is_empty() { return Err(format!("{label} field mapping cannot be blank.")); }
+    }
+    if !draft.service_account_json.trim().is_empty() {
+        let account:GoogleServiceAccount=serde_json::from_str(draft.service_account_json.trim())
+            .map_err(|_| "The service-account JSON is not valid.".to_string())?;
+        if account.client_email.trim().is_empty() || account.private_key.trim().is_empty() {
+            return Err("The service-account JSON must contain client_email and private_key.".into());
+        }
+    }
+    let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    let now=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    for (key,value) in [
+        ("google_sheet_id",draft.sheet_id.trim()),
+        ("google_sheet_name",draft.sheet_name.trim()),
+        ("google_map_timestamp",draft.timestamp_header.trim()),
+        ("google_map_client",draft.client_header.trim()),
+        ("google_map_contact",draft.contact_header.trim()),
+        ("google_map_mobile",draft.mobile_header.trim()),
+        ("google_map_email",draft.email_header.trim()),
+        ("google_map_equipment",draft.equipment_header.trim()),
+        ("google_map_make",draft.make_header.trim()),
+        ("google_map_model",draft.model_header.trim()),
+        ("google_map_serial",draft.serial_header.trim()),
+        ("google_map_reason",draft.reason_header.trim()),
+        ("google_map_complaint",draft.complaint_header.trim()),
+    ] { upsert_setting(&db,key,value,&now)?; }
+    if draft.clear_credentials {
+        upsert_setting(&db,"google_service_account_json","",&now)?;
+    } else if !draft.service_account_json.trim().is_empty() {
+        upsert_setting(&db,"google_service_account_json",draft.service_account_json.trim(),&now)?;
+    }
+    let cfg=google_config(&db);
+    let configured=cfg.service_account_configured && !cfg.sheet_id.trim().is_empty() && !cfg.sheet_name.trim().is_empty();
+    upsert_setting(&db,"google_form_configured",if configured {"true"} else {"false"},&now)?;
+    db.execute(
+        "INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('GoogleSync','Configure',?1,?2,?3,?4)",
+        params![cfg.sheet_id,actor.id,if configured {"Google Sheet intake configured"} else {"Google Sheet intake saved without credentials"},now],
+    ).map_err(db_err)?;
+    Ok(google_config(&db))
+}
+
+#[tauri::command]
+pub fn sync_google_form(state: State<'_, AppState>) -> Result<SyncStatus, String> {
+    let actor = require_user(&state)?;
+    let started = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let (config,credential_json) = {
+        let db=state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+        (google_config(&db),setting(&db,"google_service_account_json",""))
+    };
+    if !config.service_account_configured || config.sheet_id.trim().is_empty() || config.sheet_name.trim().is_empty() {
+        let db=state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+        db.execute("INSERT INTO sync_log(started_at,completed_at,success,error_message) VALUES(?1,?1,0,'Google Form intake is not configured')",params![started]).map_err(db_err)?;
+        return Err("Google Form intake is not configured. Open Users & Settings → Google Form Intake.".into());
+    }
+    let rows = match fetch_google_sheet(&config,&credential_json) {
+        Ok(v)=>v,
+        Err(err)=>{
+            let db=state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+            let completed=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            db.execute("INSERT INTO sync_log(started_at,completed_at,success,error_message) VALUES(?1,?2,0,?3)",params![started,completed,err]).map_err(db_err)?;
+            return Err(err);
+        }
+    };
+    if rows.is_empty() { return Err("The configured Google Sheet returned no rows.".into()); }
+
+    let headers:Vec<String>=rows[0].iter().map(|v|cell_text(Some(v))).collect();
+    let index:HashMap<String,usize>=headers.iter().enumerate().map(|(i,h)|(h.clone(),i)).collect();
+    let required=[config.timestamp_header.as_str(),config.client_header.as_str(),config.mobile_header.as_str(),config.email_header.as_str(),config.equipment_header.as_str(),config.serial_header.as_str(),config.complaint_header.as_str()];
+    let missing:Vec<&str>=required.into_iter().filter(|h|!index.contains_key(*h)).collect();
+    if !missing.is_empty() {
+        let err=format!("Google Sheet mapping does not match these headers: {}.",missing.join(", "));
+        let db=state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+        let completed=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        db.execute("INSERT INTO sync_log(started_at,completed_at,success,error_message) VALUES(?1,?2,0,?3)",params![started,completed,err]).map_err(db_err)?;
+        return Err(err);
+    }
+
+    let mut db=state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    let tx=db.transaction().map_err(db_err)?;
+    let mut fetched=0_i64; let mut inserted=0_i64;
+    for row in rows.iter().skip(1) {
+        if row.iter().all(|v|cell_text(Some(v)).is_empty()) { continue; }
+        fetched+=1;
+        let received_at=mapped_value(row,&index,&config.timestamp_header);
+        let client_name=mapped_value(row,&index,&config.client_header);
+        let contact=mapped_value(row,&index,&config.contact_header);
+        let mobile=mapped_value(row,&index,&config.mobile_header);
+        let email=mapped_value(row,&index,&config.email_header);
+        let equipment=mapped_value(row,&index,&config.equipment_header);
+        let make=mapped_value(row,&index,&config.make_header);
+        let model=mapped_value(row,&index,&config.model_header);
+        let serial=mapped_value(row,&index,&config.serial_header);
+        let complaint=mapped_value(row,&index,&config.complaint_header);
+        if client_name.is_empty() && equipment.is_empty() && complaint.is_empty() { continue; }
+
+        let mut snapshot=serde_json::Map::new();
+        for (i,header) in headers.iter().enumerate() {
+            snapshot.insert(header.clone(),serde_json::Value::String(cell_text(row.get(i))));
+        }
+        let raw_json=serde_json::Value::Object(snapshot).to_string();
+        let mut hasher=Sha256::new();
+        hasher.update(config.sheet_id.as_bytes());hasher.update([0]);
+        hasher.update(config.sheet_name.as_bytes());hasher.update([0]);
+        hasher.update(raw_json.as_bytes());
+        let external_id=format!("GS-{}",hex::encode(hasher.finalize()));
+        let (match_summary,match_tone)=classify_intake_match(&tx,&mobile,&email,&serial,&client_name,&equipment)?;
+        let changed=tx.execute(
+            "INSERT OR IGNORE INTO form_intake(external_id,received_at,client_name,contact,mobile,email,equipment,make,model,serial_number,complaint,raw_json,match_summary,match_tone,status) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,'New')",
+            params![external_id,received_at,client_name,contact,normalize_mobile(&mobile),normalize_email(&email),equipment,make,model,serial,complaint,raw_json,match_summary,match_tone],
+        ).map_err(db_err)?;
+        if changed>0 { inserted+=1; }
+    }
+    let completed=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    tx.execute("INSERT INTO sync_log(started_at,completed_at,success,fetched_count,new_count) VALUES(?1,?2,1,?3,?4)",params![started,completed,fetched,inserted]).map_err(db_err)?;
+    tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('GoogleSync','Sync',?1,?2,?3,?4)",params![config.sheet_id,actor.id,format!("Fetched {} row(s); imported {} new intake request(s)",fetched,inserted),completed]).map_err(db_err)?;
+    tx.commit().map_err(db_err)?;
+    let mut status=sync_status(&db)?;
+    status.message=format!("Google Form sync completed: {} row(s) checked, {} new request(s) imported.",fetched,inserted);
+    Ok(status)
+}
 
 fn qa_insert_client(
     tx: &Transaction<'_>,

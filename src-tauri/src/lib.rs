@@ -31,6 +31,8 @@ pub fn run() {
             commands::create_user,
             commands::save_intake_review,
             commands::update_intake_status,
+            commands::get_google_sync_config,
+            commands::save_google_sync_config,
             commands::sync_google_form,
             commands::load_qa_mock_data,
             service_detail::get_service_detail,

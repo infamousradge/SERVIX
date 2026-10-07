@@ -238,6 +238,48 @@ pub struct PartUsage {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GoogleSyncConfig {
+    pub sheet_id: String,
+    pub sheet_name: String,
+    pub service_account_configured: bool,
+    pub service_account_email: String,
+    pub timestamp_header: String,
+    pub client_header: String,
+    pub contact_header: String,
+    pub mobile_header: String,
+    pub email_header: String,
+    pub equipment_header: String,
+    pub make_header: String,
+    pub model_header: String,
+    pub serial_header: String,
+    pub reason_header: String,
+    pub complaint_header: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleSyncConfigDraft {
+    pub sheet_id: String,
+    pub sheet_name: String,
+    #[serde(default)]
+    pub service_account_json: String,
+    #[serde(default)]
+    pub clear_credentials: bool,
+    pub timestamp_header: String,
+    pub client_header: String,
+    pub contact_header: String,
+    pub mobile_header: String,
+    pub email_header: String,
+    pub equipment_header: String,
+    pub make_header: String,
+    pub model_header: String,
+    pub serial_header: String,
+    pub reason_header: String,
+    pub complaint_header: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncStatus {
     pub configured: bool,
     pub last_successful_sync: Option<String>,

@@ -98,6 +98,14 @@ const ServixApi = {
     if(isDesktop) return invokeNative('update_intake_status',{id,status});
     const item=mockState.intake.find(x=>x.id===id); if(item) item.status=status;
   },
+  async getGoogleSyncConfig():Promise<GoogleSyncConfig>{
+    if(isDesktop) return invokeNative<GoogleSyncConfig>('get_google_sync_config');
+    return {sheetId:'1dXiMB7ls1vAzFL3PHYTOMQDnI-JUtVltVGVuGhu4IJo',sheetName:'Form Responses 1',serviceAccountConfigured:false,serviceAccountEmail:'',timestampHeader:'Timestamp',clientHeader:'Organisation / Client Name',contactHeader:'Contact Person Name',mobileHeader:'Mobile Number',emailHeader:'Email',equipmentHeader:'Equipment / Device',makeHeader:'Make',modelHeader:'Model',serialHeader:'Serial Number',reasonHeader:'Reason for Sending',complaintHeader:'Problem / Complaint'};
+  },
+  async saveGoogleSyncConfig(draft:GoogleSyncConfigDraft):Promise<GoogleSyncConfig>{
+    if(isDesktop) return invokeNative<GoogleSyncConfig>('save_google_sync_config',{draft});
+    return {...draft,serviceAccountConfigured:!!draft.serviceAccountJson,serviceAccountEmail:draft.serviceAccountJson?'preview@service-account.local':''};
+  },
   async syncGoogleForm():Promise<SyncStatus>{
     if(isDesktop) return invokeNative<SyncStatus>('sync_google_form');
     mockState.sync={...mockState.sync,lastAttemptedSync:new Date().toLocaleString(),lastSuccessfulSync:new Date().toLocaleString(),newCount:0,status:'up-to-date',message:'Sync completed in preview mode.'}; return mockState.sync;
