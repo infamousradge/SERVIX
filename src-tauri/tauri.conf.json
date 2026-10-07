@@ -12,7 +12,7 @@
   "app": {
     "withGlobalTauri": true,
     "windows": [{"label":"main","title":"SERVIX","width":1440,"height":900,"minWidth":1180,"minHeight":720,"center":true,"resizable":true,"fullscreen":false,"devtools":false}],
-    "security": {"capabilities":["main"],"freezePrototype":false,"csp":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"}
+    "security": {"capabilities":["main"],"freezePrototype":false,"csp":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src blob:; base-uri 'self'; form-action 'self'"}
   },
   "bundle": {
     "active": true,

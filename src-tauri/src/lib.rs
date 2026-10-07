@@ -1,4 +1,5 @@
 mod commands;
+mod files;
 mod database;
 mod models;
 mod security;
@@ -21,6 +22,13 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            files::choose_backup_path,
+            files::list_documents,
+            files::add_document,
+            files::read_document,
+            files::create_backup,
+            files::preview_restore,
+            files::restore_backup,
             commands::system_status,
             commands::create_first_admin,
             commands::authenticate,
