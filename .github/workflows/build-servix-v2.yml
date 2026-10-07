@@ -55,8 +55,11 @@ jobs:
           & .\node_modules\.bin\tauri.cmd icon assets/app-icon-generated.png
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Build frontend for native recovery tests
+        run: npm run frontend:build
+
       - name: Test file validation and recovery
-        run: cargo test --manifest-path src-tauri/Cargo.toml --lib files::tests
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib files::tests
 
       - name: Build SERVIX V2 NSIS installer
         shell: pwsh
