@@ -33,7 +33,17 @@ function ClientsView({data}:{data:DashboardData}){
     <section className="client-history-section">
      <div className="client-history-head"><div><h4>{selectedEquipment?(selectedEquipment.make+' '+selectedEquipment.model).trim()+' History':'Client Service History'}</h4><p>{selectedEquipment?selectedEquipment.servixEquipmentId+' • S/N '+(selectedEquipment.serialNumber||'—'):'All equipment and Service ID activity for this client'}</p></div><div className="history-actions"><span className="soft-chip">{filteredHistory.length} events</span><button type="button" className="small-button history-action-button" disabled={!filteredHistory.length} onClick={()=>printHistoryDocument(selectedEquipment?'Equipment Service History':'Client Service History',selectedEquipment?(selectedEquipment.servixEquipmentId+' • '+selected.name):(selected.name+' • '+selected.code),historyRows,['Services: '+filteredServices.length])}><Icon name="print" size={14}/> Print</button><button type="button" className="small-button history-action-button" disabled={!filteredHistory.length} onClick={()=>historyRowsToCsv((selectedEquipment?selectedEquipment.servixEquipmentId:selected.code)+'-history',historyRows)}><Icon name="export" size={14}/> CSV</button></div></div>
      <div className="client-service-strip">{filteredServices.slice(0,8).map(s=><div key={s.id}><span><strong>{s.serviceId}</strong><small>{s.openedDate+' • '+s.reason}</small></span><StatusBadge value={s.status}/></div>)}{!filteredServices.length&&<p className="quiet-empty">No Service Calls for this selection.</p>}</div>
-     {historyBusy?<div className="history-loading"><div className="boot-spinner"/><span>Loading history…</span></div>:historyError?<div className="form-error">{historyError}</div>:<div className="simple-history-list">{filteredHistory.map(ev=>{const dt=splitAuditDateTime(ev.createdAt);return <div className="simple-history-row" key={ev.serviceId+'-'+ev.id}><div className="simple-history-time"><strong>{dt.date}</strong><small>{dt.time||'—'}</small></div><div className="simple-history-event"><div><strong>{ev.eventType}</strong><span className="history-service-id">{ev.serviceId}</span></div><p>{ev.note||([ev.oldValue,ev.newValue].filter(Boolean).join(' → '))||'Record activity'}</p><small>{ev.actor+' • '+ev.equipment+(ev.serialNumber?' • S/N '+ev.serialNumber:'')}</small></div><StatusBadge value={ev.serviceStatus}/></div>)}{!filteredHistory.length&&!historyBusy&&<p className="quiet-empty">No history recorded for this selection yet.</p>}</div>}
+     {historyBusy?
+      <div className="history-loading"><div className="boot-spinner"/><span>Loading history…</span></div>:
+      historyError?<div className="form-error">{historyError}</div>:
+      <div className="simple-history-list">
+       {filteredHistory.map(ev=>{const dt=splitAuditDateTime(ev.createdAt);return <div className="simple-history-row" key={ev.serviceId+'-'+ev.id}>
+        <div className="simple-history-time"><strong>{dt.date}</strong><small>{dt.time||'—'}</small></div>
+        <div className="simple-history-event"><div><strong>{ev.eventType}</strong><span className="history-service-id">{ev.serviceId}</span></div><p>{ev.note||([ev.oldValue,ev.newValue].filter(Boolean).join(' → '))||'Record activity'}</p><small>{[ev.actor,ev.equipment,ev.serialNumber?'S/N '+ev.serialNumber:''].filter(Boolean).join(' • ')}</small></div>
+        <StatusBadge value={ev.serviceStatus}/>
+       </div>})}
+       {!filteredHistory.length&&!historyBusy&&<p className="quiet-empty">No history recorded for this selection yet.</p>}
+      </div>}
     </section>
    </div>
   </Modal>}
