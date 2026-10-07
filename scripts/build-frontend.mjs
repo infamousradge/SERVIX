@@ -35,10 +35,14 @@ await copyFile(path.join(root, 'src', 'scale100.css'), path.join(web, 'assets', 
 await copyFile(reactUmd, path.join(web, 'assets', 'vendor', 'react.production.min.js'));
 await copyFile(reactDomUmd, path.join(web, 'assets', 'vendor', 'react-dom.production.min.js'));
 
-const transparentLogo = path.join(root, 'assets', 'logo-transparent.png');
-const originalLogo = path.join(root, 'assets', 'logo.png');
-const logoSource = existsSync(transparentLogo) ? transparentLogo : originalLogo;
-if (existsSync(logoSource)) await copyFile(logoSource, path.join(web, 'assets', 'servix-logo.png'));
+const sidebarLogo = path.join(root, 'assets', 'logo-transparent.png');
+const loginMark = path.join(root, 'assets', 'login-mark-generated.png');
+if (!existsSync(sidebarLogo) || !existsSync(loginMark)) {
+  console.error('Prepared SERVIX locked logo assets are missing. Run the brand preparation step first.');
+  process.exit(1);
+}
+await copyFile(sidebarLogo, path.join(web, 'assets', 'servix-sidebar-logo.png'));
+await copyFile(loginMark, path.join(web, 'assets', 'servix-login-mark.png'));
 
 const manropeSource = path.join(root, 'assets', 'Manrope-wght.ttf');
 if (!existsSync(manropeSource)) {
