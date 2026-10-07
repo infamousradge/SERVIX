@@ -208,6 +208,7 @@ pub struct ClientRecord {
 pub struct EquipmentRecord {
     pub id: i64,
     pub servix_equipment_id: String,
+    pub client_id: i64,
     pub client: String,
     pub make: String,
     pub model: String,
