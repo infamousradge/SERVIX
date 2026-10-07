@@ -34,7 +34,7 @@ type IntakeItem = {
 };
 type IntakeReviewDraft = { id:number; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string; serialNumber:string; complaint:string };
 type ClientRecord = { id:number; code:string; name:string; contact:string; mobile:string; email:string; city:string; state:string; active:boolean; serviceCount:number; equipmentCount:number };
-type EquipmentRecord = { id:number; servixEquipmentId:string; client:string; make:string; model:string; serialNumber:string; type:string; location:string; coverage:string; serviceCount:number; lastService:string };
+type EquipmentRecord = { id:number; servixEquipmentId:string; clientId?:number|null; client:string; make:string; model:string; serialNumber:string; type:string; location:string; coverage:string; serviceCount:number; lastService:string };
 type PartUsage = { id:number; date:string; serviceId:string; client:string; equipment:string; itemName:string; make:string; model:string; partNumber:string; quantity:number; remarks:string };
 type SyncStatus = { configured:boolean; lastSuccessfulSync:string|null; lastAttemptedSync:string|null; newCount:number; status:'up-to-date'|'warning'|'overdue'|'offline'|'not-configured'; message:string };
 type UserRecord = { id:number; username:string; displayName:string; role:'Administrator'|'Office User'|'Read Only'; active:boolean };

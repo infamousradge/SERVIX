@@ -298,22 +298,23 @@ fn list_clients(db: &Connection) -> Result<Vec<ClientRecord>, String> {
 
 fn list_equipment(db: &Connection) -> Result<Vec<EquipmentRecord>, String> {
     let mut stmt = db
-        .prepare("SELECT e.id,e.servix_equipment_id,COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,e.location,e.coverage,(SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id),COALESCE((SELECT MAX(opened_date) FROM service_calls sc WHERE sc.equipment_id=e.id),'') FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC")
+        .prepare("SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,e.location,e.coverage,(SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id),COALESCE((SELECT MAX(opened_date) FROM service_calls sc WHERE sc.equipment_id=e.id),'') FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC")
         .map_err(db_err)?;
     let rows = stmt
         .query_map([], |r| {
             Ok(EquipmentRecord {
                 id: r.get(0)?,
                 servix_equipment_id: r.get(1)?,
-                client: r.get(2)?,
-                make: r.get(3)?,
-                model: r.get(4)?,
-                serial_number: r.get(5)?,
-                r#type: r.get(6)?,
-                location: r.get(7)?,
-                coverage: r.get(8)?,
-                service_count: r.get(9)?,
-                last_service: r.get(10)?,
+                client_id: r.get(2)?,
+                client: r.get(3)?,
+                make: r.get(4)?,
+                model: r.get(5)?,
+                serial_number: r.get(6)?,
+                r#type: r.get(7)?,
+                location: r.get(8)?,
+                coverage: r.get(9)?,
+                service_count: r.get(10)?,
+                last_service: r.get(11)?,
             })
         })
         .map_err(db_err)?;
@@ -433,7 +434,9 @@ fn duplicate_review(db: &Connection, draft: &ServiceCallDraft) -> Result<Duplica
         rows.collect::<Result<Vec<_>,_>>().map_err(db_err)?
     };
 
-    let equipment_candidates = if serial.is_empty() { Vec::new() } else {
+    let exact_serial_candidates = if serial.is_empty() {
+        Vec::new()
+    } else {
         let mut stmt = db.prepare(
             "SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,
              (SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id)
@@ -446,6 +449,35 @@ fn duplicate_review(db: &Connection, draft: &ServiceCallDraft) -> Result<Duplica
             model:r.get(5)?,serial_number:r.get(6)?,equipment_type:r.get(7)?,service_count:r.get(8)?
         })).map_err(db_err)?;
         rows.collect::<Result<Vec<_>,_>>().map_err(db_err)?
+    };
+
+    // If the serial did not identify a device but the client is known, show that
+    // client's registered equipment. Staff can deliberately select the returning
+    // device or create a genuinely new device under the same client.
+    let equipment_candidates = if !exact_serial_candidates.is_empty() {
+        exact_serial_candidates
+    } else if client_candidates.len()==1 {
+        let client_id = client_candidates[0].id;
+        let mut stmt = db.prepare(
+            "SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,
+             (SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id)
+             FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
+             WHERE e.active=1 AND e.client_id=?1
+             ORDER BY (CASE WHEN lower(trim(e.equipment_type))=lower(trim(?2)) THEN 0 ELSE 1 END),
+                      (CASE WHEN ?3<>'' AND lower(trim(e.make))=lower(trim(?3)) THEN 0 ELSE 1 END),
+                      (CASE WHEN ?4<>'' AND lower(trim(e.model))=lower(trim(?4)) THEN 0 ELSE 1 END),
+                      e.id DESC"
+        ).map_err(db_err)?;
+        let rows = stmt.query_map(
+            params![client_id,draft.equipment.trim(),draft.make.as_deref().unwrap_or_default().trim(),draft.model.as_deref().unwrap_or_default().trim()],
+            |r| Ok(DuplicateEquipmentCandidate{
+                id:r.get(0)?,servix_equipment_id:r.get(1)?,client_id:r.get(2)?,client_name:r.get(3)?,make:r.get(4)?,
+                model:r.get(5)?,serial_number:r.get(6)?,equipment_type:r.get(7)?,service_count:r.get(8)?
+            })
+        ).map_err(db_err)?;
+        rows.collect::<Result<Vec<_>,_>>().map_err(db_err)?
+    } else {
+        Vec::new()
     };
 
     let open_services = {
@@ -499,11 +531,18 @@ fn duplicate_review(db: &Connection, draft: &ServiceCallDraft) -> Result<Duplica
     }
 
     let level = if requires_override {"warning"} else if !client_candidates.is_empty() || !equipment_candidates.is_empty() {"match"} else {"clear"}.to_string();
-    let summary = match level.as_str() {
-        "warning" => "Potential duplicate or record conflict found. Review the existing records before creating this Service Call.",
-        "match" => "Existing client/equipment records were found. Confirm the records SERVIX should link to this Service Call.",
-        _ => "No existing client/equipment duplicate was found."
-    }.to_string();
+    let has_exact_serial_match = !serial.is_empty() && equipment_candidates.iter().any(|e| e.serial_number.eq_ignore_ascii_case(&serial));
+    let summary = if level == "warning" {
+        "Potential duplicate or record conflict found. Review the existing records before creating this Service Call.".to_string()
+    } else if has_exact_serial_match {
+        "This device already exists in SERVIX. Select the existing equipment record so this visit is added to its history.".to_string()
+    } else if client_candidates.len()==1 && !equipment_candidates.is_empty() {
+        "Existing client found with registered equipment. Select the returning device, or create a new equipment record under this client.".to_string()
+    } else if level == "match" {
+        "Existing client/equipment records were found. Confirm the records SERVIX should link to this Service Call.".to_string()
+    } else {
+        "No existing client/equipment duplicate was found.".to_string()
+    };
 
     Ok(DuplicateReview{level,summary,client_candidates,equipment_candidates,open_services,warnings,requires_override})
 }

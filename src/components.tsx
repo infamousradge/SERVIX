@@ -10,8 +10,8 @@ function PageHeader({title,subtitle,actions}:{title:string,subtitle?:string,acti
 }
 function EmptyState({title,detail}:{title:string,detail:string}){return <div className="empty-state"><div className="empty-icon"><Icon name="service" size={24}/></div><strong>{title}</strong><p>{detail}</p></div>}
 function Field({label,required,children,wide}:{label:string,required?:boolean,children?:any,wide?:boolean}){return <label className={`field ${wide?'wide':''}`}><span>{label}{required&&<em>*</em>}</span>{children}</label>}
-function Modal({title,subtitle,onClose,children,footer,wide=false}:{title:string,subtitle?:string,onClose:()=>void,children?:any,footer?:any,wide?:boolean}){
- return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section className={`modal ${wide?'modal-wide':''}`}><header><div><h2>{title}</h2>{subtitle&&<p>{subtitle}</p>}</div><button className="icon-button" onClick={onClose}><Icon name="close"/></button></header><div className="modal-body">{children}</div>{footer&&<footer>{footer}</footer>}</section></div>;
+function Modal({title,subtitle,onClose,children,footer,wide=false,className=''}:{title:string,subtitle?:string,onClose:()=>void,children?:any,footer?:any,wide?:boolean,className?:string}){
+ return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section className={`modal ${wide?'modal-wide':''} ${className}`.trim()}><header><div><h2>{title}</h2>{subtitle&&<p>{subtitle}</p>}</div><button className="icon-button" onClick={onClose}><Icon name="close"/></button></header><div className="modal-body">{children}</div>{footer&&<footer>{footer}</footer>}</section></div>;
 }
 function Toolbar({children}:{children?:any}){return <div className="toolbar">{children}</div>}
 function SearchBox({value,onChange,placeholder='Search...'}:{value:string,onChange:(v:string)=>void,placeholder?:string}){return <div className="search-box"><Icon name="search" size={17}/><input value={value} onChange={e=>onChange((e.target as HTMLInputElement).value)} placeholder={placeholder}/></div>}
@@ -52,4 +52,19 @@ function printHistoryDocument(title:string,subtitle:string,rows:PrintableHistory
  rows.forEach(r=>{const tr=document.createElement('tr');[r.dateTime,r.user,r.action,r.serviceId,r.details+(r.context?' • '+r.context:'')].forEach(v=>{const td=document.createElement('td');td.textContent=v||'—';tr.appendChild(td)});tbody.appendChild(tr)});
  table.append(thead,tbody); sheet.append(head,metaBox,table); document.body.appendChild(sheet);
  const cleanup=()=>sheet.remove(); window.addEventListener('afterprint',cleanup,{once:true}); setTimeout(()=>window.print(),80); setTimeout(()=>{if(document.body.contains(sheet))sheet.remove()},120000);
+}
+
+
+function splitAuditDateTime(value:string){
+ const raw=String(value||'').trim();
+ if(!raw)return {date:'—',time:''};
+ const m=raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+ if(m){
+  const [y,mo,d]=m[1].split('-');
+  return {date:d+'/'+mo+'/'+y,time:m[2]};
+ }
+ const parsed=new Date(raw);
+ if(!Number.isNaN(parsed.getTime()))return {date:parsed.toLocaleDateString(),time:parsed.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})};
+ const pieces=raw.split(/\s+/);
+ return {date:pieces[0]||'—',time:pieces.slice(1).join(' ')};
 }
