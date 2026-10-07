@@ -47,6 +47,7 @@ function ServiceDetailModal({service,onClose,onUpdated}:{service:ServiceCall,onC
  const addNote=async()=>{if(!note.trim())return;setBusy(true);setError('');try{const d=await ServixApi.addServiceNote(service.id,note);setDetail(d);if(!hasUnsaved)setDraft(toDraft(d));setNote('');setTab('Notes');await onUpdated()}catch(e:any){setError(e?.message||String(e))}finally{setBusy(false)}};
  const addPart=async()=>{if(!part.itemName.trim())return;setBusy(true);setError('');try{const d=await ServixApi.addServicePart({serviceCallId:service.id,...part,quantity:Number(part.quantity)||1});setDetail(d);if(!hasUnsaved)setDraft(toDraft(d));setPart({itemName:'',make:'',model:'',partNumber:'',quantity:1,remarks:''});setShowPart(false);await onUpdated()}catch(e:any){setError(e?.message||String(e))}finally{setBusy(false)}};
  const tabs=[{key:'Service',icon:'service'},{key:'Received Item',icon:'intake'},{key:'Parts Used',icon:'parts'},{key:'Notes',icon:'service'},{key:'History',icon:'reports'}];
+ React.useEffect(()=>{const area=document.querySelector('.service-workspace-modal .modal-body');if(area)area.scrollTop=0},[tab]);
  const hasUnsaved=!!detail&&!!draft&&JSON.stringify(toDraft(detail))!==JSON.stringify(draft);
  const dueOverdue=!!draft?.dueDate&&draft.status!=='Closed'&&draft.dueDate<new Date().toISOString().slice(0,10);
  return <Modal title="Service Workspace" subtitle={(detail?detail.serviceId:service.serviceId)+' • open, update and retain the complete Service ID history'} onClose={onClose} wide className="service-workspace-modal" footer={<><button className="secondary-button" onClick={onClose}>Close</button>{detail&&<button className="secondary-button" disabled={busy||hasUnsaved} onClick={async()=>{setBusy(true);try{const data=await ServixApi.bootstrap();printServiceDocument(detail,data.clients.find(c=>c.id===service.clientId),data.operations?.calibrations.find(r=>r.serviceCallId===service.id))}catch(e:any){setError(e.message)}finally{setBusy(false)}}}><Icon name="print"/> Print Service Report</button>}{draft&&<button className="primary-button" disabled={busy||!hasUnsaved} onClick={save}>{busy?'Saving...':hasUnsaved?'Save Changes':'Saved'}</button>}</>}>
@@ -82,8 +83,8 @@ function ServiceDetailModal({service,onClose,onUpdated}:{service:ServiceCall,onC
  </Modal>;
 }
 
-function ServiceCallsView({data,onRefresh}:{data:DashboardData,onRefresh:()=>void}){
- const [query,setQuery]=React.useState(newServiceQuery());const [showNew,setShowNew]=React.useState(false);const [selectedService,setSelectedService]=React.useState(null as ServiceCall|null);const [selected,setSelected]=React.useState([] as number[]);
+function ServiceCallsView({data,onRefresh,initialQuery}:{data:DashboardData,onRefresh:()=>void,initialQuery?:ServiceQuery}){
+ const [query,setQuery]=React.useState(initialQuery||newServiceQuery());React.useEffect(()=>{if(initialQuery)setQuery(initialQuery)},[initialQuery]);const [showNew,setShowNew]=React.useState(false);const [selectedService,setSelectedService]=React.useState(null as ServiceCall|null);const [selected,setSelected]=React.useState([] as number[]);
  const rows=filterServices(data,query);const selectedRows=data.services.filter(s=>selected.includes(s.id));const outputRows=selected.length?selectedRows:rows;const output=buildReportTable('Service Calls',outputRows,[]);const scopeMeta=['Scope: '+(selected.length?'Selected calls':'Matching calls'),...Object.entries(query).filter(([k,v])=>v&&v!=='All').map(([k,v])=>k+': '+v)];
  const allVisibleSelected=rows.length>0&&rows.every(r=>selected.includes(r.id));
  const toggleAll=()=>setSelected(allVisibleSelected?selected.filter(id=>!rows.some(r=>r.id===id)):Array.from(new Set([...selected,...rows.map(r=>r.id)])));

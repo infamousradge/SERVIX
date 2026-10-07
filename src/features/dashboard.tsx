@@ -1,6 +1,6 @@
-function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(m:ModuleKey)=>void,onSync:()=>void}){
+function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(m:ModuleKey,q?:Partial<ServiceQuery>)=>void,onSync:()=>void}){
  const counts={open:data.services.filter(s=>s.status==='Open').length,inProgress:data.services.filter(s=>s.status==='In Progress').length,pending:data.services.filter(s=>s.status==='Pending').length,closed:data.services.filter(s=>s.status==='Closed').length};
- const overdue=data.services.filter(s=>s.status!=='Closed'&&s.dueDate&&new Date(s.dueDate)<new Date()).length;
+ const overdue=data.services.filter(s=>s.status!=='Closed'&&s.dueDate&&s.dueDate<new Date().toISOString().slice(0,10)).length;
  const monthKeys=Array.from({length:12},(_,i)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-(11-i));return d.toISOString().slice(0,7)});const trend=monthKeys.map(k=>data.services.filter(s=>s.openedDate.startsWith(k)).length);const followups=data.services.filter(s=>s.status!=='Closed'&&s.followUpDate&&s.followUpDate<=new Date().toISOString().slice(0,10)).length;
  const coverage=['Warranty','AMC','Out of Coverage'].map((label,i)=>({label,value:data.services.filter(s=>s.coverage===label).length,tone:['seg-blue','seg-green','seg-amber'][i]}));
  const topClients=Object.entries(data.services.reduce((a:any,s)=>{a[s.client]=(a[s.client]||0)+1;return a},{})).sort((a:any,b:any)=>b[1]-a[1]).slice(0,5).map(([label,value]:any)=>({label,value}));
@@ -8,11 +8,11 @@ function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(
  return <div className="module-content dashboard-view">
   <PageHeader title="Dashboard" subtitle="Live overview of service operations and incoming work" actions={<button className="primary-button" onClick={()=>onNavigate('service-calls')}><Icon name="plus"/> Manual Service Call</button>}/>
   <div className="kpi-grid">
-   <KpiCard label="Open" value={counts.open} icon="service" tone="blue" onClick={()=>onNavigate('service-calls')}/>
-   <KpiCard label="In Progress" value={counts.inProgress} icon="service" tone="orange" onClick={()=>onNavigate('service-calls')}/>
-   <KpiCard label="Pending" value={counts.pending} icon="bell" tone="amber" onClick={()=>onNavigate('service-calls')}/>
-   <KpiCard label="Closed" value={counts.closed} icon="shield" tone="green" onClick={()=>onNavigate('service-calls')}/>
-   <KpiCard label="Overdue" value={overdue} icon="bell" tone="red" onClick={()=>onNavigate('service-calls')}/>
+   <KpiCard label="Open" value={counts.open} icon="service" tone="blue" onClick={()=>onNavigate('service-calls',{status:'Open'})}/>
+   <KpiCard label="In Progress" value={counts.inProgress} icon="service" tone="orange" onClick={()=>onNavigate('service-calls',{status:'In Progress'})}/>
+   <KpiCard label="Pending" value={counts.pending} icon="bell" tone="amber" onClick={()=>onNavigate('service-calls',{status:'Pending'})}/>
+   <KpiCard label="Closed" value={counts.closed} icon="shield" tone="green" onClick={()=>onNavigate('service-calls',{status:'Closed'})}/>
+   <KpiCard label="Overdue" value={overdue} icon="bell" tone="red" onClick={()=>onNavigate('service-calls',{due:'Overdue'})}/>
   </div>
   <div className="dashboard-grid two">
    <section className="card chart-card"><div className="card-head"><div><h3>Service Calls Trend</h3><p>Recent activity</p></div><span className="soft-chip">Live</span></div><Sparkline values={trend}/><div className="trend-labels"><span>Earlier</span><strong>Current period</strong></div></section>

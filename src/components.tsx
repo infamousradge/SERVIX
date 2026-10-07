@@ -19,11 +19,11 @@ function Toolbar({children}:{children?:any}){return <div className="toolbar">{ch
 function SearchBox({value,onChange,placeholder='Search...'}:{value:string,onChange:(v:string)=>void,placeholder?:string}){return <div className="search-box"><Icon name="search" size={17}/><input value={value} onChange={e=>onChange((e.target as HTMLInputElement).value)} placeholder={placeholder}/></div>}
 function MiniBars({items}:{items:{label:string,value:number}[]}){
  const max=Math.max(1,...items.map(x=>x.value));
- return <div className="mini-bars">{items.map((item,i)=><div className="mini-bar-row" key={i}><span>{item.label}</span><div className="mini-track"><i style={{width:`${Math.max(5,item.value/max*100)}%`}}/></div><strong>{item.value}</strong></div>)}</div>;
+ return <div className="mini-bars">{items.map((item,i)=><div className="mini-bar-row" key={i}><span>{item.label}</span><div className="mini-track"><i style={{width:`${item.value/max*100}%`}}/></div><strong>{item.value}</strong></div>)}</div>;
 }
 function Donut({segments,totalLabel}:{segments:{label:string,value:number,tone:string}[],totalLabel:string}){
- const total=Math.max(1,segments.reduce((a,b)=>a+b.value,0)); let offset=0;
- return <div className="donut-layout"><svg className="donut" viewBox="0 0 42 42"><circle className="donut-base" cx="21" cy="21" r="15.9"/><g transform="rotate(-90 21 21)">{segments.map((s,i)=>{const pct=s.value/total*100; const el=<circle key={i} className={`donut-seg ${s.tone}`} cx="21" cy="21" r="15.9" strokeDasharray={`${pct} ${100-pct}`} strokeDashoffset={-offset}/>; offset+=pct; return el;})}</g><text x="21" y="20" textAnchor="middle" className="donut-number">{total}</text><text x="21" y="25" textAnchor="middle" className="donut-label">{totalLabel}</text></svg><div className="legend">{segments.map((s,i)=><div key={i}><i className={s.tone}/><span>{s.label}</span><strong>{s.value}</strong></div>)}</div></div>;
+ const count=segments.reduce((a,b)=>a+b.value,0);const total=Math.max(1,count); let offset=0;
+ return <div className="donut-layout"><svg className="donut" viewBox="0 0 42 42"><circle className="donut-base" cx="21" cy="21" r="15.9"/><g transform="rotate(-90 21 21)">{segments.map((s,i)=>{const pct=s.value/total*100; const el=<circle key={i} className={`donut-seg ${s.tone}`} cx="21" cy="21" r="15.9" strokeDasharray={`${pct} ${100-pct}`} strokeDashoffset={-offset}/>; offset+=pct; return el;})}</g><text x="21" y="20" textAnchor="middle" className="donut-number">{count}</text><text x="21" y="25" textAnchor="middle" className="donut-label">{totalLabel}</text></svg><div className="legend">{segments.map((s,i)=><div key={i}><i className={s.tone}/><span>{s.label}</span><strong>{s.value}</strong></div>)}</div></div>;
 }
 function Sparkline({values}:{values:number[]}){
  const max=Math.max(...values,1), min=Math.min(...values,0); const pts=values.map((v,i)=>`${i/(values.length-1)*100},${32-(v-min)/(max-min||1)*26}`).join(' ');
