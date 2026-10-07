@@ -21,6 +21,11 @@ type ServiceDetail = {
   receivedRemarks:string; completionDate:string; attachmentCount:number; parts:ServicePart[]; events:ServiceEvent[]; updatedAt:string;
 };
 type ServiceDetailDraft = Omit<ServiceDetail,'serviceId'|'openedDate'|'client'|'equipment'|'make'|'model'|'serialNumber'|'attachmentCount'|'parts'|'events'|'updatedAt'>;
+type DuplicateClientCandidate = { id:number; code:string; name:string; contact:string; mobile:string; email:string; serviceCount:number; equipmentCount:number };
+type DuplicateEquipmentCandidate = { id:number; servixEquipmentId:string; clientId:number; clientName:string; make:string; model:string; serialNumber:string; equipmentType:string; serviceCount:number };
+type DuplicateServiceCandidate = { id:number; serviceId:string; client:string; equipment:string; status:string; openedDate:string; complaint:string };
+type DuplicateReview = { level:'clear'|'match'|'warning'; summary:string; clientCandidates:DuplicateClientCandidate[]; equipmentCandidates:DuplicateEquipmentCandidate[]; openServices:DuplicateServiceCandidate[]; warnings:string[]; requiresOverride:boolean };
+
 type IntakeItem = {
   id:number; receivedAt:string; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string;
   serialNumber:string; complaint:string; matchSummary:string; matchTone:'good'|'neutral'|'warn'; status:IntakeStatus; linkedServiceId?:string;

@@ -408,190 +408,238 @@ fn sync_status(db: &Connection) -> Result<SyncStatus, String> {
     })
 }
 
-fn find_or_create_client(tx: &Transaction<'_>, draft: &ServiceCallDraft) -> Result<i64, String> {
+fn duplicate_review(db: &Connection, draft: &ServiceCallDraft) -> Result<DuplicateReview, String> {
     let mobile = normalize_mobile(draft.mobile.as_deref().unwrap_or_default());
     let email = normalize_email(draft.email.as_deref().unwrap_or_default());
-    let existing = tx
-        .query_row(
-            "SELECT id FROM clients WHERE (?1<>'' AND replace(replace(replace(mobile,' ',''),'-',''),'+','')=?1) OR (?2<>'' AND lower(email)=?2) ORDER BY active DESC,id LIMIT 1",
-            params![mobile, email],
-            |r| r.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(db_err)?;
+    let serial = draft.serial_number.as_deref().unwrap_or_default().trim().to_string();
 
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    if let Some(id) = existing {
-        tx.execute(
-            "UPDATE clients SET name=?1,contact=CASE WHEN ?2<>'' THEN ?2 ELSE contact END,mobile=CASE WHEN ?3<>'' THEN ?3 ELSE mobile END,email=CASE WHEN ?4<>'' THEN ?4 ELSE email END,updated_at=?5 WHERE id=?6",
-            params![draft.client.trim(), draft.contact.as_deref().unwrap_or_default().trim(), mobile, email, now, id],
-        )
-        .map_err(db_err)?;
-        return Ok(id);
-    }
-
-    let code = next_human_id(tx, "client_prefix", "client_next_number", "client_digits", "CLI-", 1001)?;
-    tx.execute(
-        "INSERT INTO clients(code,name,contact,mobile,email,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?6)",
-        params![
-            code,
-            draft.client.trim(),
-            draft.contact.as_deref().unwrap_or_default().trim(),
-            mobile,
-            email,
-            now
-        ],
-    )
-    .map_err(db_err)?;
-    Ok(tx.last_insert_rowid())
-}
-
-fn find_or_create_equipment(
-    tx: &Transaction<'_>,
-    client_id: i64,
-    draft: &ServiceCallDraft,
-) -> Result<i64, String> {
-    let serial = draft.serial_number.as_deref().unwrap_or_default().trim();
-    let existing = if serial.is_empty() {
-        None
-    } else {
-        tx.query_row(
-            "SELECT id FROM equipment WHERE client_id=?1 AND lower(serial_number)=lower(?2) ORDER BY active DESC,id LIMIT 1",
-            params![client_id, serial],
-            |r| r.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(db_err)?
+    let client_candidates = {
+        let mut stmt = db.prepare(
+            "SELECT c.id,c.code,c.name,c.contact,c.mobile,c.email,
+             (SELECT COUNT(*) FROM service_calls sc WHERE sc.client_id=c.id),
+             (SELECT COUNT(*) FROM equipment e WHERE e.client_id=c.id)
+             FROM clients c
+             WHERE c.active=1 AND (
+               (?1<>'' AND replace(replace(replace(replace(replace(c.mobile,' ',''),'-',''),'+',''),'(',''),')','')=?1)
+               OR (?2<>'' AND lower(trim(c.email))=?2)
+             )
+             ORDER BY c.name,c.id"
+        ).map_err(db_err)?;
+        let rows = stmt.query_map(params![mobile,email], |r| Ok(DuplicateClientCandidate{
+            id:r.get(0)?,code:r.get(1)?,name:r.get(2)?,contact:r.get(3)?,mobile:r.get(4)?,email:r.get(5)?,
+            service_count:r.get(6)?,equipment_count:r.get(7)?
+        })).map_err(db_err)?;
+        rows.collect::<Result<Vec<_>,_>>().map_err(db_err)?
     };
 
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    if let Some(id) = existing {
-        tx.execute(
-            "UPDATE equipment SET make=?1,model=?2,equipment_type=?3,location=?4,coverage=?5,updated_at=?6 WHERE id=?7",
-            params![
-                draft.make.as_deref().unwrap_or_default().trim(),
-                draft.model.as_deref().unwrap_or_default().trim(),
-                draft.equipment.trim(),
-                draft.service_location.trim(),
-                draft.coverage.as_str(),
-                now,
-                id
-            ],
-        )
-        .map_err(db_err)?;
-        return Ok(id);
+    let equipment_candidates = if serial.is_empty() { Vec::new() } else {
+        let mut stmt = db.prepare(
+            "SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,
+             (SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id)
+             FROM equipment e LEFT JOIN clients c ON c.id=e.client_id
+             WHERE e.active=1 AND lower(trim(e.serial_number))=lower(trim(?1))
+             ORDER BY e.id"
+        ).map_err(db_err)?;
+        let rows = stmt.query_map(params![serial], |r| Ok(DuplicateEquipmentCandidate{
+            id:r.get(0)?,servix_equipment_id:r.get(1)?,client_id:r.get(2)?,client_name:r.get(3)?,make:r.get(4)?,
+            model:r.get(5)?,serial_number:r.get(6)?,equipment_type:r.get(7)?,service_count:r.get(8)?
+        })).map_err(db_err)?;
+        rows.collect::<Result<Vec<_>,_>>().map_err(db_err)?
+    };
+
+    let open_services = {
+        let mut stmt = if !serial.is_empty() {
+            db.prepare(
+                "SELECT id,service_id,client_name,equipment_name,status,opened_date,complaint
+                 FROM service_calls
+                 WHERE status<>'Closed' AND lower(trim(serial_number))=lower(trim(?1))
+                 ORDER BY opened_date DESC,id DESC"
+            ).map_err(db_err)?
+        } else {
+            db.prepare(
+                "SELECT id,service_id,client_name,equipment_name,status,opened_date,complaint
+                 FROM service_calls
+                 WHERE status<>'Closed' AND lower(trim(client_name))=lower(trim(?1)) AND lower(trim(equipment_name))=lower(trim(?2))
+                 ORDER BY opened_date DESC,id DESC"
+            ).map_err(db_err)?
+        };
+        if !serial.is_empty() {
+            stmt.query_map(params![serial], |r| Ok(DuplicateServiceCandidate{
+                id:r.get(0)?,service_id:r.get(1)?,client:r.get(2)?,equipment:r.get(3)?,status:r.get(4)?,opened_date:r.get(5)?,complaint:r.get(6)?
+            })).map_err(db_err)?.collect::<Result<Vec<_>,_>>().map_err(db_err)?
+        } else {
+            stmt.query_map(params![draft.client.trim(),draft.equipment.trim()], |r| Ok(DuplicateServiceCandidate{
+                id:r.get(0)?,service_id:r.get(1)?,client:r.get(2)?,equipment:r.get(3)?,status:r.get(4)?,opened_date:r.get(5)?,complaint:r.get(6)?
+            })).map_err(db_err)?.collect::<Result<Vec<_>,_>>().map_err(db_err)?
+        }
+    };
+
+    let mut warnings = Vec::new();
+    let mut requires_override = false;
+    if client_candidates.len() > 1 {
+        warnings.push("The entered mobile/email matches more than one client record. Choose the correct client or create a separate record with administrator approval.".into());
+        requires_override = true;
+    }
+    if equipment_candidates.len() > 1 {
+        warnings.push("The serial number already exists on more than one equipment record. Confirm the correct equipment before continuing.".into());
+        requires_override = true;
+    }
+    if !equipment_candidates.is_empty() {
+        let client_ids: Vec<i64> = client_candidates.iter().map(|x| x.id).collect();
+        let serial_on_other_client = equipment_candidates.iter().any(|e| client_ids.is_empty() || !client_ids.contains(&e.client_id));
+        if serial_on_other_client {
+            warnings.push("This serial number is already linked to another client/equipment record.".into());
+            requires_override = true;
+        }
+    }
+    if !open_services.is_empty() {
+        warnings.push(format!("{} open / in-progress / pending Service Call(s) already match this equipment. Creating another call requires administrator approval.", open_services.len()));
+        requires_override = true;
     }
 
-    let servix_id = next_human_id(
-        tx,
-        "equipment_prefix",
-        "equipment_next_number",
-        "equipment_digits",
-        "EQ-",
-        10001,
-    )?;
-    tx.execute(
-        "INSERT INTO equipment(servix_equipment_id,client_id,make,model,serial_number,equipment_type,location,coverage,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?9)",
-        params![
-            servix_id,
-            client_id,
-            draft.make.as_deref().unwrap_or_default().trim(),
-            draft.model.as_deref().unwrap_or_default().trim(),
-            serial,
-            draft.equipment.trim(),
-            draft.service_location.trim(),
-            draft.coverage.as_str(),
-            now
-        ],
-    )
-    .map_err(db_err)?;
-    Ok(tx.last_insert_rowid())
+    let level = if requires_override {"warning"} else if !client_candidates.is_empty() || !equipment_candidates.is_empty() {"match"} else {"clear"}.to_string();
+    let summary = match level.as_str() {
+        "warning" => "Potential duplicate or record conflict found. Review the existing records before creating this Service Call.",
+        "match" => "Existing client/equipment records were found. Confirm the records SERVIX should link to this Service Call.",
+        _ => "No existing client/equipment duplicate was found."
+    }.to_string();
+
+    Ok(DuplicateReview{level,summary,client_candidates,equipment_candidates,open_services,warnings,requires_override})
+}
+
+fn verify_admin_override(db: &Connection, password: &str) -> Result<bool, String> {
+    if password.is_empty() { return Ok(false); }
+    let mut stmt = db.prepare("SELECT password_hash FROM users WHERE role='Administrator' AND active=1").map_err(db_err)?;
+    let rows = stmt.query_map([], |r| r.get::<_,String>(0)).map_err(db_err)?;
+    for row in rows {
+        if security::verify_password(password, &row.map_err(db_err)?) { return Ok(true); }
+    }
+    Ok(false)
 }
 
 #[tauri::command]
-pub fn create_service_call(
-    state: State<'_, AppState>,
-    draft: ServiceCallDraft,
-) -> Result<ServiceCall, String> {
-    let user = require_user(&state)?;
-    if user.role == "Read Only" {
-        return Err("Read-only users cannot create service calls.".into());
+pub fn review_service_duplicates(state: State<'_, AppState>, draft: ServiceCallDraft) -> Result<DuplicateReview, String> {
+    let _ = require_user(&state)?;
+    let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    duplicate_review(&db, &draft)
+}
+
+fn insert_new_client(tx: &Transaction<'_>, draft: &ServiceCallDraft) -> Result<i64, String> {
+    let code = next_human_id(tx, "client_prefix", "client_next_number", "client_digits", "CLI-", 1001)?;
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    tx.execute(
+        "INSERT INTO clients(code,name,contact,mobile,email,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?6)",
+        params![code,draft.client.trim(),draft.contact.as_deref().unwrap_or_default().trim(),normalize_mobile(draft.mobile.as_deref().unwrap_or_default()),normalize_email(draft.email.as_deref().unwrap_or_default()),now],
+    ).map_err(db_err)?;
+    Ok(tx.last_insert_rowid())
+}
+
+fn find_or_create_client(tx: &Transaction<'_>, draft: &ServiceCallDraft) -> Result<i64, String> {
+    if draft.force_new_client { return insert_new_client(tx,draft); }
+    if let Some(id) = draft.selected_client_id {
+        let exists: Option<i64> = tx.query_row("SELECT id FROM clients WHERE id=?1 AND active=1",params![id],|r|r.get(0)).optional().map_err(db_err)?;
+        return exists.ok_or_else(|| "The selected client is no longer available. Review duplicates again.".into());
     }
-    if draft.client.trim().is_empty()
-        || draft.equipment.trim().is_empty()
-        || draft.reason.trim().is_empty()
-        || draft.complaint.trim().is_empty()
-    {
+    let mobile = normalize_mobile(draft.mobile.as_deref().unwrap_or_default());
+    let email = normalize_email(draft.email.as_deref().unwrap_or_default());
+    let mut stmt = tx.prepare(
+        "SELECT id FROM clients WHERE active=1 AND ((?1<>'' AND replace(replace(replace(replace(replace(mobile,' ',''),'-',''),'+',''),'(',''),')','')=?1) OR (?2<>'' AND lower(trim(email))=?2)) ORDER BY id"
+    ).map_err(db_err)?;
+    let ids = stmt.query_map(params![mobile,email],|r|r.get::<_,i64>(0)).map_err(db_err)?.collect::<Result<Vec<_>,_>>().map_err(db_err)?;
+    match ids.len() {0=>insert_new_client(tx,draft),1=>Ok(ids[0]),_=>Err("More than one client matches this mobile/email. Review duplicates and choose a client before saving.".into())}
+}
+
+fn insert_new_equipment(tx: &Transaction<'_>, client_id: i64, draft: &ServiceCallDraft) -> Result<i64, String> {
+    let servix_id = next_human_id(tx, "equipment_prefix", "equipment_next_number", "equipment_digits", "EQ-", 10001)?;
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    tx.execute(
+        "INSERT INTO equipment(servix_equipment_id,client_id,make,model,serial_number,equipment_type,location,coverage,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?9)",
+        params![servix_id,client_id,draft.make.as_deref().unwrap_or_default().trim(),draft.model.as_deref().unwrap_or_default().trim(),draft.serial_number.as_deref().unwrap_or_default().trim(),draft.equipment.trim(),draft.service_location.trim(),draft.coverage.as_str(),now],
+    ).map_err(db_err)?;
+    Ok(tx.last_insert_rowid())
+}
+
+fn find_or_create_equipment(tx: &Transaction<'_>, client_id: i64, draft: &ServiceCallDraft) -> Result<i64, String> {
+    if let Some(id) = draft.selected_equipment_id {
+        let owner: Option<i64> = tx.query_row("SELECT client_id FROM equipment WHERE id=?1 AND active=1",params![id],|r|r.get(0)).optional().map_err(db_err)?;
+        let owner = owner.ok_or_else(|| "The selected equipment is no longer available. Review duplicates again.".to_string())?;
+        if owner != client_id { return Err("Selected equipment belongs to a different client. Choose its linked client or create a separate equipment record with administrator approval.".into()); }
+        return Ok(id);
+    }
+    if draft.force_new_equipment { return insert_new_equipment(tx,client_id,draft); }
+    let serial = draft.serial_number.as_deref().unwrap_or_default().trim();
+    if !serial.is_empty() {
+        let mut stmt = tx.prepare("SELECT id FROM equipment WHERE active=1 AND client_id=?1 AND lower(trim(serial_number))=lower(trim(?2)) ORDER BY id").map_err(db_err)?;
+        let ids = stmt.query_map(params![client_id,serial],|r|r.get::<_,i64>(0)).map_err(db_err)?.collect::<Result<Vec<_>,_>>().map_err(db_err)?;
+        if ids.len()==1 { return Ok(ids[0]); }
+        if ids.len()>1 { return Err("More than one equipment record with this serial exists for the selected client. Review duplicates and choose one.".into()); }
+        let other_count:i64=tx.query_row("SELECT COUNT(*) FROM equipment WHERE active=1 AND client_id<>?1 AND lower(trim(serial_number))=lower(trim(?2))",params![client_id,serial],|r|r.get(0)).map_err(db_err)?;
+        if other_count>0 { return Err("This serial number is already linked to another client. Use duplicate review and administrator override to create a separate equipment record.".into()); }
+    }
+    insert_new_equipment(tx,client_id,draft)
+}
+
+#[tauri::command]
+pub fn create_service_call(state: State<'_, AppState>, draft: ServiceCallDraft) -> Result<ServiceCall, String> {
+    let user = require_user(&state)?;
+    if user.role == "Read Only" { return Err("Read-only users cannot create service calls.".into()); }
+    if draft.client.trim().is_empty() || draft.equipment.trim().is_empty() || draft.reason.trim().is_empty() || draft.complaint.trim().is_empty() {
         return Err("Client, equipment, reason and complaint are required.".into());
     }
 
-    let mut db = state
-        .db
-        .lock()
-        .map_err(|_| "Database lock failed".to_string())?;
-    let tx = db.transaction().map_err(db_err)?;
-    let client_id = find_or_create_client(&tx, &draft)?;
-    let equipment_id = find_or_create_equipment(&tx, client_id, &draft)?;
-    let service_id = next_human_id(
-        &tx,
-        "service_prefix",
-        "service_next_number",
-        "service_digits",
-        "SRV-",
-        10001,
-    )?;
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let mut db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    let review = duplicate_review(&db, &draft)?;
+    let creating_separate_client = draft.force_new_client && !review.client_candidates.is_empty();
+    let creating_separate_equipment = draft.force_new_equipment && !review.equipment_candidates.is_empty();
+    let override_needed = review.requires_override || creating_separate_client || creating_separate_equipment;
+    let override_ok = if override_needed {
+        let password = draft.duplicate_override_password.as_deref().unwrap_or_default();
+        if !verify_admin_override(&db,password)? { return Err("Administrator password is required to override this duplicate/conflict warning.".into()); }
+        true
+    } else { false };
 
+    if review.client_candidates.len()>1 && draft.selected_client_id.is_none() && !draft.force_new_client {
+        return Err("Choose the correct existing client, or choose Create Separate Client with administrator approval.".into());
+    }
+    if review.equipment_candidates.len()>1 && draft.selected_equipment_id.is_none() && !draft.force_new_equipment {
+        return Err("Choose the correct existing equipment, or choose Create Separate Equipment with administrator approval.".into());
+    }
+
+    let tx = db.transaction().map_err(db_err)?;
+    let client_id = find_or_create_client(&tx,&draft)?;
+    let equipment_id = find_or_create_equipment(&tx,client_id,&draft)?;
+    let linked_client_name:String=tx.query_row("SELECT name FROM clients WHERE id=?1",params![client_id],|r|r.get(0)).map_err(db_err)?;
+    let (linked_equipment_name,linked_make,linked_model,linked_serial):(String,String,String,String)=tx.query_row(
+        "SELECT equipment_type,make,model,serial_number FROM equipment WHERE id=?1",params![equipment_id],
+        |r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))
+    ).map_err(db_err)?;
+
+    let service_id=next_human_id(&tx,"service_prefix","service_next_number","service_digits","SRV-",10001)?;
+    let now=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     tx.execute(
         "INSERT INTO service_calls(service_id,opened_date,client_id,equipment_id,client_name,equipment_name,make,model,serial_number,reason,complaint,engineer,status,priority,service_location,due_date,coverage,foc,quote_status,payment_status,created_by,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?22)",
         params![
-            service_id,
-            draft.opened_date,
-            client_id,
-            equipment_id,
-            draft.client.trim(),
-            draft.equipment.trim(),
-            draft.make.as_deref().unwrap_or_default().trim(),
-            draft.model.as_deref().unwrap_or_default().trim(),
-            draft.serial_number.as_deref().unwrap_or_default().trim(),
-            draft.reason,
-            draft.complaint,
-            draft.engineer.as_deref().unwrap_or_default().trim(),
-            draft.status,
-            draft.priority,
-            draft.service_location,
-            draft.due_date.as_deref().unwrap_or_default(),
-            draft.coverage,
-            if draft.foc { 1 } else { 0 },
-            draft.quote_status,
-            draft.payment_status,
-            user.id,
-            now
+            service_id,draft.opened_date,client_id,equipment_id,linked_client_name,
+            if linked_equipment_name.trim().is_empty(){draft.equipment.trim()}else{linked_equipment_name.as_str()},
+            if linked_make.trim().is_empty(){draft.make.as_deref().unwrap_or_default().trim()}else{linked_make.as_str()},
+            if linked_model.trim().is_empty(){draft.model.as_deref().unwrap_or_default().trim()}else{linked_model.as_str()},
+            if linked_serial.trim().is_empty(){draft.serial_number.as_deref().unwrap_or_default().trim()}else{linked_serial.as_str()},
+            draft.reason,draft.complaint,draft.engineer.as_deref().unwrap_or_default().trim(),draft.status,draft.priority,draft.service_location,
+            draft.due_date.as_deref().unwrap_or_default(),draft.coverage,if draft.foc {1}else{0},draft.quote_status,draft.payment_status,user.id,now
         ],
-    )
-    .map_err(db_err)?;
-    let id = tx.last_insert_rowid();
-    tx.execute(
-        "INSERT INTO service_events(service_call_id,event_type,new_value,note,actor_id,created_at) VALUES(?1,'Created',?2,'Service call created',?3,?4)",
-        params![id, service_id, user.id, now],
-    )
-    .map_err(db_err)?;
-    tx.execute(
-        "INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('ServiceCall','Create',?1,?2,?3,?4)",
-        params![service_id, user.id, format!("Created service call for {}", draft.client.trim()), now],
-    )
-    .map_err(db_err)?;
+    ).map_err(db_err)?;
+    let id=tx.last_insert_rowid();
+    tx.execute("INSERT INTO service_events(service_call_id,event_type,new_value,note,actor_id,created_at) VALUES(?1,'Created',?2,'Service call created',?3,?4)",params![id,service_id,user.id,now]).map_err(db_err)?;
+    if override_ok {
+        tx.execute("INSERT INTO service_events(service_call_id,event_type,note,actor_id,created_at) VALUES(?1,'Duplicate Override','Administrator password override approved after duplicate/conflict review',?2,?3)",params![id,user.id,now]).map_err(db_err)?;
+    }
+    let audit_summary=if override_ok {format!("Created service call for {} after duplicate override",linked_client_name)} else {format!("Created service call for {}",linked_client_name)};
+    tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('ServiceCall','Create',?1,?2,?3,?4)",params![service_id,user.id,audit_summary,now]).map_err(db_err)?;
     tx.commit().map_err(db_err)?;
     drop(db);
 
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| "Database lock failed".to_string())?;
-    list_services(&db)?
-        .into_iter()
-        .find(|x| x.id == id)
-        .ok_or_else(|| "Service call was saved but could not be reloaded.".into())
+    let db=state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    list_services(&db)?.into_iter().find(|x|x.id==id).ok_or_else(|| "Service call was saved but could not be reloaded.".into())
 }
 
 #[tauri::command]

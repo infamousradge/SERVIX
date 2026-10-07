@@ -31,6 +31,19 @@ const ServixApi = {
   },
   async logout(){ if(isDesktop) await invokeNative('logout'); mockUser=null; },
   async bootstrap():Promise<DashboardData>{ if(isDesktop) return invokeNative<DashboardData>('bootstrap'); return JSON.parse(JSON.stringify(mockState)); },
+  async reviewServiceDuplicates(draft:any):Promise<DuplicateReview>{
+    if(isDesktop) return invokeNative<DuplicateReview>('review_service_duplicates',{draft});
+    const mobile=String(draft.mobile||'').replace(/\D/g,''); const email=String(draft.email||'').trim().toLowerCase(); const serial=String(draft.serialNumber||'').trim().toLowerCase();
+    const clients=mockState.clients.filter(c=>(mobile&&String(c.mobile||'').replace(/\D/g,'')===mobile)||(email&&String(c.email||'').trim().toLowerCase()===email));
+    const equipment=mockState.equipment.filter(e=>serial&&String(e.serialNumber||'').trim().toLowerCase()===serial);
+    const open=mockState.services.filter(s=>s.status!=='Closed'&&((serial&&String(s.serialNumber||'').trim().toLowerCase()===serial)||(!serial&&s.client.toLowerCase()===String(draft.client||'').toLowerCase()&&s.equipment.toLowerCase()===String(draft.equipment||'').toLowerCase())));
+    const warnings:string[]=[]; let requiresOverride=false;
+    if(clients.length>1){warnings.push('The entered mobile/email matches more than one client record.');requiresOverride=true}
+    if(equipment.length>1){warnings.push('The serial number appears on more than one equipment record.');requiresOverride=true}
+    if(equipment.some(e=>!clients.some(c=>c.name===e.client))){warnings.push('This serial number is linked to another client/equipment record.');requiresOverride=true}
+    if(open.length){warnings.push('An open / in-progress / pending Service Call already matches this equipment.');requiresOverride=true}
+    return {level:requiresOverride?'warning':(clients.length||equipment.length?'match':'clear'),summary:requiresOverride?'Potential duplicate or record conflict found. Review before creating this Service Call.':(clients.length||equipment.length?'Existing client/equipment records were found. Confirm the records to link.':'No existing client/equipment duplicate was found.'),clientCandidates:clients.map(c=>({id:c.id,code:c.code,name:c.name,contact:c.contact,mobile:c.mobile,email:c.email,serviceCount:c.serviceCount,equipmentCount:c.equipmentCount})),equipmentCandidates:equipment.map(e=>({id:e.id,servixEquipmentId:e.servixEquipmentId,clientId:mockState.clients.find(c=>c.name===e.client)?.id||0,clientName:e.client,make:e.make,model:e.model,serialNumber:e.serialNumber,equipmentType:e.type,serviceCount:e.serviceCount})),openServices:open.map(s=>({id:s.id,serviceId:s.serviceId,client:s.client,equipment:s.equipment,status:s.status,openedDate:s.openedDate,complaint:s.complaint})),warnings,requiresOverride};
+  },
   async createServiceCall(draft:any):Promise<ServiceCall>{
     if(isDesktop) return invokeNative<ServiceCall>('create_service_call',{draft});
     const id=Math.max(0,...mockState.services.map(x=>x.id))+1;

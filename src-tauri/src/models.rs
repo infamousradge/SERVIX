@@ -77,6 +77,67 @@ pub struct ServiceCallDraft {
     pub foc: bool,
     pub quote_status: String,
     pub payment_status: String,
+    #[serde(default)]
+    pub selected_client_id: Option<i64>,
+    #[serde(default)]
+    pub selected_equipment_id: Option<i64>,
+    #[serde(default)]
+    pub force_new_client: bool,
+    #[serde(default)]
+    pub force_new_equipment: bool,
+    #[serde(default)]
+    pub duplicate_override_password: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateClientCandidate {
+    pub id: i64,
+    pub code: String,
+    pub name: String,
+    pub contact: String,
+    pub mobile: String,
+    pub email: String,
+    pub service_count: i64,
+    pub equipment_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateEquipmentCandidate {
+    pub id: i64,
+    pub servix_equipment_id: String,
+    pub client_id: i64,
+    pub client_name: String,
+    pub make: String,
+    pub model: String,
+    pub serial_number: String,
+    pub equipment_type: String,
+    pub service_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateServiceCandidate {
+    pub id: i64,
+    pub service_id: String,
+    pub client: String,
+    pub equipment: String,
+    pub status: String,
+    pub opened_date: String,
+    pub complaint: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateReview {
+    pub level: String,
+    pub summary: String,
+    pub client_candidates: Vec<DuplicateClientCandidate>,
+    pub equipment_candidates: Vec<DuplicateEquipmentCandidate>,
+    pub open_services: Vec<DuplicateServiceCandidate>,
+    pub warnings: Vec<String>,
+    pub requires_override: bool,
 }
 
 #[derive(Debug, Deserialize)]

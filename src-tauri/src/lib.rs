@@ -27,6 +27,7 @@ pub fn run() {
             commands::logout,
             commands::bootstrap,
             commands::create_service_call,
+            commands::review_service_duplicates,
             commands::create_user,
             commands::update_intake_status,
             commands::sync_google_form,
