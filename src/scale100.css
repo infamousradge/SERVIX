@@ -35,23 +35,64 @@
 }
 .sidebar nav{padding-top:10px!important}
 
-/* Login behaves visually like the About modal: compact centred dialog on a
-   quiet dimmed backdrop, rather than a large login page. */
+/* Login behaves like the About popup: the normal SERVIX shell remains
+   visible behind a modal-sized authentication dialog, but contains no client data. */
+.login-shell{
+  position:relative;
+  display:grid;
+  grid-template-columns:224px minmax(0,1fr);
+  height:100vh;
+  overflow:hidden;
+  background:#f3f6fb;
+}
+.login-shell-sidebar,.login-shell-workspace{pointer-events:none;user-select:none}
+.login-shell-sidebar{filter:saturate(.78)}
+.login-shell-workspace{filter:saturate(.72)}
+.login-shell-search{color:#8a97a8!important}
+.login-shell-search span{font-size:13px;color:#9ba7b7}
+.login-shell-user{margin-left:auto}
+.login-shell-content{padding-top:24px!important}
+.login-shell-heading{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+.login-shell-heading>div{display:flex;flex-direction:column;gap:8px}
+.login-shell-heading i,.login-shell-heading b,.login-shell-kpis i,.login-shell-kpis span,.login-shell-kpis small,.login-shell-panels i,.login-shell-panels span{display:block;background:#dfe7f0;border-radius:7px}
+.login-shell-heading i:first-child{width:180px;height:25px}
+.login-shell-heading i:last-child{width:300px;height:11px}
+.login-shell-heading b{width:126px;height:39px}
+.login-shell-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:11px;margin-bottom:14px}
+.login-shell-kpis>div{height:92px;background:#fff;border:1px solid #e0e7ef;border-radius:14px;padding:15px;box-shadow:0 5px 18px rgba(27,43,62,.04)}
+.login-shell-kpis i{width:34px;height:34px;border-radius:10px;margin-bottom:9px}
+.login-shell-kpis span{width:54%;height:11px;margin-bottom:6px}
+.login-shell-kpis small{width:34%;height:9px}
+.login-shell-panels{display:grid;grid-template-columns:1.28fr .72fr;gap:13px}
+.login-shell-panels section{height:290px;background:#fff;border:1px solid #e0e7ef;border-radius:14px;padding:18px;box-shadow:0 5px 18px rgba(27,43,62,.04)}
+.login-shell-panels i{width:138px;height:14px;margin-bottom:24px}
+.login-shell-panels span{height:12px;margin:16px 0}
+.login-shell-panels span:nth-of-type(1){width:88%}
+.login-shell-panels span:nth-of-type(2){width:72%}
+.login-shell-panels span:nth-of-type(3){width:81%}
+
 .login-screen{
+  position:absolute!important;
+  inset:0!important;
+  z-index:1000!important;
   padding:24px!important;
-  background:linear-gradient(rgba(13,27,48,.28),rgba(13,27,48,.28)),linear-gradient(145deg,#eef3f8,#e6edf5)!important;
+  background:rgba(12,25,43,.36)!important;
+  backdrop-filter:blur(2.2px);
+  -webkit-backdrop-filter:blur(2.2px);
   display:grid!important;
   place-items:center!important;
 }
 .login-card{
   width:min(390px,calc(100vw - 48px))!important;
   padding:0 26px 24px!important;
-  border-radius:18px!important;
+  border-radius:17px!important;
   overflow:hidden!important;
-  border:1px solid #d9e3ed!important;
+  border:1px solid #d8e1eb!important;
   background:#fff!important;
-  box-shadow:0 24px 70px rgba(17,31,49,.24)!important;
+  box-shadow:0 28px 78px rgba(8,21,38,.30)!important;
+  animation:servix-login-in .18s ease-out both;
 }
+@keyframes servix-login-in{from{opacity:.45;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
 .login-brand{
   width:calc(100% + 52px)!important;
   min-height:102px!important;
@@ -81,12 +122,12 @@
   border-radius:0!important;
 }
 .login-copy{text-align:center!important}
-.login-copy h1{font-size:21px!important;margin-bottom:4px!important}
-.login-copy p{font-size:12px!important;margin:0 auto 16px!important;max-width:300px}
+.login-copy h1{font-size:21px!important;margin:0 0 4px!important;color:#1e2939!important}
+.login-copy p{font-size:12px!important;line-height:1.48!important;margin:0 auto 16px!important;max-width:300px;color:#718096!important}
 .login-card .field{margin-bottom:11px!important}
 .login-card .field input{height:40px!important}
-.login-button{height:41px!important;width:100%!important}
-.login-foot{margin-top:12px!important;text-align:center!important;display:block!important}
+.login-button{height:41px!important;width:100%!important;justify-content:center!important}
+.login-foot{margin-top:12px!important;text-align:center!important;display:block!important;color:#8491a2!important}
 
 /* About logo uses the same white SERVIX artwork on a discreet navy plate. */
 .about-brand{background:linear-gradient(145deg,#071a3d,#0b4f78);border-radius:12px;padding:10px 12px!important}
