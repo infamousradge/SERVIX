@@ -419,7 +419,7 @@ fn list_services(db: &Connection) -> Result<Vec<ServiceCall>, String> {
 
 fn list_intake(db: &Connection) -> Result<Vec<IntakeItem>, String> {
     let mut stmt = db
-        .prepare("SELECT id,received_at,client_name,contact,mobile,email,equipment,make,model,serial_number,complaint,match_summary,match_tone,status,linked_service_id,raw_json FROM form_intake ORDER BY received_at DESC,id DESC LIMIT 500")
+        .prepare("SELECT id,received_at,client_name,contact,mobile,email,equipment,make,model,serial_number,complaint,match_summary,match_tone,status,linked_service_id,raw_json FROM form_intake ORDER BY received_at DESC,id DESC")
         .map_err(db_err)?;
     let rows = stmt
         .query_map([], |r| {
@@ -918,71 +918,40 @@ pub fn create_user(
     })
 }
 
-#[tauri::command]
-pub fn save_intake_review(
-    state: State<'_, AppState>,
-    draft: IntakeReviewDraft,
-) -> Result<(), String> {
-    let user = require_user(&state)?;
-    if user.role == "Read Only" {
-        return Err("Read-only users cannot review intake records.".into());
-    }
-    if draft.client.trim().is_empty() || draft.equipment.trim().is_empty() || draft.complaint.trim().is_empty() {
-        return Err("Client, equipment and complaint are required before marking the request Reviewed.".into());
-    }
-    let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
-    let current_status: String = db.query_row(
-        "SELECT status FROM form_intake WHERE id=?1",
-        params![draft.id],
-        |r| r.get(0)
-    ).optional().map_err(db_err)?.ok_or_else(|| "Incoming request not found.".to_string())?;
-    if current_status == "Converted" {
-        return Err("Converted intake records are read-only.".into());
-    }
-    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-    db.execute(
-        "UPDATE form_intake SET client_name=?1,contact=?2,mobile=?3,email=?4,equipment=?5,make=?6,model=?7,serial_number=?8,complaint=?9,status='Reviewed',processed_by=?10,processed_at=?11 WHERE id=?12",
-        params![
-            draft.client.trim(),draft.contact.trim(),normalize_mobile(&draft.mobile),normalize_email(&draft.email),
-            draft.equipment.trim(),draft.make.trim(),draft.model.trim(),draft.serial_number.trim(),draft.complaint.trim(),
-            user.id,now,draft.id
-        ],
-    ).map_err(db_err)?;
-    db.execute(
-        "INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('Intake','Review',?1,?2,'Incoming request reviewed; original submission snapshot retained',?3)",
-        params![draft.id.to_string(),user.id,now],
-    ).map_err(db_err)?;
-    Ok(())
+fn intake_review_permission(role:&str,status:&str)->Result<(),String>{
+ if role=="Read Only"{return Err("Read-only users cannot review intake records.".into())}
+ if status!="New"&&role!="Administrator"{return Err("Only an administrator can correct a previously reviewed request.".into())}Ok(())
 }
-
 #[tauri::command]
-pub fn update_intake_status(
-    state: State<'_, AppState>,
-    id: i64,
-    status: String,
-) -> Result<(), String> {
-    let user = require_user(&state)?;
-    if user.role == "Read Only" {
-        return Err("Read-only users cannot change intake records.".into());
-    }
-    if !["New", "Reviewed", "Converted", "Duplicate"].contains(&status.as_str()) {
-        return Err("Invalid intake status.".into());
-    }
-    let db = state
-        .db
-        .lock()
-        .map_err(|_| "Database lock failed".to_string())?;
-    db.execute(
-        "UPDATE form_intake SET status=?1,processed_by=?2,processed_at=?3 WHERE id=?4",
-        params![
-            status,
-            user.id,
-            Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-            id
-        ],
-    )
-    .map_err(db_err)?;
-    Ok(())
+pub fn save_intake_review(state: State<'_, AppState>,draft: IntakeReviewDraft)->Result<(),String>{
+ let user=require_user(&state)?;
+ if draft.client.trim().is_empty()||draft.equipment.trim().is_empty()||draft.complaint.trim().is_empty(){return Err("Client, equipment and complaint are required.".into())}
+ let mut db=state.db.lock().map_err(|_|"Database lock failed".to_string())?;
+ let current:String=db.query_row("SELECT status FROM form_intake WHERE id=?1",[draft.id],|r|r.get(0)).optional().map_err(db_err)?.ok_or("Incoming request not found.")?;
+ intake_review_permission(&user.role,&current)?;
+ let status=if current=="Converted"{"Converted"}else{"Reviewed"};let now=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+ let tx=db.transaction().map_err(db_err)?;
+ let before:serde_json::Value=tx.query_row("SELECT client_name,contact,mobile,email,equipment,make,model,serial_number,complaint FROM form_intake WHERE id=?1",[draft.id],|r|Ok(serde_json::json!({"client":r.get::<_,String>(0)?,"contact":r.get::<_,String>(1)?,"mobile":r.get::<_,String>(2)?,"email":r.get::<_,String>(3)?,"equipment":r.get::<_,String>(4)?,"make":r.get::<_,String>(5)?,"model":r.get::<_,String>(6)?,"serial":r.get::<_,String>(7)?,"complaint":r.get::<_,String>(8)?}))).map_err(db_err)?;
+ tx.execute("UPDATE form_intake SET client_name=?1,contact=?2,mobile=?3,email=?4,equipment=?5,make=?6,model=?7,serial_number=?8,complaint=?9,status=?10,processed_by=?11,processed_at=?12 WHERE id=?13",params![draft.client.trim(),draft.contact.trim(),normalize_mobile(&draft.mobile),normalize_email(&draft.email),draft.equipment.trim(),draft.make.trim(),draft.model.trim(),draft.serial_number.trim(),draft.complaint.trim(),status,user.id,now,draft.id]).map_err(db_err)?;
+ let summary=serde_json::json!({"message":"Intake correction; original submission and linked Service ID retained","before":before,"after":{"client":draft.client,"contact":draft.contact,"mobile":draft.mobile,"email":draft.email,"equipment":draft.equipment,"make":draft.make,"model":draft.model,"serial":draft.serial_number,"complaint":draft.complaint}}).to_string();
+ tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('Intake',?1,?2,?3,?4,?5)",params![if current=="New"{"Review"}else{"Admin Correction"},draft.id.to_string(),user.id,summary,now]).map_err(db_err)?;tx.commit().map_err(db_err)?;Ok(())
+}
+#[tauri::command]
+pub fn update_intake_status(state:State<'_,AppState>,id:i64,status:String)->Result<(),String>{
+ let user=require_user(&state)?;if user.role=="Read Only"{return Err("Read-only users cannot change intake records.".into())}
+ if !["New","Reviewed","Converted","Duplicate"].contains(&status.as_str()){return Err("Invalid intake status.".into())}
+ let mut db=state.db.lock().map_err(|_|"Database lock failed".to_string())?;
+ let (current,linked):(String,Option<String>)=db.query_row("SELECT status,linked_service_id FROM form_intake WHERE id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?))).optional().map_err(db_err)?.ok_or("Incoming request not found.")?;
+ if current=="Converted"||linked.as_deref().is_some_and(|s|!s.is_empty()){return Err("A converted request retains its Service ID. Use administrator correction to edit it.".into())}
+ if status=="Converted"{return Err("Use Create Service Call to convert an incoming request.".into())}
+ intake_review_permission(&user.role,&current)?;let now=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();let tx=db.transaction().map_err(db_err)?;
+ tx.execute("UPDATE form_intake SET status=?1,processed_by=?2,processed_at=?3 WHERE id=?4",params![status,user.id,now,id]).map_err(db_err)?;
+ tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('Intake','Status',?1,?2,?3,?4)",params![id.to_string(),user.id,format!("{current} -> {status}"),now]).map_err(db_err)?;tx.commit().map_err(db_err)?;Ok(())
+}
+#[cfg(test)]
+mod intake_permission_tests{
+ use super::*;
+ #[test]fn administrator_only_re_review(){assert!(intake_review_permission("Office User","New").is_ok());for status in ["Reviewed","Converted","Duplicate"]{assert!(intake_review_permission("Office User",status).is_err());assert!(intake_review_permission("Administrator",status).is_ok());}assert!(intake_review_permission("Read Only","New").is_err());}
 }
 
 #[tauri::command]

@@ -92,7 +92,7 @@ const ServixApi = {
   async saveIntakeReview(draft:IntakeReviewDraft):Promise<void>{
     if(isDesktop) return invokeNative('save_intake_review',{draft});
     const item=mockState.intake.find(x=>x.id===draft.id);
-    if(item){Object.assign(item,draft,{status:'Reviewed'});}
+    if(item){if(mockUser?.role==='Read Only'||(item.status!=='New'&&mockUser?.role!=='Administrator'))throw new Error('Administrator permission is required for a correction.');Object.assign(item,draft,{status:item.status==='Converted'?'Converted':'Reviewed'});}
   },
   async updateIntakeStatus(id:number,status:IntakeStatus):Promise<void>{
     if(isDesktop) return invokeNative('update_intake_status',{id,status});

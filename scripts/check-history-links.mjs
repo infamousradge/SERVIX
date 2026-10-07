@@ -24,6 +24,8 @@ const events = [{ serviceCallId: 1, serviceId: 'SRV-100' }, { serviceCallId: 2, 
 assert.deepEqual(filterHistory([{ id: 1, serviceId: 'SRV-100' }], 7, events), [events[0]]);
 assert.deepEqual(filterHistory([], 7, events), []);
 assert.deepEqual(filterHistory([], 'all', events), events);
-assert.ok(equipmentSource.includes('relatedServices.map('));
-assert.ok(clientSource.includes('filteredServices.map('));
+assert.ok(equipmentSource.includes('rows={relatedServices}'));
+assert.ok(!equipmentSource.includes('relatedServices.slice('));
+assert.ok(clientSource.includes('rows={filteredServices}'));
+assert.ok(!clientSource.includes('filteredServices.slice('));
 console.log('History relationship checks passed: shared serials, missing links, full lists, and internal history IDs.');

@@ -17,6 +17,7 @@
     "src/api.ts",
     "src/icons.tsx",
     "src/components.tsx",
+    "src/workspace-tools.tsx",
     "src/file-controls.tsx",
     "src/report-output.ts",
     "src/features/dashboard.tsx",

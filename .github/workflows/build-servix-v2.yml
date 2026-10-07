@@ -43,6 +43,9 @@ jobs:
       - name: Verify report output
         run: node scripts/check-report-output.mjs
 
+      - name: Verify search, display and profile behavior
+        run: node scripts/check-workspace.mjs
+
       - name: Install image tooling
         run: python -m pip install --disable-pip-version-check pillow
 
@@ -58,8 +61,8 @@ jobs:
       - name: Build frontend for native recovery tests
         run: npm run frontend:build
 
-      - name: Test file validation and recovery
-        run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib files::tests
+      - name: Test native permissions, file validation and recovery
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --lib
 
       - name: Build SERVIX V2 NSIS installer
         shell: pwsh

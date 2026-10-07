@@ -11,7 +11,9 @@ function PageHeader({title,subtitle,actions}:{title:string,subtitle?:string,acti
 function EmptyState({title,detail}:{title:string,detail:string}){return <div className="empty-state"><div className="empty-icon"><Icon name="service" size={24}/></div><strong>{title}</strong><p>{detail}</p></div>}
 function Field({label,required,children,wide}:{label:string,required?:boolean,children?:any,wide?:boolean}){return <label className={`field ${wide?'wide':''}`}><span>{label}{required&&<em>*</em>}</span>{children}</label>}
 function Modal({title,subtitle,onClose,children,footer,wide=false,className=''}:{title:string,subtitle?:string,onClose:()=>void,children?:any,footer?:any,wide?:boolean,className?:string}){
- return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section className={`modal ${wide?'modal-wide':''} ${className}`.trim()}><header><div><h2>{title}</h2>{subtitle&&<p>{subtitle}</p>}</div><button className="icon-button" onClick={onClose}><Icon name="close"/></button></header><div className="modal-body">{children}</div>{footer&&<footer>{footer}</footer>}</section></div>;
+ const panel=React.useRef(null);const close=React.useRef(onClose);close.current=onClose;const titleId=React.useId();
+ React.useEffect(()=>{const previous=document.activeElement as HTMLElement;const node=panel.current;const focusable=()=>Array.from(node?.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex="0"]')||[]) as HTMLElement[];focusable()[0]?.focus();const keyboard=(e:KeyboardEvent)=>{if(!node||!node.contains(document.activeElement))return;if(e.key==='Escape'){e.stopPropagation();close.current()}if(e.key==='Tab'){const items=focusable().filter(x=>x.getClientRects().length);const first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus()}}};document.addEventListener('keydown',keyboard);return()=>{document.removeEventListener('keydown',keyboard);previous?.focus()}},[]);
+ return ReactDOM.createPortal(<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={`modal ${wide?'modal-wide':''} ${className}`.trim()}><header><div><h2 id={titleId}>{title}</h2>{subtitle&&<p>{subtitle}</p>}</div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><Icon name="close"/></button></header><div className="modal-body">{children}</div>{footer&&<footer>{footer}</footer>}</section></div>,document.body);
 }
 function Toolbar({children}:{children?:any}){return <div className="toolbar">{children}</div>}
 function SearchBox({value,onChange,placeholder='Search...'}:{value:string,onChange:(v:string)=>void,placeholder?:string}){return <div className="search-box"><Icon name="search" size={17}/><input value={value} onChange={e=>onChange((e.target as HTMLInputElement).value)} placeholder={placeholder}/></div>}
@@ -40,20 +42,13 @@ function historyRowsToCsv(fileName:string,rows:PrintableHistoryRow[]){
 }
 
 function printHistoryDocument(title:string,subtitle:string,rows:PrintableHistoryRow[],meta:string[]=[]){
- const existing=document.querySelector('.servix-print-sheet'); if(existing)existing.remove();
- const sheet=document.createElement('section'); sheet.className='servix-print-sheet';
- const head=document.createElement('header'); const h=document.createElement('h1'); h.textContent=title; const sub=document.createElement('p'); sub.textContent=subtitle; head.append(h,sub);
- const metaBox=document.createElement('div'); metaBox.className='servix-print-meta';
- [...meta,'Generated: '+new Date().toLocaleString()].forEach(v=>{const span=document.createElement('span');span.textContent=v;metaBox.appendChild(span)});
- const table=document.createElement('table');
- const thead=document.createElement('thead'); const hr=document.createElement('tr');
- ['Date & Time','User','Action','Service ID','Details'].forEach(v=>{const th=document.createElement('th');th.textContent=v;hr.appendChild(th)}); thead.appendChild(hr);
- const tbody=document.createElement('tbody');
- rows.forEach(r=>{const tr=document.createElement('tr');[r.dateTime,r.user,r.action,r.serviceId,r.details+(r.context?' • '+r.context:'')].forEach(v=>{const td=document.createElement('td');td.textContent=v||'—';tr.appendChild(td)});tbody.appendChild(tr)});
- table.append(thead,tbody); sheet.append(head,metaBox,table); document.body.appendChild(sheet);
- const cleanup=()=>sheet.remove(); window.addEventListener('afterprint',cleanup,{once:true}); setTimeout(()=>window.print(),80); setTimeout(()=>{if(document.body.contains(sheet))sheet.remove()},120000);
+ document.querySelector('.servix-print-sheet')?.remove();const sheet=document.createElement('section');sheet.className='servix-print-sheet grouped-history-print';
+ const head=document.createElement('header');const h=document.createElement('h1');h.textContent=title;const sub=document.createElement('p');sub.textContent='HAC Acoustic Technologies • '+subtitle;head.append(h,sub);sheet.appendChild(head);
+ const groups=new Map<string,PrintableHistoryRow[]>();rows.forEach(r=>groups.set(r.serviceId,[...(groups.get(r.serviceId)||[]),r]));
+ const metaBox=document.createElement('div');metaBox.className='servix-print-meta';[...meta,'Service Calls: '+groups.size,'Events: '+rows.length,'Generated: '+new Date().toLocaleString()].forEach(v=>{const span=document.createElement('span');span.textContent=v;metaBox.appendChild(span)});sheet.appendChild(metaBox);
+ groups.forEach((items,serviceId)=>{const section=document.createElement('section');section.className='print-service-group';const table=document.createElement('table');const thead=document.createElement('thead');const titleRow=document.createElement('tr');const titleCell=document.createElement('th');titleCell.colSpan=4;titleCell.className='print-service-title';titleCell.textContent=serviceId+' • '+(items[0].context||'Service History');titleRow.appendChild(titleCell);thead.appendChild(titleRow);const headerRow=document.createElement('tr');['Date & Time','Recorded By','Activity','Details'].forEach(v=>{const th=document.createElement('th');th.textContent=v;headerRow.appendChild(th)});thead.appendChild(headerRow);const tbody=document.createElement('tbody');items.forEach(r=>{const tr=document.createElement('tr');[r.dateTime,r.user,r.action,r.details].forEach(v=>{const td=document.createElement('td');td.textContent=v||'—';tr.appendChild(td)});tbody.appendChild(tr)});table.append(thead,tbody);section.appendChild(table);sheet.appendChild(section)});
+ document.body.appendChild(sheet);window.addEventListener('afterprint',()=>sheet.remove(),{once:true});setTimeout(()=>window.print(),80);
 }
-
 
 function splitAuditDateTime(value:string){
  const raw=String(value||'').trim();

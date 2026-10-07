@@ -3,20 +3,20 @@
    Only wider effective viewports (such as 1920x1080 @ 100%) expand the workspace. */
 
 /* Keep the normal/125% layout unchanged. */
-.module-content{max-width:1500px}
+.module-content{max-width:93.75rem}
 
 /* Old-SERVIX brand treatment: protected logo zone, then navigation. */
 .sidebar-brand{
-  height:154px!important;
-  flex:0 0 154px!important;
-  padding:10px 12px 8px!important;
+  height:9.625rem!important;
+  flex:0 0 9.625rem!important;
+  padding:0.625rem 0.75rem 0.5rem!important;
   justify-content:center!important;
-  border-bottom:1px solid rgba(255,255,255,.08)!important;
+  border-bottom:0.0625rem solid rgba(255,255,255,.08)!important;
   overflow:hidden!important;
 }
 .sidebar-brand .brand-logo{
-  width:176px!important;
-  height:136px!important;
+  width:11rem!important;
+  height:8.5rem!important;
   padding:0!important;
   border:0!important;
   border-radius:0!important;
@@ -33,14 +33,14 @@
   object-position:center!important;
   border-radius:0!important;
 }
-.sidebar nav{padding-top:10px!important}
+.sidebar nav{padding-top:0.625rem!important}
 
 /* Login behaves like the About popup: the normal SERVIX shell remains
    visible behind a modal-sized authentication dialog, but contains no client data. */
 .login-shell{
   position:relative;
   display:grid;
-  grid-template-columns:224px minmax(0,1fr);
+  grid-template-columns:14rem minmax(0,1fr);
   height:100vh;
   overflow:hidden;
   background:#f3f6fb;
@@ -49,24 +49,24 @@
 .login-shell-sidebar{filter:saturate(.78)}
 .login-shell-workspace{filter:saturate(.72)}
 .login-shell-search{color:#8a97a8!important}
-.login-shell-search span{font-size:13px;color:#9ba7b7}
+.login-shell-search span{font-size:0.8125rem;color:#9ba7b7}
 .login-shell-user{margin-left:auto}
-.login-shell-content{padding-top:24px!important}
-.login-shell-heading{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
-.login-shell-heading>div{display:flex;flex-direction:column;gap:8px}
-.login-shell-heading i,.login-shell-heading b,.login-shell-kpis i,.login-shell-kpis span,.login-shell-kpis small,.login-shell-panels i,.login-shell-panels span{display:block;background:#dfe7f0;border-radius:7px}
-.login-shell-heading i:first-child{width:180px;height:25px}
-.login-shell-heading i:last-child{width:300px;height:11px}
-.login-shell-heading b{width:126px;height:39px}
-.login-shell-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:11px;margin-bottom:14px}
-.login-shell-kpis>div{height:92px;background:#fff;border:1px solid #e0e7ef;border-radius:14px;padding:15px;box-shadow:0 5px 18px rgba(27,43,62,.04)}
-.login-shell-kpis i{width:34px;height:34px;border-radius:10px;margin-bottom:9px}
-.login-shell-kpis span{width:54%;height:11px;margin-bottom:6px}
-.login-shell-kpis small{width:34%;height:9px}
-.login-shell-panels{display:grid;grid-template-columns:1.28fr .72fr;gap:13px}
-.login-shell-panels section{height:290px;background:#fff;border:1px solid #e0e7ef;border-radius:14px;padding:18px;box-shadow:0 5px 18px rgba(27,43,62,.04)}
-.login-shell-panels i{width:138px;height:14px;margin-bottom:24px}
-.login-shell-panels span{height:12px;margin:16px 0}
+.login-shell-content{padding-top:1.5rem!important}
+.login-shell-heading{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.125rem}
+.login-shell-heading>div{display:flex;flex-direction:column;gap:0.5rem}
+.login-shell-heading i,.login-shell-heading b,.login-shell-kpis i,.login-shell-kpis span,.login-shell-kpis small,.login-shell-panels i,.login-shell-panels span{display:block;background:#dfe7f0;border-radius:0.4375rem}
+.login-shell-heading i:first-child{width:11.25rem;height:1.5625rem}
+.login-shell-heading i:last-child{width:18.75rem;height:0.6875rem}
+.login-shell-heading b{width:7.875rem;height:2.4375rem}
+.login-shell-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0.6875rem;margin-bottom:0.875rem}
+.login-shell-kpis>div{height:5.75rem;background:#fff;border:0.0625rem solid #e0e7ef;border-radius:0.875rem;padding:0.9375rem;box-shadow:0 0.3125rem 1.125rem rgba(27,43,62,.04)}
+.login-shell-kpis i{width:2.125rem;height:2.125rem;border-radius:0.625rem;margin-bottom:0.5625rem}
+.login-shell-kpis span{width:54%;height:0.6875rem;margin-bottom:0.375rem}
+.login-shell-kpis small{width:34%;height:0.5625rem}
+.login-shell-panels{display:grid;grid-template-columns:1.28fr .72fr;gap:0.8125rem}
+.login-shell-panels section{height:18.125rem;background:#fff;border:0.0625rem solid #e0e7ef;border-radius:0.875rem;padding:1.125rem;box-shadow:0 0.3125rem 1.125rem rgba(27,43,62,.04)}
+.login-shell-panels i{width:8.625rem;height:0.875rem;margin-bottom:1.5rem}
+.login-shell-panels span{height:0.75rem;margin:1rem 0}
 .login-shell-panels span:nth-of-type(1){width:88%}
 .login-shell-panels span:nth-of-type(2){width:72%}
 .login-shell-panels span:nth-of-type(3){width:81%}
@@ -75,38 +75,38 @@
   position:absolute!important;
   inset:0!important;
   z-index:1000!important;
-  padding:24px!important;
+  padding:1.5rem!important;
   background:rgba(12,25,43,.36)!important;
-  backdrop-filter:blur(2.2px);
-  -webkit-backdrop-filter:blur(2.2px);
+  backdrop-filter:blur(0.1375rem);
+  -webkit-backdrop-filter:blur(0.1375rem);
   display:grid!important;
   place-items:center!important;
 }
 .login-card{
-  width:min(390px,calc(100vw - 48px))!important;
-  padding:0 26px 24px!important;
-  border-radius:17px!important;
+  width:min(24.375rem,calc(100vw - 3rem))!important;
+  padding:0 1.625rem 1.5rem!important;
+  border-radius:1.0625rem!important;
   overflow:hidden!important;
-  border:1px solid #d8e1eb!important;
+  border:0.0625rem solid #d8e1eb!important;
   background:#fff!important;
-  box-shadow:0 28px 78px rgba(8,21,38,.30)!important;
+  box-shadow:0 1.75rem 4.875rem rgba(8,21,38,.30)!important;
   animation:servix-login-in .18s ease-out both;
 }
-@keyframes servix-login-in{from{opacity:.45;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes servix-login-in{from{opacity:.45;transform:translateY(0.5rem) scale(.985)}to{opacity:1;transform:none}}
 .login-brand{
-  width:calc(100% + 52px)!important;
-  min-height:102px!important;
-  margin:0 -26px 18px!important;
-  padding:12px 20px!important;
+  width:calc(100% + 3.25rem)!important;
+  min-height:6.375rem!important;
+  margin:0 -1.625rem 1.125rem!important;
+  padding:0.75rem 1.25rem!important;
   display:flex!important;
   justify-content:center!important;
   align-items:center!important;
   background:linear-gradient(150deg,#071a3d,#0b4f78)!important;
-  border-bottom:1px solid rgba(255,255,255,.10)!important;
+  border-bottom:0.0625rem solid rgba(255,255,255,.10)!important;
 }
 .login-brand .brand-logo{
-  width:78px!important;
-  height:78px!important;
+  width:4.875rem!important;
+  height:4.875rem!important;
   padding:0!important;
   border:0!important;
   border-radius:0!important;
@@ -122,81 +122,81 @@
   border-radius:0!important;
 }
 .login-copy{text-align:center!important}
-.login-copy h1{font-size:21px!important;margin:0 0 4px!important;color:#1e2939!important}
-.login-copy p{font-size:12px!important;line-height:1.48!important;margin:0 auto 16px!important;max-width:300px;color:#718096!important}
-.login-card .field{margin-bottom:11px!important}
-.login-card .field input{height:40px!important}
-.login-button{height:41px!important;width:100%!important;justify-content:center!important}
-.login-foot{margin-top:12px!important;text-align:center!important;display:block!important;color:#8491a2!important}
+.login-copy h1{font-size:1.3125rem!important;margin:0 0 0.25rem!important;color:#1e2939!important}
+.login-copy p{font-size:0.75rem!important;line-height:1.48!important;margin:0 auto 1rem!important;max-width:18.75rem;color:#718096!important}
+.login-card .field{margin-bottom:0.6875rem!important}
+.login-card .field input{height:2.5rem!important}
+.login-button{height:2.5625rem!important;width:100%!important;justify-content:center!important}
+.login-foot{margin-top:0.75rem!important;text-align:center!important;display:block!important;color:#8491a2!important}
 
 /* About logo uses the same white SERVIX artwork on a discreet navy plate. */
-.about-brand{background:linear-gradient(145deg,#071a3d,#0b4f78);border-radius:12px;padding:10px 12px!important}
-.about-brand img{width:125px!important;height:70px!important;object-fit:contain!important}
+.about-brand{background:linear-gradient(145deg,#071a3d,#0b4f78);border-radius:0.75rem;padding:0.625rem 0.75rem!important}
+.about-brand img{width:7.8125rem!important;height:4.375rem!important;object-fit:contain!important}
 .about-brand h3,.about-brand p{color:#fff!important}
 .about-brand p{opacity:.72}
 
 /* At 1920x1080 @ 100% the CSS viewport is wide enough to trigger this.
    125% scaling stays below this breakpoint and retains the approved density. */
-@media (min-width:1700px){
+@media (min-width:106.25rem){
   /* 1920x1080 at Windows 100% has substantially more CSS space than the
      approved 125% view. Restore some of the physical breathing room without
      changing typography or stretching the whole interface. */
-  :root{--page-top:28px;--page-bottom:38px;--row-h:66px;--control-h:41px}
-  .workspace{grid-template-rows:68px 1fr!important}
-  .topbar{height:68px!important;padding-left:30px!important;padding-right:30px!important}
+  :root{--page-top:1.75rem;--page-bottom:2.375rem;--row-h:4.125rem;--control-h:2.5625rem}
+  .workspace{grid-template-rows:4.25rem 1fr!important}
+  .topbar{height:4.25rem!important;padding-left:1.875rem!important;padding-right:1.875rem!important}
   .module-content{
     max-width:none!important;
     width:100%!important;
     margin:0!important;
-    padding-left:30px!important;
-    padding-right:30px!important;
+    padding-left:1.875rem!important;
+    padding-right:1.875rem!important;
   }
-  .page-header{margin-bottom:22px!important}
-  .page-header p{margin-top:6px!important}
-  .toolbar{min-height:62px!important;padding:11px 12px!important;margin-bottom:13px!important}
-  .results-summary{min-height:32px!important;padding-bottom:10px!important}
-  .card{padding:20px 21px!important}
-  .card-head{margin-bottom:14px!important}
-  .dashboard-grid{gap:15px!important;margin-bottom:15px!important}
-  .kpi-grid{gap:13px!important;margin-bottom:16px!important}
-  .kpi-card{min-height:96px!important;padding:16px 17px!important}
-  .compact-list button{padding-top:12px!important;padding-bottom:12px!important}
-  .alert{padding:12px!important}
-  .sparkline{height:132px!important}
-  .form-section{padding:18px!important;margin-bottom:15px!important}
-  .section-title{margin-bottom:14px!important}
-  .field input,.field select{height:40px!important}
-  .field textarea{min-height:86px!important}
-  .choice-group button{height:34px!important}
-  .detail-card{padding:19px!important}
-  .detail-tabs button{height:38px!important}
-  .profile-hero{padding:18px 19px!important}
-  .profile-metrics>div{min-height:74px!important;padding:13px 14px!important}
-  .profile-panel{padding:16px 17px!important}
-  .tr{min-height:66px!important}
-  .tr.th{min-height:44px!important}
-  .search-box{max-width:620px!important}
-  .dashboard-grid.two{grid-template-columns:minmax(0,1.32fr) minmax(360px,.68fr)!important}
+  .page-header{margin-bottom:1.375rem!important}
+  .page-header p{margin-top:0.375rem!important}
+  .toolbar{min-height:3.875rem!important;padding:0.6875rem 0.75rem!important;margin-bottom:0.8125rem!important}
+  .results-summary{min-height:2rem!important;padding-bottom:0.625rem!important}
+  .card{padding:1.25rem 1.3125rem!important}
+  .card-head{margin-bottom:0.875rem!important}
+  .dashboard-grid{gap:0.9375rem!important;margin-bottom:0.9375rem!important}
+  .kpi-grid{gap:0.8125rem!important;margin-bottom:1rem!important}
+  .kpi-card{min-height:6rem!important;padding:1rem 1.0625rem!important}
+  .compact-list button{padding-top:0.75rem!important;padding-bottom:0.75rem!important}
+  .alert{padding:0.75rem!important}
+  .sparkline{height:8.25rem!important}
+  .form-section{padding:1.125rem!important;margin-bottom:0.9375rem!important}
+  .section-title{margin-bottom:0.875rem!important}
+  .field input,.field select{height:2.5rem!important}
+  .field textarea{min-height:5.375rem!important}
+  .choice-group button{height:2.125rem!important}
+  .detail-card{padding:1.1875rem!important}
+  .detail-tabs button{height:2.375rem!important}
+  .profile-hero{padding:1.125rem 1.1875rem!important}
+  .profile-metrics>div{min-height:4.625rem!important;padding:0.8125rem 0.875rem!important}
+  .profile-panel{padding:1rem 1.0625rem!important}
+  .tr{min-height:4.125rem!important}
+  .tr.th{min-height:2.75rem!important}
+  .search-box{max-width:38.75rem!important}
+  .dashboard-grid.two{grid-template-columns:minmax(0,1.32fr) minmax(22.5rem,.68fr)!important}
   .dashboard-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))!important}
   .dashboard-grid.three>:last-child{grid-column:auto!important}
-  .settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:15px!important}
-  .data-table{max-height:calc(100vh - 270px)!important}
+  .settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:0.9375rem!important}
+  .data-table{max-height:calc(100vh - 16.875rem)!important}
 }
 
 /* Collapsed/sidebar fallback remains compact without allowing nav into the logo zone. */
 .sidebar-collapsed .sidebar-brand{
-  height:86px!important;
-  flex-basis:86px!important;
-  padding:8px!important;
+  height:5.375rem!important;
+  flex-basis:5.375rem!important;
+  padding:0.5rem!important;
 }
-.sidebar-collapsed .sidebar-brand .brand-logo{width:62px!important;height:62px!important}
+.sidebar-collapsed .sidebar-brand .brand-logo{width:3.875rem!important;height:3.875rem!important}
 .sidebar-collapsed .sidebar-brand .brand-logo img{
-  width:78px!important;height:78px!important;max-width:none!important;
+  width:4.875rem!important;height:4.875rem!important;max-width:none!important;
   object-fit:cover!important;object-position:center 5%!important;
 }
 
-@media(max-width:980px){
-  .sidebar-brand{height:86px!important;flex-basis:86px!important;padding:8px!important}
-  .sidebar-brand .brand-logo{width:62px!important;height:62px!important}
-  .sidebar-brand .brand-logo img{width:78px!important;height:78px!important;max-width:none!important;object-fit:cover!important;object-position:center 5%!important}
+@media(max-width:61.25rem){
+  .sidebar-brand{height:5.375rem!important;flex-basis:5.375rem!important;padding:0.5rem!important}
+  .sidebar-brand .brand-logo{width:3.875rem!important;height:3.875rem!important}
+  .sidebar-brand .brand-logo img{width:4.875rem!important;height:4.875rem!important;max-width:none!important;object-fit:cover!important;object-position:center 5%!important}
 }

@@ -252,7 +252,7 @@ fn load_detail(conn: &Connection, id: i64) -> Result<ServiceDetailView, String> 
         .map_err(|e| format!("Database error: {e}"))?;
 
     let mut event_stmt = conn
-        .prepare("SELECT se.id,se.event_type,se.old_value,se.new_value,se.note,COALESCE(u.display_name,'System'),se.created_at FROM service_events se LEFT JOIN users u ON u.id=se.actor_id WHERE se.service_call_id=?1 ORDER BY se.id DESC LIMIT 100")
+        .prepare("SELECT se.id,se.event_type,se.old_value,se.new_value,se.note,COALESCE(u.display_name,'System'),se.created_at FROM service_events se LEFT JOIN users u ON u.id=se.actor_id WHERE se.service_call_id=?1 ORDER BY se.id DESC")
         .map_err(|e| format!("Database error: {e}"))?;
     detail.events = event_stmt
         .query_map(params![id], |r| {
