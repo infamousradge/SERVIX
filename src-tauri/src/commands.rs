@@ -191,7 +191,7 @@ fn fetch_google_sheet(config: &GoogleSyncConfig, credential_json: &str) -> Resul
     let account: GoogleServiceAccount = serde_json::from_str(credential_json)
         .map_err(|_| "Google service-account JSON is missing or invalid. Open Users & Settings → Google Form Intake.".to_string())?;
     let token = google_access_token(&account)?;
-    let safe_sheet = config.sheet_name.replace(''', "''");
+    let safe_sheet = config.sheet_name.replace('\'', "''");
     let range = format!("'{}'!A:ZZ", safe_sheet);
     let url = format!(
         "https://sheets.googleapis.com/v4/spreadsheets/{}/values/{}?majorDimension=ROWS&valueRenderOption=FORMATTED_VALUE",
