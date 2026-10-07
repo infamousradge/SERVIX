@@ -27,3 +27,29 @@ function Sparkline({values}:{values:number[]}){
  const max=Math.max(...values,1), min=Math.min(...values,0); const pts=values.map((v,i)=>`${i/(values.length-1)*100},${32-(v-min)/(max-min||1)*26}`).join(' ');
  return <svg className="sparkline" viewBox="0 0 100 36" preserveAspectRatio="none"><polyline points={pts} fill="none" stroke="currentColor" strokeWidth="2"/><polygon points={`0,36 ${pts} 100,36`} fill="currentColor" opacity=".07"/></svg>;
 }
+
+
+type PrintableHistoryRow = { dateTime:string; user:string; action:string; serviceId:string; details:string; context?:string; status?:string };
+
+function historyRowsToCsv(fileName:string,rows:PrintableHistoryRow[]){
+ const csvCell=(v:any)=>'"'+String(v??'').replace(/"/g,'""')+'"';
+ const header=['Date & Time','User','Action','Service ID','Details','Context','Status'].map(csvCell).join(',');
+ const body=rows.map(r=>[r.dateTime,r.user,r.action,r.serviceId,r.details,r.context||'',r.status||''].map(csvCell).join(',')).join('\r\n');
+ const blob=new Blob(['\ufeff'+header+'\r\n'+body],{type:'text/csv;charset=utf-8'});
+ const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fileName.replace(/[^a-z0-9-_]+/gi,'-')+'.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function printHistoryDocument(title:string,subtitle:string,rows:PrintableHistoryRow[],meta:string[]=[]){
+ const existing=document.querySelector('.servix-print-sheet'); if(existing)existing.remove();
+ const sheet=document.createElement('section'); sheet.className='servix-print-sheet';
+ const head=document.createElement('header'); const h=document.createElement('h1'); h.textContent=title; const sub=document.createElement('p'); sub.textContent=subtitle; head.append(h,sub);
+ const metaBox=document.createElement('div'); metaBox.className='servix-print-meta';
+ [...meta,'Generated: '+new Date().toLocaleString()].forEach(v=>{const span=document.createElement('span');span.textContent=v;metaBox.appendChild(span)});
+ const table=document.createElement('table');
+ const thead=document.createElement('thead'); const hr=document.createElement('tr');
+ ['Date & Time','User','Action','Service ID','Details'].forEach(v=>{const th=document.createElement('th');th.textContent=v;hr.appendChild(th)}); thead.appendChild(hr);
+ const tbody=document.createElement('tbody');
+ rows.forEach(r=>{const tr=document.createElement('tr');[r.dateTime,r.user,r.action,r.serviceId,r.details+(r.context?' • '+r.context:'')].forEach(v=>{const td=document.createElement('td');td.textContent=v||'—';tr.appendChild(td)});tbody.appendChild(tr)});
+ table.append(thead,tbody); sheet.append(head,metaBox,table); document.body.appendChild(sheet);
+ const cleanup=()=>sheet.remove(); window.addEventListener('afterprint',cleanup,{once:true}); setTimeout(()=>window.print(),80); setTimeout(()=>{if(document.body.contains(sheet))sheet.remove()},120000);
+}
