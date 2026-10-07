@@ -1,4 +1,5 @@
 mod commands;
+mod operations;
 mod files;
 mod database;
 mod models;
@@ -29,6 +30,13 @@ pub fn run() {
             files::create_backup,
             files::preview_restore,
             files::restore_backup,
+            operations::get_operations,
+            operations::load_multi_month_qa,
+            operations::save_sequence,
+            operations::save_client,
+            operations::save_equipment,
+            operations::save_engineer,
+            operations::save_calibration,
             commands::system_status,
             commands::create_first_admin,
             commands::authenticate,

@@ -9,6 +9,7 @@ async function invokeNative<T>(command:string,args:Record<string,unknown>={}):Pr
 }
 
 function mockDetail(id:number):ServiceDetail{
+  const stored=previewDetails.get(id);if(stored){const s=mockState.services.find(x=>x.id===id);return {...stored,...s,parts:mockState.partUsage.filter(p=>p.serviceId===s.serviceId).map(p=>({id:p.id,itemName:p.itemName,make:p.make,model:p.model,partNumber:p.partNumber,quantity:p.quantity,remarks:p.remarks,usedAt:p.date}))}}
   const s=mockState.services.find(x=>x.id===id);
   if(!s) throw new Error('Service call not found.');
   const parts=mockState.partUsage.filter(p=>p.serviceId===s.serviceId).map(p=>({id:p.id,itemName:p.itemName,make:p.make,model:p.model,partNumber:p.partNumber,quantity:p.quantity,remarks:p.remarks,usedAt:p.date}));
@@ -30,7 +31,7 @@ const ServixApi = {
     mockUser={id:1,username,displayName:'Administrator',role:'Administrator'}; return mockUser;
   },
   async logout(){ if(isDesktop) await invokeNative('logout'); mockUser=null; },
-  async bootstrap():Promise<DashboardData>{ if(isDesktop) return invokeNative<DashboardData>('bootstrap'); return JSON.parse(JSON.stringify(mockState)); },
+  async bootstrap():Promise<DashboardData>{const data=isDesktop?await invokeNative<DashboardData>('bootstrap'):JSON.parse(JSON.stringify(mockState));data.operations=await OperationsApi.get();data.services.forEach(s=>s.followUpDate=data.operations.followups.find(f=>f.serviceCallId===s.id)?.followUpDate||'');return data},
   async reviewServiceDuplicates(draft:any):Promise<DuplicateReview>{
     if(isDesktop) return invokeNative<DuplicateReview>('review_service_duplicates',{draft});
     const mobile=String(draft.mobile||'').replace(/\D/g,''); const email=String(draft.email||'').trim().toLowerCase(); const serial=String(draft.serialNumber||'').trim().toLowerCase();
@@ -47,8 +48,8 @@ const ServixApi = {
   async createServiceCall(draft:any):Promise<ServiceCall>{
     if(isDesktop) return invokeNative<ServiceCall>('create_service_call',{draft});
     const id=Math.max(0,...mockState.services.map(x=>x.id))+1;
-    const next=24882+mockState.services.length;
-    const item:ServiceCall={id,serviceId:`SRV-${next}`,openedDate:draft.openedDate,client:draft.client,equipment:draft.equipment,make:draft.make,model:draft.model,serialNumber:draft.serialNumber,reason:draft.reason,complaint:draft.complaint,engineer:draft.engineer,status:draft.status,priority:draft.priority,serviceLocation:draft.serviceLocation,dueDate:draft.dueDate,coverage:draft.coverage,foc:draft.foc,quoteStatus:draft.quoteStatus,paymentStatus:draft.paymentStatus,lastUpdated:new Date().toLocaleString()};
+    const next=previewOperations.sequence.nextNumber++;
+    const item:ServiceCall={id,serviceId:previewOperations.sequence.prefix+String(next).padStart(previewOperations.sequence.digits,'0'),openedDate:draft.openedDate,client:draft.client,equipment:draft.equipment,make:draft.make,model:draft.model,serialNumber:draft.serialNumber,reason:draft.reason,complaint:draft.complaint,engineer:draft.engineer,status:draft.status,priority:draft.priority,serviceLocation:draft.serviceLocation,dueDate:draft.dueDate,coverage:draft.coverage,foc:draft.foc,quoteStatus:draft.quoteStatus,paymentStatus:draft.paymentStatus,lastUpdated:new Date().toLocaleString()};
     mockState.services.unshift(item); return item;
   },
   async getClientHistory(clientId:number):Promise<EntityHistoryEvent[]>{
@@ -72,8 +73,9 @@ const ServixApi = {
   async updateServiceDetail(draft:ServiceDetailDraft):Promise<ServiceDetail>{
     if(isDesktop) return invokeNative<ServiceDetail>('update_service_detail',{draft});
     const s=mockState.services.find(x=>x.id===draft.id); if(!s) throw new Error('Service call not found.');
+    if(s.status!==draft.status&&(draft.status==='Pending'||s.status==='Closed')&&!draft.statusReason?.trim())throw Error('Enter a status change reason.');if(draft.status==='Closed'&&(!draft.finalResult?.trim()||!draft.completionDate))throw Error('Final result and completion date are required.');
     Object.assign(s,{reason:draft.reason,complaint:draft.complaint,engineer:draft.engineer,status:draft.status,priority:draft.priority,serviceLocation:draft.serviceLocation,dueDate:draft.dueDate,coverage:draft.coverage,foc:draft.foc,quoteStatus:draft.quoteStatus,paymentStatus:draft.paymentStatus,lastUpdated:new Date().toLocaleString()});
-    return {...mockDetail(draft.id),...draft,updatedAt:new Date().toLocaleString()};
+    const updated={...mockDetail(draft.id),...draft,updatedAt:new Date().toISOString()};previewDetails.set(draft.id,updated);previewOperations.followups=previewOperations.followups.filter(f=>f.serviceCallId!==draft.id);previewOperations.followups.push({serviceCallId:draft.id,statusReason:draft.statusReason||'',followUpDate:draft.followUpDate||''});return updated;
   },
   async addServicePart(draft:{serviceCallId:number;itemName:string;make:string;model:string;partNumber:string;quantity:number;remarks:string}):Promise<ServiceDetail>{
     if(isDesktop) return invokeNative<ServiceDetail>('add_service_part',{draft});
@@ -83,7 +85,7 @@ const ServixApi = {
   },
   async addServiceNote(serviceCallId:number,note:string):Promise<ServiceDetail>{
     if(isDesktop) return invokeNative<ServiceDetail>('add_service_note',{serviceCallId,note});
-    const d=mockDetail(serviceCallId);d.events.unshift({id:Date.now(),eventType:'Note',oldValue:'',newValue:'',note,actor:'Administrator',createdAt:new Date().toLocaleString()});return d;
+    const d=mockDetail(serviceCallId);d.events.unshift({id:Date.now(),eventType:'Note',oldValue:'',newValue:'',note,actor:'Administrator',createdAt:new Date().toISOString()});previewDetails.set(serviceCallId,d);return d;
   },
   async createUser(draft:{username:string;displayName:string;password:string;role:string}):Promise<UserRecord>{
     if(isDesktop) return invokeNative<UserRecord>('create_user',{draft});
@@ -111,7 +113,7 @@ const ServixApi = {
     mockState.sync={...mockState.sync,lastAttemptedSync:new Date().toLocaleString(),lastSuccessfulSync:new Date().toLocaleString(),newCount:0,status:'up-to-date',message:'Sync completed in preview mode.'}; return mockState.sync;
   },
   async loadQaMockData():Promise<string>{
-    if(isDesktop) return invokeNative<string>('load_qa_mock_data');
-    return 'Browser preview already contains representative mock data.';
+    if(isDesktop) return invokeNative<string>('load_multi_month_qa');
+    loadPreviewMonths();return 'Loaded five months of QA5 entries and notes in this preview.';
   }
 };

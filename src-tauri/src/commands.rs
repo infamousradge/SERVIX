@@ -472,7 +472,7 @@ fn list_clients(db: &Connection) -> Result<Vec<ClientRecord>, String> {
 
 fn list_equipment(db: &Connection) -> Result<Vec<EquipmentRecord>, String> {
     let mut stmt = db
-        .prepare("SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,e.location,e.coverage,(SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id),COALESCE((SELECT MAX(opened_date) FROM service_calls sc WHERE sc.equipment_id=e.id),'') FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC")
+        .prepare("SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,e.location,e.coverage,(SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id),COALESCE((SELECT MAX(opened_date) FROM service_calls sc WHERE sc.equipment_id=e.id),'')  ,e.warranty_until,e.amc_until,e.active FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC")
         .map_err(db_err)?;
     let rows = stmt
         .query_map([], |r| {
@@ -489,6 +489,9 @@ fn list_equipment(db: &Connection) -> Result<Vec<EquipmentRecord>, String> {
                 coverage: r.get(9)?,
                 service_count: r.get(10)?,
                 last_service: r.get(11)?,
+                warranty_until: r.get(12)?,
+                amc_until: r.get(13)?,
+                active: r.get::<_,i64>(14)?!=0,
             })
         })
         .map_err(db_err)?;
@@ -797,6 +800,7 @@ fn find_or_create_equipment(tx: &Transaction<'_>, client_id: i64, draft: &Servic
 pub fn create_service_call(state: State<'_, AppState>, draft: ServiceCallDraft) -> Result<ServiceCall, String> {
     let user = require_user(&state)?;
     if user.role == "Read Only" { return Err("Read-only users cannot create service calls.".into()); }
+    if !["Open","In Progress"].contains(&draft.status.as_str()){return Err("Create an Open or In Progress call, then use its workspace for Pending or closure.".into())}
     if draft.client.trim().is_empty() || draft.equipment.trim().is_empty() || draft.reason.trim().is_empty() || draft.complaint.trim().is_empty() {
         return Err("Client, equipment, reason and complaint are required.".into());
     }

@@ -126,6 +126,10 @@ pub struct ServiceDetailView {
     pub received_accessories: String,
     pub received_remarks: String,
     pub completion_date: String,
+    #[serde(default)]
+    pub status_reason: String,
+    #[serde(default)]
+    pub follow_up_date: String,
     pub attachment_count: i64,
     pub parts: Vec<DetailPart>,
     pub events: Vec<DetailEvent>,
@@ -156,6 +160,10 @@ pub struct UpdateServiceDetailDraft {
     pub received_accessories: String,
     pub received_remarks: String,
     pub completion_date: String,
+    #[serde(default)]
+    pub status_reason: String,
+    #[serde(default)]
+    pub follow_up_date: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -211,6 +219,8 @@ fn load_detail(conn: &Connection, id: i64) -> Result<ServiceDetailView, String> 
                     received_condition: r.get(24)?,
                     received_accessories: r.get(25)?,
                     received_remarks: r.get(26)?,
+                    status_reason: conn.query_row("SELECT status_reason FROM service_followups WHERE service_call_id=?1",[id],|r|r.get(0)).unwrap_or_default(),
+                    follow_up_date: conn.query_row("SELECT follow_up_date FROM service_followups WHERE service_call_id=?1",[id],|r|r.get(0)).unwrap_or_default(),
                     completion_date: r.get(27)?,
                     attachment_count: 0,
                     parts: vec![],
@@ -352,8 +362,12 @@ pub fn update_service_detail(
         .map_err(|e| format!("Database error: {e}"))?
         .ok_or_else(|| "Service call not found.".to_string())?;
     let (old_status,old_payment,old_quote,old_coverage,old_priority,old_engineer,old_due_date,old_foc)=old;
+    let opened:String=db.query_row("SELECT opened_date FROM service_calls WHERE id=?1",[draft.id],|r|r.get(0)).map_err(|_|"Service not found")?;
+    crate::operations::validate_transition(&old_status,&draft.status,&draft.status_reason,&draft.final_result,&draft.completion_date,&opened,&draft.follow_up_date)?;
     let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let tx = db.transaction().map_err(|e| format!("Database error: {e}"))?;
+    tx.execute("INSERT INTO service_followups VALUES(?1,?2,?3) ON CONFLICT(service_call_id) DO UPDATE SET status_reason=excluded.status_reason,follow_up_date=excluded.follow_up_date",params![draft.id,draft.status_reason,draft.follow_up_date]).map_err(|_|"Could not save follow-up")?;
+    if old_status!=draft.status&&!draft.status_reason.trim().is_empty(){tx.execute("INSERT INTO service_events(service_call_id,event_type,note,actor_id,created_at) VALUES(?1,'Transition Reason',?2,?3,?4)",params![draft.id,draft.status_reason,actor_id,now]).map_err(|_|"Could not record transition")?;}
     tx.execute(
         "UPDATE service_calls SET reason=?1,complaint=?2,engineer=?3,status=?4,priority=?5,service_location=?6,due_date=?7,coverage=?8,foc=?9,quote_status=?10,payment_status=?11,updated_at=?12 WHERE id=?13",
         params![draft.reason.trim(),draft.complaint.trim(),draft.engineer.trim(),draft.status,draft.priority,draft.service_location,draft.due_date,draft.coverage,if draft.foc {1}else{0},draft.quote_status,draft.payment_status,now,draft.id],

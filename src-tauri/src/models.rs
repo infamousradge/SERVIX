@@ -218,6 +218,9 @@ pub struct EquipmentRecord {
     pub coverage: String,
     pub service_count: i64,
     pub last_service: String,
+    pub warranty_until: String,
+    pub amc_until: String,
+    pub active: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

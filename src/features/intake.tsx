@@ -12,11 +12,11 @@ function intakeReason(item:IntakeItem){
  return 'Repair';
 }
 function IntakeView({data,onRefresh,onSync,user,initialId}:{data:DashboardData,onRefresh:()=>void,onSync:()=>void,user:SessionUser,initialId?:number}){
- const [tab,setTab]=React.useState('All'); const [search,setSearch]=React.useState('');
+ const [tab,setTab]=React.useState('Pending'); const [search,setSearch]=React.useState('');
  const [selected,setSelected]=React.useState(null as IntakeItem|null); const [draft,setDraft]=React.useState(null as IntakeReviewDraft|null);
  const [convertItem,setConvertItem]=React.useState(null as IntakeItem|null); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState('');
- const tabs=['All','New','Reviewed','Converted','Duplicate'];
- const rows=data.intake.filter(x=>(tab==='All'||x.status===tab)&&((x.client+' '+x.contact+' '+x.mobile+' '+x.email+' '+x.make+' '+x.model+' '+x.equipment+' '+x.serialNumber+' '+x.complaint).toLowerCase().includes(search.toLowerCase())));
+ const tabs=['Pending','New','Reviewed','Converted','Duplicate'];
+ const rows=data.intake.filter(x=>(tab==='Pending'?(x.status==='New'||x.status==='Reviewed'):x.status===tab)&&((x.client+' '+x.contact+' '+x.mobile+' '+x.email+' '+x.make+' '+x.model+' '+x.equipment+' '+x.serialNumber+' '+x.complaint).toLowerCase().includes(search.toLowerCase())));
  const openItem=(x:IntakeItem)=>{setSelected(x);setDraft({id:x.id,client:x.client,contact:x.contact,mobile:x.mobile,email:x.email,equipment:x.equipment,make:x.make,model:x.model,serialNumber:x.serialNumber,complaint:x.complaint});setError('')};
  React.useEffect(()=>{if(initialId){const item=data.intake.find(x=>x.id===initialId);if(item)openItem(item)}},[initialId]);
  const set=(k:keyof IntakeReviewDraft,v:any)=>setDraft(d=>d?({...d,[k]:v}):d);
@@ -28,7 +28,7 @@ function IntakeView({data,onRefresh,onSync,user,initialId}:{data:DashboardData,o
  const editable=!!selected&&user.role!=='Read Only'&&(selected.status==='New'||user.role==='Administrator');
  const conversionDraft=convertItem?{client:convertItem.client,contact:convertItem.contact,mobile:convertItem.mobile,email:convertItem.email,equipment:convertItem.equipment,make:convertItem.make,model:convertItem.model,serialNumber:convertItem.serialNumber,complaint:convertItem.complaint,reason:intakeReason(convertItem),sourceIntakeId:convertItem.id}:null;
  return <div className="module-content"><PageHeader title="Incoming Requests" subtitle="Google Form intake queue — review the original submission before creating an official Service ID" actions={<button className="secondary-button" onClick={onSync}><Icon name="refresh"/> Sync Now</button>}/>
-  <Toolbar><SearchBox value={search} onChange={setSearch} placeholder="Search client, equipment, serial or complaint..."/><div className="tab-strip">{tabs.map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t} <span>{t==='All'?data.intake.length:data.intake.filter(x=>x.status===t).length}</span></button>)}</div></Toolbar>
+  <Toolbar><SearchBox value={search} onChange={setSearch} placeholder="Search client, equipment, serial or complaint..."/><div className="tab-strip">{tabs.map(t=><button className={'intake-tab status-'+t.toLowerCase()+(tab===t?' active':'')} onClick={()=>setTab(t)} key={t}>{t} <span>{t==='Pending'?data.intake.filter(x=>x.status==='New'||x.status==='Reviewed').length:data.intake.filter(x=>x.status===t).length}</span></button>)}</div></Toolbar>
   <div className="results-summary"><span><strong>{rows.length}</strong> matching requests</span><span>Last sync: {data.sync.lastSuccessfulSync||'Not synced'}</span></div>
   <section className="intake-card-list">{rows.map(x=><article className={'intake-request-card status-'+x.status.toLowerCase()} key={x.id}>
    <div className="intake-card-top"><span className="intake-received"><Icon name="intake" size={18}/> {x.receivedAt}</span><StatusBadge value={x.status}/></div>

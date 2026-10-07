@@ -46,6 +46,9 @@ jobs:
       - name: Verify search, display and profile behavior
         run: node scripts/check-workspace.mjs
 
+      - name: Verify operational workflows and multi-month QA
+        run: node scripts/check-functional.mjs
+
       - name: Install image tooling
         run: python -m pip install --disable-pip-version-check pillow
 

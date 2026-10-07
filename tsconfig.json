@@ -20,6 +20,7 @@
     "src/workspace-tools.tsx",
     "src/file-controls.tsx",
     "src/report-output.ts",
+    "src/operations.tsx",
     "src/features/dashboard.tsx",
     "src/features/intake.tsx",
     "src/features/service-calls.tsx",

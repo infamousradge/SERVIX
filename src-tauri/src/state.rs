@@ -8,6 +8,7 @@ impl AppState {
   let mut conn=Connection::open(&database_path).map_err(|e|format!("Could not open database: {e}"))?;
   database::initialise(&mut conn)?;
   service_detail::ensure_schema(&conn)?;
+  crate::operations::ensure_schema(&conn)?;
   Ok(Self{db:Mutex::new(conn),session:Mutex::new(None),database_path})
  }
 }
