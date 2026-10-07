@@ -1,3 +1,4 @@
+from base64 import b64decode
 from pathlib import Path
 from shutil import copyfile
 from urllib.request import urlretrieve
@@ -7,7 +8,6 @@ ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
 
 APP_EXACT = ASSETS / "app-icon-exact.png"
-SIDEBAR_EXACT = ASSETS / "sidebar-logo-exact.png"
 LOGIN_EXACT = ASSETS / "login-mark-exact.png"
 
 ICON = ASSETS / "app-icon-generated.png"
@@ -16,20 +16,28 @@ LOGIN_MARK = ASSETS / "login-mark-generated.png"
 MANROPE = ASSETS / "Manrope-wght.ttf"
 MANROPE_LICENSE = ASSETS / "Manrope-OFL.txt"
 
-for source in (APP_EXACT, SIDEBAR_EXACT, LOGIN_EXACT):
+for source in (APP_EXACT, LOGIN_EXACT):
     if not source.exists():
         raise SystemExit(f"Locked SERVIX asset not found: {source}")
 
-# Verify the locked PNGs before using them so a damaged repository asset can
-# never silently reach the installer.
-for source in (APP_EXACT, SIDEBAR_EXACT, LOGIN_EXACT):
+sidebar_parts = [ASSETS / f"sidebar-exact-{i:02d}.b64part" for i in range(12)]
+for source in sidebar_parts:
+    if not source.exists():
+        raise SystemExit(f"Locked SERVIX sidebar part not found: {source}")
+
+# Use the supplied app icon and login emblem exactly.
+copyfile(APP_EXACT, ICON)
+copyfile(LOGIN_EXACT, LOGIN_MARK)
+
+# The exact sidebar PNG is stored as bounded base64 chunks so GitHub transfer
+# cannot truncate the original binary. Reassemble it byte-for-byte at build time.
+sidebar_b64 = "".join(p.read_text(encoding="utf-8") for p in sidebar_parts)
+SIDEBAR.write_bytes(b64decode(sidebar_b64))
+
+# Validate all three PNGs before Tauri packages them.
+for source in (ICON, SIDEBAR, LOGIN_MARK):
     with Image.open(source) as img:
         img.verify()
-
-# Copy the supplied artwork exactly; no crop, recolour or generated substitute.
-copyfile(APP_EXACT, ICON)
-copyfile(SIDEBAR_EXACT, SIDEBAR)
-copyfile(LOGIN_EXACT, LOGIN_MARK)
 
 if not MANROPE.exists():
     urlretrieve(
