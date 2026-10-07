@@ -75,6 +75,11 @@ const ServixApi = {
     if(isDesktop) return invokeNative<UserRecord>('create_user',{draft});
     const id=Math.max(0,...mockState.users.map(x=>x.id))+1; const item:any={id,username:draft.username,displayName:draft.displayName,role:draft.role,active:true}; mockState.users.push(item); return item;
   },
+  async saveIntakeReview(draft:IntakeReviewDraft):Promise<void>{
+    if(isDesktop) return invokeNative('save_intake_review',{draft});
+    const item=mockState.intake.find(x=>x.id===draft.id);
+    if(item){Object.assign(item,draft,{status:'Reviewed'});}
+  },
   async updateIntakeStatus(id:number,status:IntakeStatus):Promise<void>{
     if(isDesktop) return invokeNative('update_intake_status',{id,status});
     const item=mockState.intake.find(x=>x.id===id); if(item) item.status=status;
