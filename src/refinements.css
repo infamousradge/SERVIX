@@ -300,3 +300,14 @@ button,input,select,textarea{font-family:var(--font-ui)}
 .sync-success{margin-top:10px;padding:9px 11px;border:1px solid #bfe0cb;background:#effaf4;color:#28784b;border-radius:9px;font-size:10.5px;font-weight:650}
 .google-setting-card .card-head{align-items:flex-start}
 @media(max-width:900px){.google-config-layout{grid-template-columns:1fr}}
+
+.report-results{margin-bottom:16px;padding:12px}
+.report-table-scroll{max-height:420px;overflow:auto}
+.report-results table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}
+.report-results th{position:sticky;top:0;background:#f1f6fc;color:#526176;padding:11px 10px}
+.report-results td{padding:10px;border-bottom:1px solid #eef2f7;overflow-wrap:anywhere}
+@media print{
+ .report-print-sheet table{table-layout:auto}
+ .report-print-sheet th:nth-child(n),.report-print-sheet td:nth-child(n){width:auto}
+ .report-print-sheet thead{display:table-header-group}
+}

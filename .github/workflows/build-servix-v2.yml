@@ -40,6 +40,9 @@ jobs:
       - name: Verify linked history isolation
         run: node scripts/check-history-links.mjs
 
+      - name: Verify report output
+        run: node scripts/check-report-output.mjs
+
       - name: Install image tooling
         run: python -m pip install --disable-pip-version-check pillow
 

@@ -17,6 +17,7 @@
     "src/api.ts",
     "src/icons.tsx",
     "src/components.tsx",
+    "src/report-output.ts",
     "src/features/dashboard.tsx",
     "src/features/intake.tsx",
     "src/features/service-calls.tsx",
