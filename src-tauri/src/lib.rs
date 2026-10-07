@@ -29,6 +29,7 @@ pub fn run() {
             commands::create_service_call,
             commands::review_service_duplicates,
             commands::create_user,
+            commands::save_intake_review,
             commands::update_intake_status,
             commands::sync_google_form,
             commands::load_qa_mock_data,
