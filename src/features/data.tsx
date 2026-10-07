@@ -6,7 +6,7 @@ function DataManagementView({onRefresh}:{onRefresh:()=>void}){
  const reviewRestore=async()=>{setBusy(true);setMessage('');try{setPreview(await FileApi.preview(restorePath))}catch(e:any){setMessage(e?.message||String(e))}finally{setBusy(false)}};
  const restore=async()=>{if(!preview)return;setBusy(true);try{const result=await FileApi.restore(preview);window.alert(result);window.location.reload()}catch(e:any){setMessage(e?.message||String(e));setPreview(null)}finally{setBusy(false)}};
  const loadQa=async()=>{setBusy(true);setMessage('');try{const result=await ServixApi.loadQaMockData();setMessage(result);await onRefresh();setShowQa(false)}catch(e:any){setMessage(e?.message||String(e))}finally{setBusy(false)}};
- return <div className="module-content"><PageHeader title="Data Management" subtitle="Safe import, export, backup and restore — never overwrite silently"/><div className="settings-grid">
+ return <div className="module-content"><PageHeader title="Data Management" subtitle="Safe import, export, backup and restore — never overwrite silently"/><div className="settings-grid" style={{alignItems:'start'}}>
   <AutomaticBackupPreferences/>
   <DataExportPanel/>
   <CsvImportPanel onRefresh={onRefresh}/>
