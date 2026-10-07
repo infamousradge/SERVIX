@@ -87,6 +87,8 @@ pub struct ServiceCallDraft {
     pub force_new_equipment: bool,
     #[serde(default)]
     pub duplicate_override_password: Option<String>,
+    #[serde(default)]
+    pub source_intake_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -167,6 +169,22 @@ pub struct IntakeItem {
     pub match_tone: String,
     pub status: String,
     pub linked_service_id: Option<String>,
+    pub original_snapshot: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntakeReviewDraft {
+    pub id: i64,
+    pub client: String,
+    pub contact: String,
+    pub mobile: String,
+    pub email: String,
+    pub equipment: String,
+    pub make: String,
+    pub model: String,
+    pub serial_number: String,
+    pub complaint: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
