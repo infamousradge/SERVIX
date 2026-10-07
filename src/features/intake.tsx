@@ -1,11 +1,55 @@
+function intakeSnapshot(item:IntakeItem){
+ try{return JSON.parse(item.originalSnapshot||'{}') as Record<string,any>}catch{return {'Original submission':item.originalSnapshot||'Snapshot unavailable'}}
+}
+function intakeReason(item:IntakeItem){
+ const s=intakeSnapshot(item);
+ const raw=String(s['Reason for Sending']||s['Service Reason']||s.reason||'').toLowerCase();
+ if(raw.includes('calib'))return 'Calibration';
+ if(raw.includes('prevent'))return 'Preventive Service';
+ if(raw.includes('install')||raw.includes('commission'))return 'Installation / Commissioning';
+ if(raw.includes('inspect'))return 'Inspection';
+ if(raw.includes('repair')||raw.includes('break'))return 'Repair';
+ return 'Repair';
+}
 function IntakeView({data,onRefresh,onSync}:{data:DashboardData,onRefresh:()=>void,onSync:()=>void}){
  const [tab,setTab]=React.useState('All'); const [search,setSearch]=React.useState('');
+ const [selected,setSelected]=React.useState(null as IntakeItem|null); const [draft,setDraft]=React.useState(null as IntakeReviewDraft|null);
+ const [convertItem,setConvertItem]=React.useState(null as IntakeItem|null); const [busy,setBusy]=React.useState(false); const [error,setError]=React.useState('');
  const tabs=['All','New','Reviewed','Converted','Duplicate'];
- const rows=data.intake.filter(x=>(tab==='All'||x.status===tab)&&(`${x.client} ${x.contact} ${x.equipment} ${x.serialNumber} ${x.complaint}`.toLowerCase().includes(search.toLowerCase())));
- const change=async(id:number,status:IntakeStatus)=>{await ServixApi.updateIntakeStatus(id,status);onRefresh()};
- return <div className="module-content"><PageHeader title="Incoming Requests" subtitle="Google Form intake queue — review before creating an official Service ID" actions={<><button className="secondary-button" onClick={onSync}><Icon name="refresh"/> Sync Now</button></>}/>
+ const rows=data.intake.filter(x=>(tab==='All'||x.status===tab)&&((x.client+' '+x.contact+' '+x.equipment+' '+x.serialNumber+' '+x.complaint).toLowerCase().includes(search.toLowerCase())));
+ const openItem=(x:IntakeItem)=>{setSelected(x);setDraft({id:x.id,client:x.client,contact:x.contact,mobile:x.mobile,email:x.email,equipment:x.equipment,make:x.make,model:x.model,serialNumber:x.serialNumber,complaint:x.complaint});setError('')};
+ const set=(k:keyof IntakeReviewDraft,v:any)=>setDraft(d=>d?({...d,[k]:v}):d);
+ const saveReview=async()=>{if(!draft||!selected)return;setBusy(true);setError('');try{await ServixApi.saveIntakeReview(draft);await onRefresh();setSelected({...selected,...draft,status:'Reviewed'}); }catch(e:any){setError(e?.message||String(e))}finally{setBusy(false)}};
+ const markDuplicate=async()=>{if(!selected)return;setBusy(true);setError('');try{await ServixApi.updateIntakeStatus(selected.id,'Duplicate');await onRefresh();setSelected({...selected,status:'Duplicate'})}catch(e:any){setError(e?.message||String(e))}finally{setBusy(false)}};
+ const beginConvert=()=>{if(!selected||!draft)return;const item={...selected,...draft,status:'Reviewed'} as IntakeItem;setSelected(null);setConvertItem(item)};
+ const closeReview=()=>{if(!busy){setSelected(null);setDraft(null);setError('')}};
+ const snapshot=selected?intakeSnapshot(selected):{};
+ const editable=!!selected&&(selected.status==='New'||selected.status==='Reviewed');
+ const conversionDraft=convertItem?{client:convertItem.client,contact:convertItem.contact,mobile:convertItem.mobile,email:convertItem.email,equipment:convertItem.equipment,make:convertItem.make,model:convertItem.model,serialNumber:convertItem.serialNumber,complaint:convertItem.complaint,reason:intakeReason(convertItem),sourceIntakeId:convertItem.id}:null;
+ return <div className="module-content"><PageHeader title="Incoming Requests" subtitle="Google Form intake queue — review the original submission before creating an official Service ID" actions={<button className="secondary-button" onClick={onSync}><Icon name="refresh"/> Sync Now</button>}/>
   <Toolbar><SearchBox value={search} onChange={setSearch} placeholder="Search client, equipment, serial or complaint..."/><div className="tab-strip">{tabs.map(t=><button className={tab===t?'active':''} onClick={()=>setTab(t)} key={t}>{t} <span>{t==='All'?data.intake.length:data.intake.filter(x=>x.status===t).length}</span></button>)}</div></Toolbar>
   <div className="results-summary"><span><strong>{rows.length}</strong> matching requests</span><span>Last sync: {data.sync.lastSuccessfulSync||'Not synced'}</span></div>
-  <section className="table-card"><div className="data-table intake-table"><div className="tr th"><span>Received</span><span>Client / Contact</span><span>Equipment</span><span>Complaint / Requirement</span><span>Match</span><span>Status</span><span>Action</span></div>{rows.map(x=><div className="tr" key={x.id}><span><strong>{x.receivedAt.split(' ')[0]}</strong><small>{x.receivedAt.replace(x.receivedAt.split(' ')[0],'')}</small></span><span><strong>{x.client}</strong><small>{x.contact} • {x.mobile}</small></span><span><strong>{x.make} {x.model}</strong><small>SN: {x.serialNumber}</small></span><span className="wrap-cell">{x.complaint}</span><span><em className={`match-text ${x.matchTone}`}>{x.matchSummary}</em></span><span><StatusBadge value={x.status}/></span><span className="row-actions">{x.status==='New'&&<button className="small-button" onClick={()=>change(x.id,'Reviewed')}>Review</button>}{x.status==='Reviewed'&&<button className="small-button primary" onClick={()=>change(x.id,'Converted')}>Convert</button>}{(x.status==='Converted'||x.status==='Duplicate')&&<button className="small-button">View</button>}</span></div>)}</div>{!rows.length&&<EmptyState title="No matching requests" detail="Try another filter or sync for new Google Form submissions."/>}</section>
+  <section className="table-card"><div className="data-table intake-table"><div className="tr th"><span>Received</span><span>Client / Contact</span><span>Equipment</span><span>Complaint / Requirement</span><span>Match</span><span>Status</span><span>Action</span></div>{rows.map(x=><div className="tr" key={x.id}><span><strong>{x.receivedAt.split(' ')[0]}</strong><small>{x.receivedAt.replace(x.receivedAt.split(' ')[0],'')}</small></span><span><strong>{x.client}</strong><small>{x.contact} • {x.mobile}</small></span><span><strong>{x.make} {x.model}</strong><small>SN: {x.serialNumber}</small></span><span className="wrap-cell">{x.complaint}</span><span><em className={'match-text '+x.matchTone}>{x.matchSummary}</em></span><span><StatusBadge value={x.status}/></span><span className="row-actions"><button className={'small-button '+(x.status==='Reviewed'?'primary':'')} onClick={()=>openItem(x)}>{x.status==='New'?'Review':x.status==='Reviewed'?'Open':'View'}</button></span></div>)}</div>{!rows.length&&<EmptyState title="No matching requests" detail="Try another filter or sync for new Google Form submissions."/>}</section>
+  {selected&&draft&&<Modal title={selected.status==='New'?'Review Incoming Request':'Incoming Request'} subtitle={'Received '+selected.receivedAt+' • Original submission remains preserved'} onClose={closeReview} wide footer={<>{selected.status!=='Converted'&&<button className="secondary-button" disabled={busy} onClick={markDuplicate}>Mark Duplicate</button>}<button className="secondary-button" disabled={busy} onClick={closeReview}>Close</button>{editable&&<button className="secondary-button" disabled={busy} onClick={saveReview}>{busy?'Saving...':'Save & Mark Reviewed'}</button>}{selected.status==='Reviewed'&&<button className="primary-button" disabled={busy} onClick={beginConvert}>Create Service Call</button>}</>}>
+   {error&&<div className="form-error">{error}</div>}
+   <div className="intake-review-summary"><div><span>Match Result</span><strong className={'match-text '+selected.matchTone}>{selected.matchSummary||'No match result'}</strong></div><div><span>Status</span><StatusBadge value={selected.status}/></div><div><span>Linked Service ID</span><strong>{selected.linkedServiceId||'Not created yet'}</strong></div></div>
+   <div className="intake-review-grid">
+    <section className="detail-card"><div className="detail-card-head"><div><h3>Reviewed SERVIX Fields</h3><p>These mapped fields may be corrected before conversion. The original submission below is never overwritten.</p></div></div><div className="form-grid four">
+     <Field label="Client Name" required wide><input disabled={!editable} value={draft.client} onChange={e=>set('client',e.target.value)}/></Field>
+     <Field label="Contact Person"><input disabled={!editable} value={draft.contact} onChange={e=>set('contact',e.target.value)}/></Field>
+     <Field label="Mobile"><input disabled={!editable} value={draft.mobile} onChange={e=>set('mobile',e.target.value)}/></Field>
+     <Field label="Email"><input disabled={!editable} value={draft.email} onChange={e=>set('email',e.target.value)}/></Field>
+     <Field label="Equipment" required wide><input disabled={!editable} value={draft.equipment} onChange={e=>set('equipment',e.target.value)}/></Field>
+     <Field label="Make"><input disabled={!editable} value={draft.make} onChange={e=>set('make',e.target.value)}/></Field>
+     <Field label="Model"><input disabled={!editable} value={draft.model} onChange={e=>set('model',e.target.value)}/></Field>
+     <Field label="Serial Number"><input disabled={!editable} value={draft.serialNumber} onChange={e=>set('serialNumber',e.target.value)}/></Field>
+     <Field label="Complaint / Requirement" required wide><textarea disabled={!editable} value={draft.complaint} onChange={e=>set('complaint',e.target.value)}/></Field>
+    </div></section>
+    <section className="detail-card original-intake-card"><div className="detail-card-head"><div><h3>Original Submission Snapshot</h3><p>Read-only intake evidence retained exactly as imported.</p></div><span className="soft-chip">Immutable</span></div><div className="original-intake-list">{Object.entries(snapshot).map(([key,value])=><div key={key}><span>{key}</span><strong>{String(value??'')}</strong></div>)}{Object.keys(snapshot).length===0&&<div><span>Snapshot</span><strong>No original snapshot available for this older record.</strong></div>}</div></section>
+   </div>
+   {selected.status==='New'&&<div className="intake-next-step"><Icon name="service" size={18}/><div><strong>Review first, convert second</strong><p>Saving this screen marks the request Reviewed. It does not consume a Service ID.</p></div></div>}
+   {selected.status==='Reviewed'&&<div className="intake-next-step ready"><Icon name="shield" size={18}/><div><strong>Ready for Service Call conversion</strong><p>Create Service Call opens the normal SERVIX Service Call form with these reviewed fields prefilled. Duplicate checks still run before the Service ID is created.</p></div></div>}
+  </Modal>}
+  {convertItem&&conversionDraft&&<ServiceCallForm initialDraft={conversionDraft} onClose={()=>setConvertItem(null)} onCreated={async()=>{await onRefresh();setConvertItem(null)}}/>}
  </div>;
 }
