@@ -172,3 +172,16 @@ button,input,select,textarea{font-family:var(--font-ui)}
 .intake-next-step{display:flex;align-items:flex-start;gap:10px;margin-top:12px;padding:11px 13px;border:1px solid #d5e3f4;background:#f3f8ff;border-radius:11px;color:#2b65a9}
 .intake-next-step.ready{border-color:#cce4d4;background:#f1fbf5;color:#287749}.intake-next-step strong{display:block;font-size:11.5px;color:#304156}.intake-next-step p{margin:3px 0 0;font-size:10.5px;line-height:1.45;color:#718095}
 @media(max-width:1050px){.intake-review-grid{grid-template-columns:1fr}.intake-review-summary{grid-template-columns:1fr 1fr}.intake-review-summary>div:last-child{grid-column:1/-1}}
+
+
+/* Client / Equipment combined service activity timeline. */
+.entity-history-panel{margin-top:0}.entity-history-panel .panel-heading{margin-bottom:6px}
+.history-loading{display:flex;align-items:center;justify-content:center;gap:10px;min-height:96px;color:#768397;font-size:11.5px}
+.history-loading .boot-spinner{width:18px;height:18px;border-width:2px}
+.entity-timeline{position:relative;display:flex;flex-direction:column}
+.entity-timeline-row{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:10px;padding:10px 2px;border-top:1px solid #edf1f5;align-items:flex-start}
+.entity-timeline-row>i{width:9px;height:9px;border-radius:50%;background:#68a5ec;border:2px solid #dcebfb;margin-top:5px;box-shadow:0 0 0 3px #f5f9ff}
+.entity-timeline-main{min-width:0}.entity-timeline-main>div{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.entity-timeline-main strong{font-size:11.5px;color:#2d3b4d}.entity-timeline-main small{font-size:9.5px;color:#8a96a5}.history-service-id{font-size:9.5px;font-weight:800;color:#2a6fc6;background:#edf5ff;border:1px solid #d4e5f8;border-radius:8px;padding:2px 6px}
+.entity-timeline-main p{font-size:11px;line-height:1.4;color:#4e5d70;margin:4px 0 3px;overflow-wrap:anywhere}.entity-timeline-main>span{font-size:9.8px;color:#8793a3}
+.entity-timeline-side{display:flex;align-items:flex-end;flex-direction:column;gap:5px;min-width:88px}.entity-timeline-side small{font-size:9.5px;color:#8793a3}
+@media(max-width:760px){.entity-timeline-row{grid-template-columns:14px minmax(0,1fr)}.entity-timeline-side{grid-column:2;align-items:flex-start;flex-direction:row}}

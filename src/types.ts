@@ -13,6 +13,7 @@ type ServiceCall = {
 };
 type ServicePart = { id:number; itemName:string; make:string; model:string; partNumber:string; quantity:number; remarks:string; usedAt:string };
 type ServiceEvent = { id:number; eventType:string; oldValue:string; newValue:string; note:string; actor:string; createdAt:string };
+type EntityHistoryEvent = { id:number; serviceCallId:number; serviceId:string; client:string; equipment:string; serialNumber:string; reason:string; serviceStatus:string; eventType:string; oldValue:string; newValue:string; note:string; actor:string; createdAt:string };
 type ServiceDetail = {
   id:number; serviceId:string; openedDate:string; client:string; equipment:string; make:string; model:string; serialNumber:string;
   reason:string; complaint:string; engineer:string; status:ServiceStatus; priority:string; serviceLocation:string; dueDate:string;

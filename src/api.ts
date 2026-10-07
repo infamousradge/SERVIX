@@ -51,6 +51,20 @@ const ServixApi = {
     const item:ServiceCall={id,serviceId:`SRV-${next}`,openedDate:draft.openedDate,client:draft.client,equipment:draft.equipment,make:draft.make,model:draft.model,serialNumber:draft.serialNumber,reason:draft.reason,complaint:draft.complaint,engineer:draft.engineer,status:draft.status,priority:draft.priority,serviceLocation:draft.serviceLocation,dueDate:draft.dueDate,coverage:draft.coverage,foc:draft.foc,quoteStatus:draft.quoteStatus,paymentStatus:draft.paymentStatus,lastUpdated:new Date().toLocaleString()};
     mockState.services.unshift(item); return item;
   },
+  async getClientHistory(clientId:number):Promise<EntityHistoryEvent[]>{
+    if(isDesktop) return invokeNative<EntityHistoryEvent[]>('get_client_history',{clientId});
+    const services=mockState.services.filter(s=>s.clientId===clientId);
+    const out:EntityHistoryEvent[]=[];
+    for(const s of services){const d=mockDetail(s.id);for(const e of d.events)out.push({id:e.id,serviceCallId:s.id,serviceId:s.serviceId,client:s.client,equipment:s.equipment,serialNumber:s.serialNumber||'',reason:s.reason,serviceStatus:s.status,eventType:e.eventType,oldValue:e.oldValue,newValue:e.newValue,note:e.note,actor:e.actor,createdAt:e.createdAt})}
+    return out.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  },
+  async getEquipmentHistory(equipmentId:number):Promise<EntityHistoryEvent[]>{
+    if(isDesktop) return invokeNative<EntityHistoryEvent[]>('get_equipment_history',{equipmentId});
+    const services=mockState.services.filter(s=>s.equipmentId===equipmentId);
+    const out:EntityHistoryEvent[]=[];
+    for(const s of services){const d=mockDetail(s.id);for(const e of d.events)out.push({id:e.id,serviceCallId:s.id,serviceId:s.serviceId,client:s.client,equipment:s.equipment,serialNumber:s.serialNumber||'',reason:s.reason,serviceStatus:s.status,eventType:e.eventType,oldValue:e.oldValue,newValue:e.newValue,note:e.note,actor:e.actor,createdAt:e.createdAt})}
+    return out.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  },
   async getServiceDetail(id:number):Promise<ServiceDetail>{
     if(isDesktop) return invokeNative<ServiceDetail>('get_service_detail',{id});
     return mockDetail(id);

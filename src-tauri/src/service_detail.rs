@@ -78,6 +78,25 @@ pub struct DetailEvent {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EntityHistoryEvent {
+    pub id: i64,
+    pub service_call_id: i64,
+    pub service_id: String,
+    pub client: String,
+    pub equipment: String,
+    pub serial_number: String,
+    pub reason: String,
+    pub service_status: String,
+    pub event_type: String,
+    pub old_value: String,
+    pub new_value: String,
+    pub note: String,
+    pub actor: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServiceDetailView {
     pub id: i64,
     pub service_id: String,
@@ -252,6 +271,53 @@ fn load_detail(conn: &Connection, id: i64) -> Result<ServiceDetailView, String> 
         .map_err(|e| format!("Database error: {e}"))?;
 
     Ok(detail)
+}
+
+fn collect_history(conn: &Connection, owner_column: &str, owner_id: i64) -> Result<Vec<EntityHistoryEvent>, String> {
+    let sql = format!(
+        "SELECT se.id,sc.id,sc.service_id,sc.client_name,sc.equipment_name,sc.serial_number,sc.reason,sc.status,
+         se.event_type,se.old_value,se.new_value,se.note,COALESCE(u.display_name,'System'),se.created_at
+         FROM service_events se
+         JOIN service_calls sc ON sc.id=se.service_call_id
+         LEFT JOIN users u ON u.id=se.actor_id
+         WHERE sc.{}=?1
+         ORDER BY se.created_at DESC,se.id DESC LIMIT 500",
+        owner_column
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("Database error: {e}"))?;
+    let rows = stmt.query_map(params![owner_id], |r| {
+        Ok(EntityHistoryEvent {
+            id:r.get(0)?,
+            service_call_id:r.get(1)?,
+            service_id:r.get(2)?,
+            client:r.get(3)?,
+            equipment:r.get(4)?,
+            serial_number:r.get(5)?,
+            reason:r.get(6)?,
+            service_status:r.get(7)?,
+            event_type:r.get(8)?,
+            old_value:r.get(9)?,
+            new_value:r.get(10)?,
+            note:r.get(11)?,
+            actor:r.get(12)?,
+            created_at:r.get(13)?,
+        })
+    }).map_err(|e| format!("Database error: {e}"))?;
+    rows.collect::<Result<Vec<_>,_>>().map_err(|e| format!("Database error: {e}"))
+}
+
+#[tauri::command]
+pub fn get_client_history(state: State<'_, AppState>, client_id: i64) -> Result<Vec<EntityHistoryEvent>, String> {
+    let _ = require_user(&state)?;
+    let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    collect_history(&db, "client_id", client_id)
+}
+
+#[tauri::command]
+pub fn get_equipment_history(state: State<'_, AppState>, equipment_id: i64) -> Result<Vec<EntityHistoryEvent>, String> {
+    let _ = require_user(&state)?;
+    let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    collect_history(&db, "equipment_id", equipment_id)
 }
 
 #[tauri::command]

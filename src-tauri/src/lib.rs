@@ -34,6 +34,8 @@ pub fn run() {
             commands::sync_google_form,
             commands::load_qa_mock_data,
             service_detail::get_service_detail,
+            service_detail::get_client_history,
+            service_detail::get_equipment_history,
             service_detail::update_service_detail,
             service_detail::add_service_part,
             service_detail::add_service_note
