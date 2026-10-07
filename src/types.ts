@@ -29,7 +29,9 @@ type DuplicateReview = { level:'clear'|'match'|'warning'; summary:string; client
 type IntakeItem = {
   id:number; receivedAt:string; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string;
   serialNumber:string; complaint:string; matchSummary:string; matchTone:'good'|'neutral'|'warn'; status:IntakeStatus; linkedServiceId?:string;
+  originalSnapshot?:string;
 };
+type IntakeReviewDraft = { id:number; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string; serialNumber:string; complaint:string };
 type ClientRecord = { id:number; code:string; name:string; contact:string; mobile:string; email:string; city:string; state:string; active:boolean; serviceCount:number; equipmentCount:number };
 type EquipmentRecord = { id:number; servixEquipmentId:string; client:string; make:string; model:string; serialNumber:string; type:string; location:string; coverage:string; serviceCount:number; lastService:string };
 type PartUsage = { id:number; date:string; serviceId:string; client:string; equipment:string; itemName:string; make:string; model:string; partNumber:string; quantity:number; remarks:string };
