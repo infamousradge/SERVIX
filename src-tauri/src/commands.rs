@@ -701,3 +701,172 @@ pub fn sync_google_form(state: State<'_, AppState>) -> Result<SyncStatus, String
     .map_err(db_err)?;
     sync_status(&db)
 }
+
+
+fn qa_insert_client(
+    tx: &Transaction<'_>,
+    name: &str,
+    contact: &str,
+    mobile: &str,
+    email: &str,
+    city: &str,
+    state_name: &str,
+    now: &str,
+) -> Result<i64, String> {
+    let code = next_human_id(tx, "client_prefix", "client_next_number", "client_digits", "CLI-", 1001)?;
+    tx.execute(
+        "INSERT INTO clients(code,name,contact,mobile,email,city,state,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?8)",
+        params![code,name,contact,mobile,email,city,state_name,now],
+    ).map_err(db_err)?;
+    Ok(tx.last_insert_rowid())
+}
+
+fn qa_insert_equipment(
+    tx: &Transaction<'_>,
+    client_id: i64,
+    make: &str,
+    model: &str,
+    serial: &str,
+    equipment_type: &str,
+    location: &str,
+    coverage: &str,
+    warranty_until: &str,
+    amc_until: &str,
+    now: &str,
+) -> Result<i64, String> {
+    let equipment_id = next_human_id(tx, "equipment_prefix", "equipment_next_number", "equipment_digits", "EQ-", 10001)?;
+    tx.execute(
+        "INSERT INTO equipment(servix_equipment_id,client_id,make,model,serial_number,equipment_type,location,coverage,warranty_until,amc_until,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?11)",
+        params![equipment_id,client_id,make,model,serial,equipment_type,location,coverage,warranty_until,amc_until,now],
+    ).map_err(db_err)?;
+    Ok(tx.last_insert_rowid())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn qa_insert_service(
+    tx: &Transaction<'_>,
+    actor_id: i64,
+    opened_date: &str,
+    client_id: i64,
+    equipment_id: i64,
+    client_name: &str,
+    equipment_name: &str,
+    make: &str,
+    model: &str,
+    serial: &str,
+    reason: &str,
+    complaint: &str,
+    engineer: &str,
+    status: &str,
+    priority: &str,
+    due_date: &str,
+    coverage: &str,
+    foc: bool,
+    quote_status: &str,
+    payment_status: &str,
+    now: &str,
+) -> Result<(i64, String), String> {
+    let service_id = next_human_id(tx, "service_prefix", "service_next_number", "service_digits", "SRV-", 10001)?;
+    tx.execute(
+        "INSERT INTO service_calls(service_id,opened_date,client_id,equipment_id,client_name,equipment_name,make,model,serial_number,reason,complaint,engineer,status,priority,service_location,due_date,coverage,foc,quote_status,payment_status,created_by,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,'Workshop',?15,?16,?17,?18,?19,?20,?21,?21)",
+        params![service_id,opened_date,client_id,equipment_id,client_name,equipment_name,make,model,serial,reason,complaint,engineer,status,priority,due_date,coverage,if foc {1}else{0},quote_status,payment_status,actor_id,now],
+    ).map_err(db_err)?;
+    let id = tx.last_insert_rowid();
+    tx.execute(
+        "INSERT INTO service_events(service_call_id,event_type,new_value,note,actor_id,created_at) VALUES(?1,'Created',?2,'QA service call created',?3,?4)",
+        params![id,service_id,actor_id,now],
+    ).map_err(db_err)?;
+    Ok((id, service_id))
+}
+
+#[tauri::command]
+pub fn load_qa_mock_data(state: State<'_, AppState>) -> Result<String, String> {
+    let actor = require_admin(&state)?;
+    let mut db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+    if setting(&db, "qa_seed_version", "") == "qa-v1" {
+        return Ok("QA test data is already loaded. Existing QA records were left unchanged.".into());
+    }
+
+    let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    let today = Local::now().date_naive();
+    let date = |days: i64| (today + Duration::days(days)).format("%Y-%m-%d").to_string();
+    let tx = db.transaction().map_err(db_err)?;
+
+    // Clients deliberately include a same-mobile/same-email duplicate scenario.
+    let city = qa_insert_client(&tx,"City Hospital","Mr. Sharma","9876543210","service@cityhospital.in","New Delhi","Delhi",&now)?;
+    let city_duplicate = qa_insert_client(&tx,"City Hospital - North Wing","Ms. Riya","9876543210","service@cityhospital.in","New Delhi","Delhi",&now)?;
+    let hearing = qa_insert_client(&tx,"Hearing Care Clinic","Dr. Mehta","9811122233","care@hearingclinic.in","Gurugram","Haryana",&now)?;
+    let apollo = qa_insert_client(&tx,"Apollo Audiology Centre","Ms. Nisha","9988776655","audiology@apolloqa.in","Bengaluru","Karnataka",&now)?;
+    let sound = qa_insert_client(&tx,"Sound & Speech Centre","Mr. Arjun","9900112233","service@soundandspeech.in","Mumbai","Maharashtra",&now)?;
+
+    // Equipment deliberately includes the same serial under the duplicate City Hospital client.
+    let e_city_ma42 = qa_insert_equipment(&tx,city,"MAICO","MA42","QA-MA42-001","Audiometer","Audiology Dept.","Warranty",&date(120),"",&now)?;
+    let e_city_sentiero = qa_insert_equipment(&tx,city,"PATH MEDICAL","Sentiero Advanced","QA-SEN-2002","Diagnostic Platform","ENT Dept.","AMC","",&date(180),&now)?;
+    let e_hearing_ma42 = qa_insert_equipment(&tx,hearing,"MAICO","MA42","QA-MA42-003","Audiometer","Clinic Room 2","Out of Coverage","","",&now)?;
+    let e_apollo_titan = qa_insert_equipment(&tx,apollo,"Interacoustics","Titan","QA-TIT-004","Tympanometer","Audiology Lab","Warranty",&date(240),"",&now)?;
+    let e_duplicate_serial = qa_insert_equipment(&tx,city_duplicate,"MAICO","MA42","QA-MA42-001","Audiometer","North Wing","Out of Coverage","","",&now)?;
+    let e_sound_oae = qa_insert_equipment(&tx,sound,"PATH MEDICAL","Qscreen","QA-QSC-005","Newborn Screening","NICU","AMC","",&date(75),&now)?;
+
+    // Repeat-equipment history, repeat complaint, open/closed status, all coverage types and commercial states.
+    let (s1, _) = qa_insert_service(&tx,actor.id,&date(-150),city,e_city_ma42,"City Hospital","Audiometer","MAICO","MA42","QA-MA42-001","Calibration","Annual calibration and performance verification","Rohit","Closed","Normal",&date(-145),"Warranty",true,"No Quote","Paid",&now)?;
+    let (s2, _) = qa_insert_service(&tx,actor.id,&date(-55),city,e_city_ma42,"City Hospital","Audiometer","MAICO","MA42","QA-MA42-001","Repair / Breakdown","Intermittent right channel output","Amit","Closed","High",&date(-50),"Warranty",false,"Quote Sent","Paid",&now)?;
+    let (s3, _) = qa_insert_service(&tx,actor.id,&date(-2),city,e_city_ma42,"City Hospital","Audiometer","MAICO","MA42","QA-MA42-001","Repair / Breakdown","Intermittent right channel output again","Amit","Open","High",&date(2),"Warranty",false,"No Quote","Pending",&now)?;
+    let (s4, _) = qa_insert_service(&tx,actor.id,&date(-7),city,e_city_sentiero,"City Hospital","Diagnostic Platform","PATH MEDICAL","Sentiero Advanced","QA-SEN-2002","Preventive Maintenance","AMC preventive maintenance visit","Rohit","Pending","Normal",&date(5),"AMC",true,"No Quote","Pending",&now)?;
+    let (s5, _) = qa_insert_service(&tx,actor.id,&date(-38),hearing,e_hearing_ma42,"Hearing Care Clinic","Audiometer","MAICO","MA42","QA-MA42-003","Repair / Breakdown","No bone conduction output","Vikram","Closed","Normal",&date(-31),"Out of Coverage",false,"Quote Sent","Paid",&now)?;
+    let (s6, _) = qa_insert_service(&tx,actor.id,&date(0),apollo,e_apollo_titan,"Apollo Audiology Centre","Tympanometer","Interacoustics","Titan","QA-TIT-004","Repair / Breakdown","Probe not detected intermittently","Rohit","In Progress","Urgent",&date(3),"Warranty",true,"No Quote","Pending",&now)?;
+    let (s7, _) = qa_insert_service(&tx,actor.id,&date(0),city_duplicate,e_duplicate_serial,"City Hospital - North Wing","Audiometer","MAICO","MA42","QA-MA42-001","Repair / Breakdown","Same serial entered under another client record","Amit","Open","Normal",&date(4),"Out of Coverage",false,"No Quote","Pending",&now)?;
+    let (s8, _) = qa_insert_service(&tx,actor.id,&date(-12),sound,e_sound_oae,"Sound & Speech Centre","Newborn Screening","PATH MEDICAL","Qscreen","QA-QSC-005","Inspection","Screening unit requires verification before camp","Vikram","Closed","Normal",&date(-8),"AMC",true,"No Quote","Paid",&now)?;
+
+    for (service_id,event_type,note) in [
+        (s2,"Communication","Customer approved repair by phone; formal quote was also sent."),
+        (s2,"Engineer Update","Right-channel connector reseated and output verified."),
+        (s3,"Communication","Customer requested urgent turnaround due to scheduled patient testing."),
+        (s3,"Repeat Complaint","Complaint resembles the previous repair on the same equipment."),
+        (s4,"Customer Update","AMC visit date discussed with hospital biomedical team."),
+        (s6,"Engineer Update","Probe cable being checked before replacement decision."),
+    ] {
+        tx.execute(
+            "INSERT INTO service_events(service_call_id,event_type,note,actor_id,created_at) VALUES(?1,?2,?3,?4,?5)",
+            params![service_id,event_type,note,actor.id,now],
+        ).map_err(db_err)?;
+    }
+
+    for (service_id,item,make,model,part_number,qty,remarks) in [
+        (s2,"Audio Jack Assembly","MAICO","MA42","QA-PN-1001",1_i64,"Replaced during right-channel repair"),
+        (s3,"Headphone Cable","Generic","DD45","QA-PN-1002",1_i64,"Used for diagnostic substitution test"),
+        (s5,"BC Connector","MAICO","MA42","QA-PN-2001",1_i64,"Replaced and retested"),
+        (s6,"Probe Seal Set","Interacoustics","Titan","QA-PN-3001",2_i64,"Used during probe verification"),
+    ] {
+        tx.execute(
+            "INSERT INTO part_usage(service_call_id,item_name,make,model,part_number,quantity,remarks,used_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
+            params![service_id,item,make,model,part_number,qty,remarks,now],
+        ).map_err(db_err)?;
+    }
+
+    // Intake rows mimic real Google submissions and include duplicate/matching cases.
+    let intake_rows = [
+        ("QA-INTAKE-001",&date(-1),"City Hospital","Mr. Sharma","9876543210","service@cityhospital.in","Audiometer","MAICO","MA42","QA-MA42-001","Intermittent right channel output again","Existing Client + Equipment Found","good","New"),
+        ("QA-INTAKE-002",&date(0),"City Hospital","Mr. Sharma","9876543210","service@cityhospital.in","Audiometer","MAICO","MA42","QA-MA42-001","Intermittent right channel output again","Possible duplicate open Service Call","warn","New"),
+        ("QA-INTAKE-003",&date(0),"New Life Hospital","Ms. Kavya","9000011111","biomed@newlifeqa.in","Tympanometer","MAICO","easyTymp","QA-NEW-9001","No pressure seal","New Client","neutral","New"),
+        ("QA-INTAKE-004",&date(0),"City Hospital - North Wing","Ms. Riya","9876543210","service@cityhospital.in","Audiometer","MAICO","MA42","QA-MA42-001","Equipment received for repair","Same serial appears under another client","warn","Reviewed"),
+    ];
+    for (external_id,received_at,client_name,contact,mobile,email,equipment,make,model,serial,complaint,match_summary,match_tone,status) in intake_rows {
+        let raw_json = format!("{{\"externalId\":\"{}\",\"client\":\"{}\",\"serial\":\"{}\",\"complaint\":\"{}\"}}",external_id,client_name,serial,complaint.replace('"', "'"));
+        tx.execute(
+            "INSERT INTO form_intake(external_id,received_at,client_name,contact,mobile,email,equipment,make,model,serial_number,complaint,raw_json,match_summary,match_tone,status) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
+            params![external_id,received_at,client_name,contact,mobile,email,equipment,make,model,serial,complaint,raw_json,match_summary,match_tone,status],
+        ).map_err(db_err)?;
+    }
+
+    tx.execute(
+        "INSERT INTO settings(key,value,updated_at) VALUES('qa_seed_version','qa-v1',?1) ON CONFLICT(key) DO UPDATE SET value='qa-v1',updated_at=excluded.updated_at",
+        params![now],
+    ).map_err(db_err)?;
+    tx.execute(
+        "INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('QAData','Load','qa-v1',?1,'Loaded controlled SERVIX duplicate/history QA dataset',?2)",
+        params![actor.id,now],
+    ).map_err(db_err)?;
+    tx.commit().map_err(db_err)?;
+
+    Ok("QA test data loaded: repeat clients/equipment, duplicate mobile/email, duplicate serial, open/closed calls, Warranty/AMC/out-of-coverage, parts, payments, notes and intake cases.".into())
+}

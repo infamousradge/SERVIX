@@ -69,5 +69,9 @@ const ServixApi = {
   async syncGoogleForm():Promise<SyncStatus>{
     if(isDesktop) return invokeNative<SyncStatus>('sync_google_form');
     mockState.sync={...mockState.sync,lastAttemptedSync:new Date().toLocaleString(),lastSuccessfulSync:new Date().toLocaleString(),newCount:0,status:'up-to-date',message:'Sync completed in preview mode.'}; return mockState.sync;
+  },
+  async loadQaMockData():Promise<string>{
+    if(isDesktop) return invokeNative<string>('load_qa_mock_data');
+    return 'Browser preview already contains representative mock data.';
   }
 };

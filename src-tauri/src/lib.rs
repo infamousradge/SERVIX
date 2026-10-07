@@ -30,6 +30,7 @@ pub fn run() {
             commands::create_user,
             commands::update_intake_status,
             commands::sync_google_form,
+            commands::load_qa_mock_data,
             service_detail::get_service_detail,
             service_detail::update_service_detail,
             service_detail::add_service_part,
