@@ -1,5 +1,5 @@
 function StatusBadge({value}:{value:string}){
-  const tone=value==='Closed'||value==='Paid'||value==='Up to date'||value==='Converted'?'green':value==='Pending'||value==='Warning'||value==='Reviewed'?'amber':value==='In Progress'||value==='Open'||value==='New'?'blue':value==='Duplicate'||value==='Overdue'?'red':'slate';
+  const tone=value==='Done'||value==='Active'||value==='Closed'||value==='Paid'||value==='Up to date'||value==='Converted'?'green':value==='Pending'||value==='Warning'||value==='Reviewed'?'amber':value==='In Progress'||value==='Open'||value==='New'?'blue':value==='Not Done'||value==='Expired'||value==='Duplicate'||value==='Overdue'?'red':'slate';
   return <span className={`status-badge ${tone}`}>{value}</span>;
 }
 function KpiCard({label,value,meta,icon,tone='blue',onClick}:{label:string,value:number|string,meta?:string,icon:string,tone?:string,onClick?:()=>void}){

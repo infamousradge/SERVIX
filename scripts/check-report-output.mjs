@@ -5,6 +5,7 @@ import ts from 'typescript';
 
 const source=readFileSync(new URL('../src/report-output.ts',import.meta.url),'utf8');
 const context=vm.createContext({});
+vm.runInContext(ts.transpile(readFileSync(new URL('../src/operations.tsx',import.meta.url),'utf8'),{target:ts.ScriptTarget.ES2019,jsx:ts.JsxEmit.React}),context);
 vm.runInContext(ts.transpile(source,{target:ts.ScriptTarget.ES2019}),context);
 const services=[
  {id:1,serviceId:'SRV-1',clientId:1,client:'Same Name',equipmentId:1,equipment:'MA42',serialNumber:'shared',openedDate:'2026-10-01',reason:'Calibration',status:'Closed',coverage:'Warranty',engineer:'A',quoteStatus:'Quote Sent',paymentStatus:'Paid',foc:false},
@@ -25,7 +26,7 @@ const csv=context.reportCsv({headers:['Name','Qty'],rows:[['=SUM(A1:A2)',-2],['a
 assert.ok(csv.startsWith('\ufeff"Customer: Test"\r\n'));
 assert.ok(csv.includes('"\'=SUM(A1:A2)","-2"'));
 assert.ok(csv.includes('"a,""b""\nnext","3"'));
-vm.runInContext(ts.transpile(readFileSync(new URL('../src/operations.tsx',import.meta.url),'utf8'),{target:ts.ScriptTarget.ES2019,jsx:ts.JsxEmit.React}),context);
+
 context.filterScope=(data,client,fromDate,toDate)=>{const scope=context.reportScope(data,{...context.newServiceQuery(),client,from:fromDate,to:toDate});return {filteredServices:scope.services,filteredParts:scope.parts}};
 const scopeData={clients:[{id:1,name:'Same Name'},{id:2,name:'Same Name'}],services,partUsage:[...parts,{...parts[0],serviceId:'SRV-2'}]};
 const scope=context.filterScope(scopeData,'1','2026-10-01','2026-10-02');
