@@ -35,3 +35,6 @@ assert.equal(scope.filteredParts.length,1);
 assert.equal(context.filterScope(scopeData,'All','2026-10-02','2026-10-02').filteredServices[0].serviceId,'SRV-2');
 assert.equal(context.filterScope(scopeData,'All','2026-10-03','2026-10-04').filteredServices.length,0);
 console.log('Report checks passed: all tabs, empty results, stable grouping IDs, calibration, scope, CSV quoting and formula escaping.');
+
+vm.runInContext(ts.transpile(readFileSync(new URL('../src/features/reports.tsx',import.meta.url),'utf8'),{target:ts.ScriptTarget.ES2019,jsx:ts.JsxEmit.React}),context);
+assert.ok(context.reportFilterKeys('Parts Usage').includes('make'));assert.ok(!context.reportFilterKeys('Parts Usage').includes('payment'));assert.ok(context.reportFilterKeys('Commercial').includes('payment'));assert.ok(!context.reportFilterKeys('Commercial').includes('make'));const switched=context.reportQueryForTab('Parts Usage',{...context.newServiceQuery(),status:'Pending',payment:'Pending',from:'2026-09-01',client:'1'});assert.equal(switched.status,'All');assert.equal(switched.payment,'All');assert.equal(switched.from,'2026-09-01');assert.equal(switched.client,'1');console.log('Report-specific filter sets and drilldown scope cleanup passed.');
