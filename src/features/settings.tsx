@@ -7,7 +7,7 @@ function CompanyReportBranding(){
  React.useEffect(()=>{ServixApi.getCompanyReportProfile().then(setProfile).catch(e=>setMessage(String(e)))},[]);
  const [message,setMessage]=React.useState('');
  const set=(key:keyof CompanyReportProfile,value:string)=>setProfile(p=>({...p,[key]:value}));
- const upload=(e:React.ChangeEvent<HTMLInputElement>)=>{
+ const upload=(e:any)=>{
   const file=e.target.files?.[0];if(!file)return;
   if(!['image/png','image/jpeg'].includes(file.type)){setMessage('Only PNG or JPG logos are supported.');return}
   if(file.size>450000){setMessage('Please choose a logo smaller than 450 KB.');return}
