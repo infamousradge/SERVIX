@@ -196,6 +196,7 @@ pub struct ClientRecord {
     pub contact: String,
     pub mobile: String,
     pub email: String,
+    pub address: String,
     pub city: String,
     pub state: String,
     pub active: bool,
