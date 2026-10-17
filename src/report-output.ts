@@ -57,7 +57,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  const details=document.createElement('div');details.className='sr-profiles';
  const group=(title:string,rows:[string,any][])=>{const section=document.createElement('section');section.className='sr-panel';section.appendChild(el('h2',title));for(const [label,value] of rows){const row=document.createElement('div');row.className='sr-line';row.append(el('span',label),el('span',String(value||'Not recorded')));section.appendChild(row)}return section};
  details.append(
- group('Customer Information',[['Customer Name',d.client],['Contact Person',client?.contact],['Phone / Email',[client?.mobile,client?.email].filter(Boolean).join(' | ')],['Address',[client?.city,client?.state].filter(Boolean).join(', ')]]),
+ group('Customer Information',[['Customer Name',d.client],['Contact Person',client?.contact],['Phone / Email',[client?.mobile,client?.email].filter(Boolean).join(' | ')],['Address',[client?.address,client?.city,client?.state].filter(Boolean).join(', ')]]),
  group('Equipment Information',[['Device Name',d.equipment],['Make / Model',[d.make,d.model].filter(Boolean).join(' / ')],['Serial Number',d.serialNumber],['Equipment ID',equipmentRecord?.servixEquipmentId],['Location',equipmentRecord?.location],['Service Type',d.reason]])
  );sheet.appendChild(details);
  const coverage=document.createElement('section');coverage.className='sr-coverage';coverage.appendChild(el('h2','Service & Payment Status'));
