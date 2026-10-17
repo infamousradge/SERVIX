@@ -373,3 +373,61 @@ button,input,select,textarea{font-family:var(--font-ui)}
  .service-document .sr-prepared strong{display:block;font-size:9pt;color:#173b67}
  .service-document .sr-prepared p,.service-document .sr-prepared small{display:block;margin:3px 0;font-size:8pt}
 }
+
+
+/* Final premium HAC letterhead refinements — keep vivid accents printable. */
+@media print {
+ .service-document,.service-document *{
+  -webkit-print-color-adjust:exact!important;
+  print-color-adjust:exact!important;
+ }
+ .service-document .sr-letterhead{
+  display:grid!important;grid-template-columns:155px minmax(0,1fr)!important;
+  align-items:center!important;gap:16px!important;
+  padding:5px 0 12px!important;margin-bottom:10px!important;
+  border-bottom:2px solid #157e8d!important;min-height:84px!important;
+ }
+ .service-document .sr-logo{display:block!important;width:auto!important;max-width:155px!important;max-height:82px!important;object-fit:contain!important}
+ .service-document .sr-company{min-width:0}
+ .service-document .sr-company-name{
+  margin:0 0 5px!important;font-size:16pt!important;
+  color:#0b315d!important;font-weight:800!important;line-height:1.12!important;
+  background:transparent!important;border:0!important;padding:0!important;
+ }
+ .service-document .sr-company-address{
+  margin:0 0 5px!important;color:#395872!important;
+  line-height:1.35!important;font-size:8.3pt!important;
+  max-width:100%;white-space:pre-line!important;overflow-wrap:anywhere;
+ }
+ .service-document .sr-contact-details{display:flex;flex-wrap:wrap;column-gap:12px;row-gap:2px}
+ .service-document .sr-contact-details p{margin:0!important;font-size:8pt!important;color:#325679}
+ .service-document .sr-contact-details strong{color:#0e436c;font-size:8pt}
+ .service-document .sr-title{
+  background:linear-gradient(105deg,#dae9f8,#eef8fa)!important;
+  border-left:5px solid #087f94!important;padding:10px 13px!important;
+ }
+ .service-document .sr-title h1{color:#063467!important;font-size:19pt!important}
+ .service-document .sr-panel h2{
+  background:#d8eafb!important;border-left:3px solid #158ba0!important;
+  color:#0a3d70!important;font-weight:800!important;
+ }
+ .service-document .sr-coverage>h2{
+  background:#daeee9!important;border-left:3px solid #138b80!important;
+  color:#095b60!important;
+ }
+ .service-document .sr-services>h2{
+  background:#dbeafd!important;border-left:3px solid #2a6fb3!important;
+  color:#0c4279!important;
+ }
+ .service-document .sr-status-tiles .sr-field:nth-child(1){background:#edf6fd!important}
+ .service-document .sr-status-tiles .sr-field:nth-child(2){background:#e4f4ec!important}
+ .service-document .sr-status-tiles .sr-field:nth-child(3){background:#edf4fa!important}
+ .service-document .sr-status-tiles .sr-field:nth-child(4){background:#e8f5ee!important}
+ .service-document .sr-status-tiles .sr-field strong{color:#075b60!important;font-weight:800}
+ .service-document .sr-narrative h3{
+  background:#e5f0fb!important;border-left:2px solid #3994b1!important;
+ }
+ .service-document .sr-facts{background:#f6faff!important}
+ .service-document .sr-facts .sr-field:last-child strong{color:#09847b!important}
+ .service-document .sr-prepared{border-left:3px solid #0b8993!important;padding-left:8px!important}
+}
