@@ -1,6 +1,6 @@
 type ModuleKey = 'dashboard'|'intake'|'service-calls'|'clients'|'equipment'|'engineers'|'coverage'|'calibration'|'parts'|'documents'|'reports'|'data'|'users-settings';
 type ServiceStatus = 'Open'|'In Progress'|'Pending'|'Closed';
-type CoverageType = 'Warranty'|'AMC'|'Out of Coverage';
+type CoverageType = 'Warranty'|'AMC'|'CMC'|'Out of Coverage';
 type IntakeStatus = 'New'|'Reviewed'|'Converted'|'Duplicate';
 
 type SessionUser = { id:number; username:string; displayName:string; role:'Administrator'|'Office User'|'Read Only' };
