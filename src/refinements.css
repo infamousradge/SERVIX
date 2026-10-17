@@ -336,3 +336,40 @@ button,input,select,textarea{font-family:var(--font-ui)}
  .service-document .print-signatures>div{padding-top:5mm;border-top:1px solid #9ca3af}
  .service-document table th,.service-document table td{width:auto!important}
 }
+
+
+/* Approved hybrid Sample 1 + Sample 3 customer-facing report. */
+@media print {
+ @page{size:A4 portrait;margin:9mm 10mm}
+ .service-document{font-family:Arial,"Segoe UI",sans-serif!important;color:#183251!important;font-size:8pt;line-height:1.28}
+ .service-document .sr-letterhead{display:flex;align-items:center;gap:14px;border:0;padding:0 0 9px;margin:0 0 9px;min-height:55px}
+ .service-document .sr-logo{max-width:115px;max-height:55px;object-fit:contain}
+ .service-document .sr-company{flex:1}
+ .service-document .sr-company strong{font-size:13pt;color:#102e57}
+ .service-document .sr-company p{font-size:8pt;line-height:1.25;margin:2px 0;white-space:pre-wrap}
+ .service-document .sr-title{background:#e9f2fa;border-radius:5px;padding:9px 12px;margin-bottom:8px;break-inside:avoid}
+ .service-document .sr-title h1{font-size:18pt;color:#12335d;margin:0;font-weight:800}
+ .service-document .sr-title p{font-size:8pt;letter-spacing:1.2px;margin:2px 0 0}
+ .service-document .sr-facts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;border:1px solid #cddfea;border-radius:4px;margin:0 0 9px;break-inside:avoid}
+ .service-document .sr-field{padding:6px 7px;border-right:1px solid #d8e5ef;min-width:0}
+ .service-document .sr-field:last-child{border-right:0}
+ .service-document .sr-field small{display:block;font-size:6.9pt;color:#4a6380;margin-bottom:3px}
+ .service-document .sr-field strong{display:block;font-size:8pt;color:#112e56;overflow-wrap:anywhere}
+ .service-document .sr-profiles{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px;align-items:stretch}
+ .service-document .sr-panel{border:1px solid #d2e2ee;border-radius:5px;overflow:hidden;break-inside:avoid}
+ .service-document .sr-panel h2,.service-document .sr-coverage>h2,.service-document .sr-services>h2{margin:0;background:#e9f2fa;color:#12365f;padding:6px 9px;font-size:10pt;border:0}
+ .service-document .sr-line{display:grid;grid-template-columns:36% 64%;border-bottom:1px solid #e4edf4;padding:4px 7px;gap:4px;font-size:7.6pt}
+ .service-document .sr-line:last-child{border-bottom:0}
+ .service-document .sr-line span:last-child{overflow-wrap:anywhere;white-space:pre-wrap}
+ .service-document .sr-coverage{border:1px solid #d2e2ee;border-radius:5px;overflow:hidden;margin:0 0 9px;break-inside:avoid}
+ .service-document .sr-status-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+ .service-document .sr-status-tiles .sr-field{text-align:center;padding:7px}
+ .service-document .sr-services{border:1px solid #d2e2ee;border-radius:5px;overflow:hidden}
+ .service-document .sr-narrative{margin:5px 8px 6px;break-inside:avoid}
+ .service-document .sr-narrative h3{font-size:8pt;margin:0;background:#eaf3fc;border-radius:3px;padding:4px 7px;color:#183c68}
+ .service-document .sr-narrative p{white-space:pre-wrap;font-size:8pt;margin:3px 7px 0;line-height:1.3}
+ .service-document .sr-extra{margin:5px 12px;font-size:7.6pt;overflow-wrap:anywhere}
+ .service-document .sr-prepared{margin:12px 0 0 12px;display:block;border:0;break-inside:avoid}
+ .service-document .sr-prepared strong{display:block;font-size:9pt;color:#173b67}
+ .service-document .sr-prepared p,.service-document .sr-prepared small{display:block;margin:3px 0;font-size:8pt}
+}
