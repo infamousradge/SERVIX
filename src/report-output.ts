@@ -41,57 +41,42 @@ function printReportTable(title:string,table:ReportTable,meta:string[]){
 async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibration?:CalibrationRecord,preparedBy?:string,equipmentRecord?:EquipmentRecord){
  document.querySelector('.servix-print-sheet')?.remove();
  const sheet=document.createElement('section');sheet.className='servix-print-sheet service-document';
- const el=(tag:string,value:string,className='')=>{const e=document.createElement(tag);e.textContent=value;if(className)e.className=className;return e};
- const addLine=(parent:HTMLElement,label:string,value:any)=>{const row=document.createElement('p');const key=el('strong',label+': ');row.append(key,document.createTextNode(String(value===undefined||value===null||value===''?'Not recorded':value)));parent.appendChild(row)};
- const block=(title:string,lines:string[])=>{const b=document.createElement('section');b.className='print-info-block';b.appendChild(el('h2',title));lines.filter(Boolean).forEach(s=>b.appendChild(el('p',s)));return b};
+ const el=(tag:string,text:string,className='')=>{const node=document.createElement(tag);node.textContent=text;if(className)node.className=className;return node};
+ const field=(label:string,value:any)=>{const cell=document.createElement('div');cell.className='sr-field';cell.append(el('small',label),el('strong',String(value===undefined||value===null||value===''?'Not recorded':value)));return cell};
  const profile=await ServixApi.getCompanyReportProfile();
- const head=document.createElement('header');
- if(profile.logo){const companyLogo=document.createElement('img');companyLogo.src=profile.logo;companyLogo.alt='Company Logo';companyLogo.style.cssText='max-height:65px;max-width:180px;object-fit:contain;display:block;margin:0 0 6px';head.appendChild(companyLogo)}
- head.append(el('p',profile.name,'company-letterhead'),el('h1','SERVICE REPORT'),el('p','Technical Service & Maintenance'));
- if(profile.address)head.appendChild(el('p',profile.address));
- if(profile.phone||profile.email||profile.website)head.appendChild(el('p',[profile.phone,profile.email,profile.website].filter(Boolean).join('  •  ')));
- sheet.appendChild(head);
- const summary=document.createElement('section');summary.className='print-info-block';
- summary.appendChild(el('h2','Service Report Details'));
- addLine(summary,'Service Request Number / Service ID',d.serviceId);
- if(equipmentRecord?.servixEquipmentId)addLine(summary,'Equipment ID',equipmentRecord.servixEquipmentId);
- addLine(summary,'Date Received / Reported',d.openedDate);
- addLine(summary,'Date Completed',d.completionDate||'Not completed');
- addLine(summary,'Report Generated',new Date().toLocaleString());
- addLine(summary,'Service Status',d.status);
- addLine(summary,'Assigned Engineer',d.engineer||'Unassigned');
- addLine(summary,'Service Type / Reason',d.reason);
- addLine(summary,'Service Location',d.serviceLocation);
- if(d.statusReason)addLine(summary,'Status / Pending Remarks',d.statusReason);
- sheet.appendChild(summary);
- const commercial=document.createElement('section');commercial.className='print-info-block';
- commercial.appendChild(el('h2','Coverage & Payment Status'));
- addLine(commercial,'Warranty / AMC Coverage',d.coverage);
- addLine(commercial,'AMC / CMC Status',d.coverage==='AMC'?'AMC (as recorded)':'Not recorded / Not applicable');
- addLine(commercial,'FOC',d.foc?'Yes':'No');
- addLine(commercial,'Quotation Status',d.quoteStatus);
- addLine(commercial,'Payment Status',d.paymentStatus||'Not recorded');
- sheet.appendChild(commercial);
- const profiles=document.createElement('div');profiles.className='print-profile-grid';
- profiles.append(
-  block('Customer Information',[d.client,client?.contact?'Contact: '+client.contact:'',client?.mobile?'Mobile: '+client.mobile:'',client?.email?'Email: '+client.email:'',[client?.city,client?.state].filter(Boolean).join(', ')]),
-  block('Device / Equipment Information',[d.equipment,'Make: '+(d.make||'Not recorded'),'Model: '+(d.model||'Not recorded'),'Serial number: '+(d.serialNumber||'Not recorded'),'Service reason: '+d.reason])
- );
- sheet.appendChild(profiles);
- for(const [title,value] of [
-  ['01 — Issue Reported / Customer Complaint',d.complaint],
-  ['02 — Technical Observation / Diagnosis',d.diagnosis],
-  ['03 — Work Performed / Resolution',d.workPerformed],
-  ['04 — Final Testing / Verification',d.testingVerification],
-  ['05 — Final Outcome / Result',d.finalResult],
-  ['06 — Recommendations / Pending Work',d.recommendations]
- ] as [string,string][]){
-  const section=block(title,[value||'Not recorded']);section.classList.add('print-narrative');sheet.appendChild(section);
- }
- if(calibration)sheet.appendChild(block('Calibration Details',['Calibration status: '+calibrationStatus(calibration),'Certificate / Reference: '+(calibration.certificate||'Not recorded'),'Calibration date: '+(calibration.calibrationDate||'Not recorded'),'Result: '+(calibration.result||'Not recorded'),'Next due: '+(calibration.nextDue||'Not recorded'),calibration.notes||'']));
- if(d.parts.length){const section=document.createElement('section');section.appendChild(el('h2','Parts / Items Used'));const table=document.createElement('table');const thead=document.createElement('thead');const hr=document.createElement('tr');['Part / Item','Make / Model','Reference','Quantity','Remarks'].forEach(v=>hr.appendChild(el('th',v)));thead.appendChild(hr);table.appendChild(thead);const tbody=document.createElement('tbody');d.parts.forEach(p=>{const row=document.createElement('tr');[p.itemName,[p.make,p.model].filter(Boolean).join(' '),p.partNumber,String(p.quantity),p.remarks].forEach(v=>row.appendChild(el('td',v||'—')));tbody.appendChild(row)});table.appendChild(tbody);section.appendChild(table);sheet.appendChild(section)}
- const footer=document.createElement('footer');footer.className='print-signatures';
- footer.append(el('div','Prepared By: '+(preparedBy||'Not recorded')),el('div','Checked / Approved By: ____________________'),el('div','Customer Acknowledgement (if applicable): ____________________'));
- sheet.appendChild(footer);
+ const head=document.createElement('header');head.className='sr-letterhead';
+ if(profile.logo){const img=document.createElement('img');img.src=profile.logo;img.alt='Company logo';img.className='sr-logo';head.appendChild(img)}
+ const identity=document.createElement('div');identity.className='sr-company';
+ identity.appendChild(el('strong',profile.name||'Company Name'));
+ if(profile.address)identity.appendChild(el('p',profile.address));
+ const contacts=[profile.phone,profile.email,profile.website].filter(Boolean).join('  |  ');if(contacts)identity.appendChild(el('p',contacts));
+ head.appendChild(identity);sheet.appendChild(head);
+ const title=document.createElement('div');title.className='sr-title';title.append(el('h1','SERVICE REPORT'),el('p','TECHNICAL SERVICE & MAINTENANCE'));sheet.appendChild(title);
+ const facts=document.createElement('section');facts.className='sr-facts';
+ facts.append(field('Service Request No.',d.serviceId),field('Equipment ID',equipmentRecord?.servixEquipmentId||'Not recorded'),field('Date Received',d.openedDate),field('Date Completed',d.completionDate||'Not completed'),field('Report Generated',new Date().toLocaleString()),field('Status',d.status));sheet.appendChild(facts);
+ const details=document.createElement('div');details.className='sr-profiles';
+ const group=(title:string,rows:[string,any][])=>{const section=document.createElement('section');section.className='sr-panel';section.appendChild(el('h2',title));for(const [label,value] of rows){const row=document.createElement('div');row.className='sr-line';row.append(el('span',label),el('span',String(value||'Not recorded')));section.appendChild(row)}return section};
+ details.append(
+ group('Customer Information',[['Customer Name',d.client],['Contact Person',client?.contact],['Phone / Email',[client?.mobile,client?.email].filter(Boolean).join(' | ')],['Address',[client?.city,client?.state].filter(Boolean).join(', ')]]),
+ group('Equipment Information',[['Device Name',d.equipment],['Make / Model',[d.make,d.model].filter(Boolean).join(' / ')],['Serial Number',d.serialNumber],['Equipment ID',equipmentRecord?.servixEquipmentId],['Location',equipmentRecord?.location],['Service Type',d.reason]])
+ );sheet.appendChild(details);
+ const coverage=document.createElement('section');coverage.className='sr-coverage';coverage.appendChild(el('h2','Service & Payment Status'));
+ const tiles=document.createElement('div');tiles.className='sr-status-tiles';
+ const warranty=d.coverage==='Warranty'?'Under Warranty':d.coverage==='Out of Coverage'?'Out of Warranty':'Not recorded';
+ for(const [label,value] of [['Warranty',warranty],['AMC',d.coverage==='AMC'?'Active / Covered':'Not recorded'],['CMC','Not recorded'],['Payment',d.paymentStatus||'Not recorded']] as [string,string][])tiles.appendChild(field(label,value));
+ coverage.appendChild(tiles);sheet.appendChild(coverage);
+ const services=document.createElement('section');services.className='sr-services';services.appendChild(el('h2','Service Details'));
+ const entries:[string,string][]=[
+  ['1. Issue Reported / Customer Complaint',d.complaint],
+  ['2. Technical Observation / Diagnosis',d.diagnosis],
+  ['3. Work Performed / Resolution',d.workPerformed],
+  ['4. Final Testing & Outcome',[d.testingVerification,d.finalResult].filter(Boolean).join(' — ')],
+  ['5. Recommendations / Remarks',[d.recommendations,d.statusReason].filter(Boolean).join(' — ')]
+ ];
+ for(const [label,value] of entries){const block=document.createElement('div');block.className='sr-narrative';block.append(el('h3',label),el('p',value||'Not recorded'));services.appendChild(block)}
+ if(d.parts.length){const parts=document.createElement('div');parts.className='sr-extra';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' ('+p.quantity+')').join(', ')));services.appendChild(parts)}
+ if(calibration){const cal=document.createElement('div');cal.className='sr-extra';cal.textContent='Calibration: '+calibrationStatus(calibration)+(calibration.certificate?' | Ref: '+calibration.certificate:'')+(calibration.nextDue?' | Next Due: '+calibration.nextDue:'');services.appendChild(cal)}
+ sheet.appendChild(services);
+ const footer=document.createElement('footer');footer.className='sr-prepared';footer.append(el('strong','Prepared By'),el('p',preparedBy||'Not recorded'),el('small','Report generated: '+new Date().toLocaleString()));sheet.appendChild(footer);
  document.body.appendChild(sheet);window.addEventListener('afterprint',()=>sheet.remove(),{once:true});setTimeout(()=>window.print(),80);
 }
