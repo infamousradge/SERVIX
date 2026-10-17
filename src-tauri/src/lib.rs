@@ -45,6 +45,8 @@ pub fn run() {
             commands::create_first_admin,
             commands::authenticate,
             commands::logout,
+            commands::get_company_report_profile,
+            commands::save_company_report_profile,
             commands::bootstrap,
             commands::create_service_call,
             commands::review_service_duplicates,
