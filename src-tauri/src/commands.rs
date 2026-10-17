@@ -473,7 +473,7 @@ fn list_clients(db: &Connection) -> Result<Vec<ClientRecord>, String> {
 
 fn list_equipment(db: &Connection) -> Result<Vec<EquipmentRecord>, String> {
     let mut stmt = db
-        .prepare("SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,e.location,e.coverage,(SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id),COALESCE((SELECT MAX(opened_date) FROM service_calls sc WHERE sc.equipment_id=e.id),'')  ,e.warranty_until,e.amc_until,e.active FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC")
+        .prepare("SELECT e.id,e.servix_equipment_id,COALESCE(e.client_id,0),COALESCE(c.name,''),e.make,e.model,e.serial_number,e.equipment_type,e.location,e.coverage,(SELECT COUNT(*) FROM service_calls sc WHERE sc.equipment_id=e.id),COALESCE((SELECT MAX(opened_date) FROM service_calls sc WHERE sc.equipment_id=e.id),'')  ,e.warranty_until,e.amc_until,e.cmc_until,e.active FROM equipment e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.id DESC")
         .map_err(db_err)?;
     let rows = stmt
         .query_map([], |r| {
@@ -492,7 +492,8 @@ fn list_equipment(db: &Connection) -> Result<Vec<EquipmentRecord>, String> {
                 last_service: r.get(11)?,
                 warranty_until: r.get(12)?,
                 amc_until: r.get(13)?,
-                active: r.get::<_,i64>(14)?!=0,
+                cmc_until: r.get(14)?,
+                active: r.get::<_,i64>(15)?!=0,
             })
         })
         .map_err(db_err)?;
