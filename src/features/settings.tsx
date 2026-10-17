@@ -4,6 +4,7 @@ const reportProfileKey='servix-company-report-profile-v1';
 function getCompanyReportProfile():CompanyReportProfile{try{return {...defaultCompanyReportProfile,...JSON.parse(localStorage.getItem(reportProfileKey)||'{}')}}catch{return {...defaultCompanyReportProfile}}}
 function CompanyReportBranding(){
  const [profile,setProfile]=React.useState(getCompanyReportProfile);
+ React.useEffect(()=>{ServixApi.getCompanyReportProfile().then(setProfile).catch(e=>setMessage(String(e)))},[]);
  const [message,setMessage]=React.useState('');
  const set=(key:keyof CompanyReportProfile,value:string)=>setProfile(p=>({...p,[key]:value}));
  const upload=(e:React.ChangeEvent<HTMLInputElement>)=>{
@@ -23,8 +24,8 @@ function CompanyReportBranding(){
    <Field label="Company Logo (PNG/JPG, max 450 KB)"><input type="file" accept="image/png,image/jpeg" onChange={upload}/></Field>
    {profile.logo&&<div><img src={profile.logo} alt="Company logo preview" style={{maxWidth:150,maxHeight:90,objectFit:'contain'}}/><button className="secondary-button" onClick={()=>set('logo','')}>Remove Logo</button></div>}
   </div>
-  <p style={{fontSize:12}}>This initial setting is stored locally in the current Windows app profile. Shared-database storage and export/restore integration will follow.</p>
-  <button className="primary-button" onClick={()=>{if(!profile.name.trim()){setMessage('Company name is required.');return}try{localStorage.setItem(reportProfileKey,JSON.stringify(profile));setMessage('Company report branding saved.')}catch{setMessage('Could not save profile. Try a smaller logo.')}}}>Save Company Branding</button>
+  <p style={{fontSize:12}}>The Windows app stores these details in the local SQLite database alongside the service records.</p>
+  <button className="primary-button" onClick={async()=>{if(!profile.name.trim()){setMessage('Company name is required.');return}try{await ServixApi.saveCompanyReportProfile(profile);setMessage('Company report branding saved.')}catch(e:any){setMessage('Could not save profile: '+(e?.message||String(e)))}}}>Save Company Branding</button>
   {message&&<p role="status">{message}</p>}
  </section>;
 }
