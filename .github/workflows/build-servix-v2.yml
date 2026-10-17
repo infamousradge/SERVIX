@@ -6,6 +6,10 @@ on:
       - servix-rebuild-v2
   workflow_dispatch:
 
+concurrency:
+  group: servix-v2-windows-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
