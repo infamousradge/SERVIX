@@ -1,3 +1,33 @@
+type CompanyReportProfile={name:string,address:string,phone:string,email:string,website:string,logo:string};
+const defaultCompanyReportProfile:CompanyReportProfile={name:'HAC Acoustic Technologies',address:'',phone:'',email:'',website:'',logo:''};
+const reportProfileKey='servix-company-report-profile-v1';
+function getCompanyReportProfile():CompanyReportProfile{try{return {...defaultCompanyReportProfile,...JSON.parse(localStorage.getItem(reportProfileKey)||'{}')}}catch{return {...defaultCompanyReportProfile}}}
+function CompanyReportBranding(){
+ const [profile,setProfile]=React.useState(getCompanyReportProfile);
+ const [message,setMessage]=React.useState('');
+ const set=(key:keyof CompanyReportProfile,value:string)=>setProfile(p=>({...p,[key]:value}));
+ const upload=(e:React.ChangeEvent<HTMLInputElement>)=>{
+  const file=e.target.files?.[0];if(!file)return;
+  if(!['image/png','image/jpeg'].includes(file.type)){setMessage('Only PNG or JPG logos are supported.');return}
+  if(file.size>450000){setMessage('Please choose a logo smaller than 450 KB.');return}
+  const reader=new FileReader();reader.onload=()=>{set('logo',String(reader.result||''));setMessage('Logo loaded. Save the profile to apply it.')};reader.readAsDataURL(file);
+ };
+ return <section className="card" style={{gridColumn:'1 / -1'}}>
+  <div className="card-head"><div><h3>Service Report Company Branding</h3><p>Customer reports use this company identity only. No SERVIX branding is printed.</p></div></div>
+  <div className="form-grid two">
+   <Field label="Company Name" required><input value={profile.name} onChange={e=>set('name',e.target.value)}/></Field>
+   <Field label="Contact Number"><input value={profile.phone} onChange={e=>set('phone',e.target.value)}/></Field>
+   <Field label="Email"><input value={profile.email} onChange={e=>set('email',e.target.value)}/></Field>
+   <Field label="Website"><input value={profile.website} onChange={e=>set('website',e.target.value)}/></Field>
+   <Field label="Company Address" wide><textarea value={profile.address} onChange={e=>set('address',e.target.value)}/></Field>
+   <Field label="Company Logo (PNG/JPG, max 450 KB)"><input type="file" accept="image/png,image/jpeg" onChange={upload}/></Field>
+   {profile.logo&&<div><img src={profile.logo} alt="Company logo preview" style={{maxWidth:150,maxHeight:90,objectFit:'contain'}}/><button className="secondary-button" onClick={()=>set('logo','')}>Remove Logo</button></div>}
+  </div>
+  <p style={{fontSize:12}}>This initial setting is stored locally in the current Windows app profile. Shared-database storage and export/restore integration will follow.</p>
+  <button className="primary-button" onClick={()=>{if(!profile.name.trim()){setMessage('Company name is required.');return}try{localStorage.setItem(reportProfileKey,JSON.stringify(profile));setMessage('Company report branding saved.')}catch{setMessage('Could not save profile. Try a smaller logo.')}}}>Save Company Branding</button>
+  {message&&<p role="status">{message}</p>}
+ </section>;
+}
 function SettingsView({data,onRefresh,onNavigate}:{data:DashboardData,onRefresh:()=>void,onNavigate:(m:ModuleKey)=>void}){
  const sync=data.sync;const [section,setSection]=React.useState('Accounts');
  const [showUser,setShowUser]=React.useState(false); const [showAbout,setShowAbout]=React.useState(false); const [showGoogle,setShowGoogle]=React.useState(false);
@@ -10,8 +40,8 @@ function SettingsView({data,onRefresh,onNavigate}:{data:DashboardData,onRefresh:
  const setG=(k:keyof GoogleSyncConfigDraft,v:any)=>setGoogleDraft(d=>d?({...d,[k]:v}):d);
  const saveGoogle=async()=>{if(!googleDraft)return;setBusy(true);setError('');try{const cfg=await ServixApi.saveGoogleSyncConfig(googleDraft);setGoogle(cfg);setGoogleDraft({...cfg,serviceAccountJson:'',clearCredentials:false});await onRefresh();setSyncMessage(cfg.serviceAccountConfigured?'Google intake configuration saved.':'Source mapping saved. Add service-account JSON to enable live sync.')}catch(e:any){setError(e?.message||String(e))}finally{setBusy(false)}};
  const testGoogle=async()=>{if(!googleDraft)return;setBusy(true);setError('');setSyncMessage('');try{const cfg=await ServixApi.saveGoogleSyncConfig(googleDraft);setGoogle(cfg);setGoogleDraft({...cfg,serviceAccountJson:'',clearCredentials:false});if(!cfg.serviceAccountConfigured)throw new Error('Add the service-account JSON before testing live sync.');const s=await ServixApi.syncGoogleForm();setSyncMessage(s.message);await onRefresh()}catch(e:any){setError(e?.message||String(e))}finally{setBusy(false)}};
- return <div className="module-content compact-admin settings-workspace"><PageHeader title="Users & Settings" subtitle="Administrator-only configuration and reference data"/><div className="report-tabs">{['Accounts','Display & Numbering','Connections','Application'].map(t=><button key={t} className={section===t?'active':''} onClick={()=>setSection(t)}>{t}</button>)}</div><div className={'settings-grid admin-compact-grid settings-section-'+section.split(' ')[0].toLowerCase()}>{section==='Display & Numbering'&&<><DisplayPreferences/><SequenceSettings/></>}{section==='Accounts'&&<AccountMaintenance users={data.users} onRefresh={onRefresh}/>}
-  {section==='Connections'&&<section className="card google-setting-card"><div className="card-head"><div><h3>Google Form Intake</h3><p>Read-only Google Sheet sync into the Incoming Requests review queue.</p></div><StatusBadge value={sync.configured?'Configured':'Not configured'}/></div><div className="setting-status"><span>Last successful sync</span><strong>{sync.lastSuccessfulSync||'—'}</strong></div><div className="setting-status"><span>New requests waiting</span><strong>{sync.newCount}</strong></div><button className="secondary-button" disabled={busy} onClick={openGoogle}><Icon name="settings" size={14}/> Configure Google Intake</button></section>}
+ return <div className="module-content compact-admin settings-workspace"><PageHeader title="Users & Settings" subtitle="Administrator-only configuration and reference data"/><div className="report-tabs">{['Accounts','Display & Numbering','Report Branding','Connections','Application'].map(t=><button key={t} className={section===t?'active':''} onClick={()=>setSection(t)}>{t}</button>)}</div><div className={'settings-grid admin-compact-grid settings-section-'+section.split(' ')[0].toLowerCase()}>{section==='Display & Numbering'&&<><DisplayPreferences/><SequenceSettings/></>}{section==='Accounts'&&<AccountMaintenance users={data.users} onRefresh={onRefresh}/>}
+  {section==='Report Branding'&&<CompanyReportBranding/>}{section==='Connections'&&<section className="card google-setting-card"><div className="card-head"><div><h3>Google Form Intake</h3><p>Read-only Google Sheet sync into the Incoming Requests review queue.</p></div><StatusBadge value={sync.configured?'Configured':'Not configured'}/></div><div className="setting-status"><span>Last successful sync</span><strong>{sync.lastSuccessfulSync||'—'}</strong></div><div className="setting-status"><span>New requests waiting</span><strong>{sync.newCount}</strong></div><button className="secondary-button" disabled={busy} onClick={openGoogle}><Icon name="settings" size={14}/> Configure Google Intake</button></section>}
   {section==='Accounts'&&<section className="card users-card"><div className="card-head"><div><h3>Users & Roles</h3><p>Create named accounts with appropriate access.</p></div><button className="secondary-button" onClick={()=>setShowUser(true)}><Icon name="plus"/> Add User</button></div><div className="settings-role-guide">{[{role:'Administrator',detail:'Configuration, users, imports and recovery'},{role:'Office User',detail:'Service entry, notes and record updates'},{role:'Read Only',detail:'View records, histories and reports'}].map(r=><div key={r.role}><StatusBadge value={r.role}/><p>{r.detail}</p></div>)}</div><div className="setting-status"><span>Active accounts</span><strong>{data.users.filter(u=>u.active).length} / {data.users.length}</strong></div></section>}
   {section==='Application'&&<section className="card"><h3>Backup & Data</h3><p>Backups are separate from exports and include the database plus linked attachments.</p><button className="secondary-button" onClick={()=>onNavigate('data')}>Open Data Management</button></section>}
   {section==='Application'&&<section className="card"><h3>About SERVIX</h3><p>Application information is kept here so it is available when required without occupying the everyday workspace.</p><div className="setting-status"><span>Publisher</span><strong>Yogesh Gaurav</strong></div><div className="setting-status"><span>Application</span><strong>SERVIX</strong></div><button className="secondary-button" onClick={()=>setShowAbout(true)}>Application Information</button></section>}
