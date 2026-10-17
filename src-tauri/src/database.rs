@@ -185,7 +185,7 @@ pub fn initialise(conn: &mut Connection) -> Result<(), String> {
     // Add optional postal details to existing installations without resetting client records.
     let has_address: bool = conn.prepare("PRAGMA table_info(clients)").map_err(db_err)?
         .query_map([], |r| r.get::<_, String>(1)).map_err(db_err)?
-        .any(|col| col.as_deref() == Ok("address"));
+        .any(|col| col.map(|value| value == "address").unwrap_or(false));
     if !has_address {
         conn.execute("ALTER TABLE clients ADD COLUMN address TEXT NOT NULL DEFAULT ''", []).map_err(db_err)?;
     }
