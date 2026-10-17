@@ -1271,3 +1271,25 @@ pub fn load_qa_mock_data(state: State<'_, AppState>) -> Result<String, String> {
 
     Ok("QA test data loaded: repeat clients/equipment, duplicate mobile/email, duplicate serial, open/closed calls, Warranty/AMC/out-of-coverage, parts, payments, notes and intake cases.".into())
 }
+
+#[tauri::command]
+pub fn get_company_report_profile(state: State<'_, AppState>) -> Result<String, String> {
+    require_user(&state)?;
+    let db=state.db.lock().map_err(|_|"Database lock failed".to_string())?;
+    Ok(setting(&db,"company_report_profile_v1","{}"))
+}
+#[tauri::command]
+pub fn save_company_report_profile(state: State<'_, AppState>, profile: String) -> Result<(), String> {
+    require_admin(&state)?;
+    if profile.len()>800_000 {return Err("Company profile exceeds the 800 KB limit.".into())}
+    let parsed:serde_json::Value=serde_json::from_str(&profile).map_err(|_|"Invalid company profile JSON")?;
+    let name=parsed.get("name").and_then(|v|v.as_str()).unwrap_or("").trim();
+    if name.is_empty() || name.len()>200 {return Err("Enter a company name under 200 characters.".into())}
+    for key in ["address","phone","email","website","logo"] {
+        if !parsed.get(key).map_or(true,|v|v.is_string()){return Err(format!("Invalid company profile field: {key}"))}
+    }
+    let logo=parsed.get("logo").and_then(|v|v.as_str()).unwrap_or("");
+    if !logo.is_empty() && !(logo.starts_with("data:image/png;base64,")||logo.starts_with("data:image/jpeg;base64,")){return Err("Company logo must be PNG or JPEG.".into())}
+    let db=state.db.lock().map_err(|_|"Database lock failed".to_string())?;
+    upsert_setting(&db,"company_report_profile_v1",&profile,&Local::now().format("%Y-%m-%d %H:%M:%S").to_string())
+}
