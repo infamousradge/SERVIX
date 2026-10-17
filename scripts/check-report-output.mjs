@@ -38,3 +38,17 @@ console.log('Report checks passed: all tabs, empty results, stable grouping IDs,
 
 vm.runInContext(ts.transpile(readFileSync(new URL('../src/features/reports.tsx',import.meta.url),'utf8'),{target:ts.ScriptTarget.ES2019,jsx:ts.JsxEmit.React}),context);
 assert.ok(context.reportFilterKeys('Parts Usage').includes('make'));assert.ok(!context.reportFilterKeys('Parts Usage').includes('payment'));assert.ok(context.reportFilterKeys('Commercial').includes('payment'));assert.ok(!context.reportFilterKeys('Commercial').includes('make'));const switched=context.reportQueryForTab('Parts Usage',{...context.newServiceQuery(),status:'Pending',payment:'Pending',from:'2026-09-01',client:'1'});assert.equal(switched.status,'All');assert.equal(switched.payment,'All');assert.equal(switched.from,'2026-09-01');assert.equal(switched.client,'1');console.log('Report-specific filter sets and drilldown scope cleanup passed.');
+
+const reportFunction=source.slice(source.indexOf('async function printServiceDocument('));
+assert.ok(reportFunction.includes("getCompanyReportProfile()"),'Customer report must use configured company letterhead');
+assert.ok(reportFunction.includes("sr-profiles"),'Customer and equipment panels must be present');
+assert.ok(reportFunction.includes("sr-status-tiles"),'Coverage and payment status must be present');
+assert.ok(reportFunction.indexOf("sheet.appendChild(details)")<reportFunction.indexOf("sheet.appendChild(coverage)"),'Coverage/payment must appear below customer and equipment panels');
+assert.ok(reportFunction.indexOf("sheet.appendChild(coverage)")<reportFunction.indexOf("sheet.appendChild(services)"),'Technical service narrative must follow coverage');
+assert.ok(reportFunction.includes("Prepared By"),'Digital report must include prepared-by');
+assert.ok(!/Customer Acknowledgement|Checked \/ Approved By|Approved By:/.test(reportFunction),'Digital service report must not request acknowledgement or approval');
+assert.ok(!/SERVIX|servix-logo|servix-sidebar-logo/.test(reportFunction),'Customer report must not show software branding');
+const stylesheet=readFileSync(new URL('../src/refinements.css',import.meta.url),'utf8');
+assert.ok(stylesheet.includes('.service-document .sr-facts'),'A4 service report layout must be present');
+assert.ok(stylesheet.includes('grid-template-columns:repeat(6'),'Six-field report summary must remain compact');
+console.log('Approved single-page report layout, ordering and branding safeguards passed.');
