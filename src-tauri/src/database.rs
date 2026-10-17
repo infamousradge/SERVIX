@@ -182,6 +182,14 @@ pub fn initialise(conn: &mut Connection) -> Result<(), String> {
     )
     .map_err(db_err)?;
 
+    // Add CMC expiry while preserving existing equipment, IDs and service history.
+    let has_cmc: bool = conn.prepare("PRAGMA table_info(equipment)").map_err(db_err)?
+        .query_map([], |r| r.get::<_, String>(1)).map_err(db_err)?
+        .any(|col| col.map(|value| value == "cmc_until").unwrap_or(false));
+    if !has_cmc {
+        conn.execute("ALTER TABLE equipment ADD COLUMN cmc_until TEXT NOT NULL DEFAULT ''", []).map_err(db_err)?;
+    }
+
     // Add optional postal details to existing installations without resetting client records.
     let has_address: bool = conn.prepare("PRAGMA table_info(clients)").map_err(db_err)?
         .query_map([], |r| r.get::<_, String>(1)).map_err(db_err)?
