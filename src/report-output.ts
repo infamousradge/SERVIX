@@ -38,13 +38,13 @@ function printReportTable(title:string,table:ReportTable,meta:string[]){
  const body=document.createElement('tbody');table.rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>{const td=document.createElement('td');td.textContent=String(value??'');tr.appendChild(td)});body.appendChild(tr)});grid.appendChild(body);sheet.appendChild(grid);document.body.appendChild(sheet);
  const cleanup=()=>sheet.remove();window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),80);
 }
-function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibration?:CalibrationRecord,preparedBy?:string,equipmentRecord?:EquipmentRecord){
+async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibration?:CalibrationRecord,preparedBy?:string,equipmentRecord?:EquipmentRecord){
  document.querySelector('.servix-print-sheet')?.remove();
  const sheet=document.createElement('section');sheet.className='servix-print-sheet service-document';
  const el=(tag:string,value:string,className='')=>{const e=document.createElement(tag);e.textContent=value;if(className)e.className=className;return e};
  const addLine=(parent:HTMLElement,label:string,value:any)=>{const row=document.createElement('p');const key=el('strong',label+': ');row.append(key,document.createTextNode(String(value===undefined||value===null||value===''?'Not recorded':value)));parent.appendChild(row)};
  const block=(title:string,lines:string[])=>{const b=document.createElement('section');b.className='print-info-block';b.appendChild(el('h2',title));lines.filter(Boolean).forEach(s=>b.appendChild(el('p',s)));return b};
- const profile=getCompanyReportProfile();
+ const profile=await ServixApi.getCompanyReportProfile();
  const head=document.createElement('header');
  if(profile.logo){const companyLogo=document.createElement('img');companyLogo.src=profile.logo;companyLogo.alt='Company Logo';companyLogo.style.cssText='max-height:65px;max-width:180px;object-fit:contain;display:block;margin:0 0 6px';head.appendChild(companyLogo)}
  head.append(el('p',profile.name,'company-letterhead'),el('h1','SERVICE REPORT'),el('p','Technical Service & Maintenance'));
