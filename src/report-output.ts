@@ -47,9 +47,11 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  const head=document.createElement('header');head.className='sr-letterhead';
  if(profile.logo){const img=document.createElement('img');img.src=profile.logo;img.alt='Company logo';img.className='sr-logo';head.appendChild(img)}
  const identity=document.createElement('div');identity.className='sr-company';
- identity.appendChild(el('strong',profile.name||'Company Name'));
- if(profile.address)identity.appendChild(el('p',profile.address));
- const contacts=[profile.phone,profile.email,profile.website].filter(Boolean).join('  |  ');if(contacts)identity.appendChild(el('p',contacts));
+ identity.appendChild(el('h2',profile.name||'Company Name','sr-company-name'));
+ if(profile.address){const address=el('p',profile.address,'sr-company-address');identity.appendChild(address)}
+ const contactDetails=document.createElement('div');contactDetails.className='sr-contact-details';
+ for(const [label,value] of [['Mobile',profile.phone],['Email',profile.email],['Website',profile.website]] as [string,string][]){if(!value)continue;const line=document.createElement('p');line.append(el('strong',label+': '),document.createTextNode(value));contactDetails.appendChild(line)}
+ identity.appendChild(contactDetails);
  head.appendChild(identity);sheet.appendChild(head);
  const title=document.createElement('div');title.className='sr-title';title.append(el('h1','SERVICE REPORT'),el('p','TECHNICAL SERVICE & MAINTENANCE'));sheet.appendChild(title);
  const facts=document.createElement('section');facts.className='sr-facts';
