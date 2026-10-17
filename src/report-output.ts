@@ -39,10 +39,54 @@ function printReportTable(title:string,table:ReportTable,meta:string[]){
  const cleanup=()=>sheet.remove();window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),80);
 }
 function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibration?:CalibrationRecord){
- document.querySelector('.servix-print-sheet')?.remove();const sheet=document.createElement('section');sheet.className='servix-print-sheet service-document';const el=(tag:string,text:string,className='')=>{const e=document.createElement(tag);e.textContent=text;if(className)e.className=className;return e};const head=document.createElement('header');head.append(el('p','HAC ACOUSTIC TECHNOLOGIES','company-letterhead'),el('h1','Service Report'),el('p',d.serviceId+' • '+d.status));sheet.appendChild(head);
- const meta=document.createElement('div');meta.className='servix-print-meta';['Opened: '+d.openedDate,'Completed: '+(d.completionDate||'Not completed'),'Engineer: '+(d.engineer||'Unassigned'),'Generated: '+new Date().toLocaleString()].forEach(s=>meta.appendChild(el('span',s)));sheet.appendChild(meta);
- const profiles=document.createElement('div');profiles.className='print-profile-grid';const block=(title:string,lines:string[])=>{const b=document.createElement('section');b.className='print-info-block';b.appendChild(el('h2',title));lines.filter(Boolean).forEach(s=>b.appendChild(el('p',s)));return b};profiles.append(block('Customer',[d.client,client?.contact||'',client?.mobile||'',client?.email||'',[client?.city,client?.state].filter(Boolean).join(', ')]),block('Equipment',[d.equipment,[d.make,d.model].filter(Boolean).join(' '),'Serial number: '+(d.serialNumber||'Not recorded'),'Service reason: '+d.reason,'Coverage at service: '+d.coverage]));sheet.appendChild(profiles);
- for(const [title,content] of [['Complaint / Requirement',d.complaint],['Inspection / Diagnosis',d.diagnosis],['Work Performed',d.workPerformed],['Testing / Verification',d.testingVerification],['Final Result',d.finalResult],['Recommendations / Follow-up',d.recommendations]]){if(content){const b=block(title,[content]);b.classList.add('print-narrative');sheet.appendChild(b)}}if(calibration)sheet.appendChild(block('Calibration',['Calibration status: '+calibrationStatus(calibration),'Certificate / Reference: '+calibration.certificate,'Calibration date: '+calibration.calibrationDate,'Result: '+calibration.result,'Next due: '+(calibration.nextDue||'Not recorded'),calibration.notes]));
+ document.querySelector('.servix-print-sheet')?.remove();
+ const sheet=document.createElement('section');sheet.className='servix-print-sheet service-document';
+ const el=(tag:string,value:string,className='')=>{const e=document.createElement(tag);e.textContent=value;if(className)e.className=className;return e};
+ const addLine=(parent:HTMLElement,label:string,value:any)=>{const row=document.createElement('p');const key=el('strong',label+': ');row.append(key,document.createTextNode(String(value===undefined||value===null||value===''?'Not recorded':value)));parent.appendChild(row)};
+ const block=(title:string,lines:string[])=>{const b=document.createElement('section');b.className='print-info-block';b.appendChild(el('h2',title));lines.filter(Boolean).forEach(s=>b.appendChild(el('p',s)));return b};
+ const head=document.createElement('header');
+ head.append(el('p','HAC ACOUSTIC TECHNOLOGIES','company-letterhead'),el('h1','SERVICE REPORT'),el('p','Technical Service & Maintenance'));
+ sheet.appendChild(head);
+ const summary=document.createElement('section');summary.className='print-info-block';
+ summary.appendChild(el('h2','Service Report Details'));
+ addLine(summary,'Service Request Number / Service ID',d.serviceId);
+ addLine(summary,'Date Received / Reported',d.openedDate);
+ addLine(summary,'Date Completed',d.completionDate||'Not completed');
+ addLine(summary,'Report Generated',new Date().toLocaleString());
+ addLine(summary,'Service Status',d.status);
+ addLine(summary,'Assigned Engineer',d.engineer||'Unassigned');
+ addLine(summary,'Service Type / Reason',d.reason);
+ addLine(summary,'Service Location',d.serviceLocation);
+ if(d.statusReason)addLine(summary,'Status / Pending Remarks',d.statusReason);
+ sheet.appendChild(summary);
+ const commercial=document.createElement('section');commercial.className='print-info-block';
+ commercial.appendChild(el('h2','Coverage & Payment Status'));
+ addLine(commercial,'Warranty / AMC Coverage',d.coverage);
+ addLine(commercial,'AMC / CMC Status',d.coverage==='AMC'?'Covered under AMC (verify agreement validity)':'Not recorded / Not applicable');
+ addLine(commercial,'FOC',d.foc?'Yes':'No');
+ addLine(commercial,'Quotation Status',d.quoteStatus);
+ addLine(commercial,'Payment Status',d.paymentStatus||'Not recorded');
+ sheet.appendChild(commercial);
+ const profiles=document.createElement('div');profiles.className='print-profile-grid';
+ profiles.append(
+  block('Customer Information',[d.client,client?.contact?'Contact: '+client.contact:'',client?.mobile?'Mobile: '+client.mobile:'',client?.email?'Email: '+client.email:'',[client?.city,client?.state].filter(Boolean).join(', ')]),
+  block('Device / Equipment Information',[d.equipment,'Make: '+(d.make||'Not recorded'),'Model: '+(d.model||'Not recorded'),'Serial number: '+(d.serialNumber||'Not recorded'),'Service reason: '+d.reason])
+ );
+ sheet.appendChild(profiles);
+ for(const [title,value] of [
+  ['01 — Issue Reported / Customer Complaint',d.complaint],
+  ['02 — Technical Observation / Diagnosis',d.diagnosis],
+  ['03 — Work Performed / Resolution',d.workPerformed],
+  ['04 — Final Testing / Verification',d.testingVerification],
+  ['05 — Final Outcome / Result',d.finalResult],
+  ['06 — Recommendations / Pending Work',d.recommendations]
+ ] as [string,string][]){
+  const section=block(title,[value||'Not recorded']);section.classList.add('print-narrative');sheet.appendChild(section);
+ }
+ if(calibration)sheet.appendChild(block('Calibration Details',['Calibration status: '+calibrationStatus(calibration),'Certificate / Reference: '+(calibration.certificate||'Not recorded'),'Calibration date: '+(calibration.calibrationDate||'Not recorded'),'Result: '+(calibration.result||'Not recorded'),'Next due: '+(calibration.nextDue||'Not recorded'),calibration.notes||'']));
  if(d.parts.length){const section=document.createElement('section');section.appendChild(el('h2','Parts / Items Used'));const table=document.createElement('table');const thead=document.createElement('thead');const hr=document.createElement('tr');['Part / Item','Make / Model','Reference','Quantity','Remarks'].forEach(v=>hr.appendChild(el('th',v)));thead.appendChild(hr);table.appendChild(thead);const tbody=document.createElement('tbody');d.parts.forEach(p=>{const row=document.createElement('tr');[p.itemName,[p.make,p.model].filter(Boolean).join(' '),p.partNumber,String(p.quantity),p.remarks].forEach(v=>row.appendChild(el('td',v||'—')));tbody.appendChild(row)});table.appendChild(tbody);section.appendChild(table);sheet.appendChild(section)}
- const footer=document.createElement('footer');footer.className='print-signatures';footer.append(el('div','Prepared / verified by: ____________________'),el('div','Customer acknowledgement: ____________________'));sheet.appendChild(footer);document.body.appendChild(sheet);window.addEventListener('afterprint',()=>sheet.remove(),{once:true});setTimeout(()=>window.print(),80);
+ const footer=document.createElement('footer');footer.className='print-signatures';
+ footer.append(el('div','Prepared By: ____________________'),el('div','Checked / Approved By: ____________________'),el('div','Customer Acknowledgement (if applicable): ____________________'));
+ sheet.appendChild(footer);
+ document.body.appendChild(sheet);window.addEventListener('afterprint',()=>sheet.remove(),{once:true});setTimeout(()=>window.print(),80);
 }
