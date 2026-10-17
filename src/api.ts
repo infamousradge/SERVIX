@@ -17,6 +17,14 @@ function mockDetail(id:number):ServiceDetail{
 }
 
 const ServixApi = {
+  async getCompanyReportProfile():Promise<CompanyReportProfile>{
+    if(isDesktop){const raw=await invokeNative<string>('get_company_report_profile');return {...defaultCompanyReportProfile,...JSON.parse(raw||'{}')}}
+    return getCompanyReportProfile();
+  },
+  async saveCompanyReportProfile(profile:CompanyReportProfile):Promise<void>{
+    if(isDesktop){await invokeNative('save_company_report_profile',{profile:JSON.stringify(profile)});return}
+    localStorage.setItem(reportProfileKey,JSON.stringify(profile));
+  },
   async systemStatus():Promise<SystemStatus>{
     if(isDesktop) return invokeNative<SystemStatus>('system_status');
     return {initialized:true,appVersion:'0.1.0-preview',databasePath:'Browser preview'};
