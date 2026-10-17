@@ -318,3 +318,21 @@ button,input,select,textarea{font-family:var(--font-ui)}
 .document-row:hover{background:#f0f6fd}
 .attachment-preview{margin-top:0.875rem}.attachment-preview img{max-width:100%;max-height:27.5rem;object-fit:contain}
 .attachment-preview iframe{width:100%;height:27.5rem;border:0;background:#f5f7fa}
+
+
+/* Customer-facing A4 service report; deliberately excludes software branding. */
+@media print {
+ .service-document{font-size:9pt;line-height:1.42;overflow-wrap:anywhere}
+ .service-document header{display:block;min-height:0}
+ .service-document .company-letterhead{font-weight:800;color:#17314f;font-size:12pt;letter-spacing:.02em}
+ .service-document>section.print-info-block{margin:.3rem 0 .55rem}
+ .service-document .print-info-block{break-inside:avoid-page;page-break-inside:avoid;background:white}
+ .service-document .print-info-block h2,.service-document>section>h2{font-size:10pt;color:#17314f;font-weight:800;border-bottom:1px solid #cbd5e1;padding-bottom:3px;margin:.6rem 0 .3rem}
+ .service-document .print-info-block p{margin:.15rem 0;font-size:8.5pt;white-space:pre-wrap}
+ .service-document .print-profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:12mm;margin:.6rem 0;align-items:start}
+ .service-document .print-narrative{break-inside:avoid-page;page-break-inside:avoid;margin:.45rem 0}
+ .service-document .print-narrative p{min-height:1.3em}
+ .service-document .print-signatures{display:grid;grid-template-columns:1fr 1fr;gap:10mm;margin-top:14mm;font-size:9pt;break-inside:avoid-page}
+ .service-document .print-signatures>div{padding-top:5mm;border-top:1px solid #9ca3af}
+ .service-document table th,.service-document table td{width:auto!important}
+}
