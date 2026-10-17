@@ -448,7 +448,7 @@ fn list_intake(db: &Connection) -> Result<Vec<IntakeItem>, String> {
 
 fn list_clients(db: &Connection) -> Result<Vec<ClientRecord>, String> {
     let mut stmt = db
-        .prepare("SELECT c.id,c.code,c.name,c.contact,c.mobile,c.email,c.city,c.state,c.active,(SELECT COUNT(*) FROM service_calls sc WHERE sc.client_id=c.id),(SELECT COUNT(*) FROM equipment e WHERE e.client_id=c.id) FROM clients c ORDER BY c.name")
+        .prepare("SELECT c.id,c.code,c.name,c.contact,c.mobile,c.email,c.address,c.city,c.state,c.active,(SELECT COUNT(*) FROM service_calls sc WHERE sc.client_id=c.id),(SELECT COUNT(*) FROM equipment e WHERE e.client_id=c.id) FROM clients c ORDER BY c.name")
         .map_err(db_err)?;
     let rows = stmt
         .query_map([], |r| {
@@ -459,11 +459,12 @@ fn list_clients(db: &Connection) -> Result<Vec<ClientRecord>, String> {
                 contact: r.get(3)?,
                 mobile: r.get(4)?,
                 email: r.get(5)?,
-                city: r.get(6)?,
-                state: r.get(7)?,
-                active: r.get::<_, i64>(8)? != 0,
-                service_count: r.get(9)?,
-                equipment_count: r.get(10)?,
+                address: r.get(6)?,
+                city: r.get(7)?,
+                state: r.get(8)?,
+                active: r.get::<_, i64>(9)? != 0,
+                service_count: r.get(10)?,
+                equipment_count: r.get(11)?,
             })
         })
         .map_err(db_err)?;
