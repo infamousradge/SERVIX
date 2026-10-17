@@ -1,66 +1,35 @@
-name: Build SERVIX Windows App
-
+name: Build SERVIX V2 Windows Installer
 on:
   push:
-    branches: [ main, feature/service-workflow-v2 ]
+    branches: [servix-rebuild-v2]
   workflow_dispatch:
-
 jobs:
-  build-windows:
+  windows-installer:
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
-
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
       - name: Install dependencies
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-
-      - name: Build SERVIX EXE
-        shell: pwsh
-        run: |
-          pyinstaller --noconfirm --clean --windowed --name SERVIX app.py
-
-      - name: Smoke test packaged SERVIX startup
-        shell: pwsh
-        run: |
-          $p = Start-Process -FilePath ".\\dist\\SERVIX\\SERVIX.exe" -PassThru
-          Start-Sleep -Seconds 10
-          if ($p.HasExited) { throw "SERVIX exited during startup smoke test with code $($p.ExitCode)" }
-          Stop-Process -Id $p.Id -Force
-
-      - name: Build professional Windows installer
-        shell: pwsh
-        run: |
-          choco install innosetup --no-progress -y
-          & "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" installer\\SERVIX.iss
-
-      - name: Package Windows build
-        shell: pwsh
-        run: |
-          Compress-Archive -Path dist\SERVIX\* -DestinationPath SERVIX-Windows.zip -Force
-
-      - name: Upload SERVIX Setup
+        run: npm ci
+      - name: TypeScript frontend build
+        run: npm run frontend:build
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Generate branded icons and Windows NSIS installer
+        run: npm run desktop:build
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: SERVIX-Setup
-          path: installer-output/SERVIX-Setup.exe
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Upload Windows app
-        uses: actions/upload-artifact@v4
-        with:
-          name: SERVIX-Windows
-          path: SERVIX-Windows.zip
+          name: SERVIX-V2-Windows-Setup
+          path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 30
