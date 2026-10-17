@@ -65,7 +65,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  const coverage=document.createElement('section');coverage.className='sr-coverage';coverage.appendChild(el('h2','Service & Payment Status'));
  const tiles=document.createElement('div');tiles.className='sr-status-tiles';
  const warranty=d.coverage==='Warranty'?'Under Warranty':d.coverage==='Out of Coverage'?'Out of Warranty':'Not recorded';
- for(const [label,value] of [['Warranty',warranty],['AMC',d.coverage==='AMC'?'Active / Covered':'Not recorded'],['CMC','Not recorded'],['Payment',d.paymentStatus||'Not recorded']] as [string,string][])tiles.appendChild(field(label,value));
+ for(const [label,value] of [['Warranty',warranty],['AMC',d.coverage==='AMC'?'Active / Covered':'Not recorded'],['CMC',d.coverage==='CMC'?'Active / Covered':'Not recorded'],['Payment',d.paymentStatus||'Not recorded']] as [string,string][])tiles.appendChild(field(label,value));
  coverage.appendChild(tiles);sheet.appendChild(coverage);
  const services=document.createElement('section');services.className='sr-services';services.appendChild(el('h2','Service Details'));
  const entries:[string,string][]=[
