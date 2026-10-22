@@ -26,7 +26,8 @@ const iconPaths:Record<string,string[]>={
   flag:['M5 21V4','M5 5h11l-2 4 2 4H5'],
   calendar:['M4 5h16v16H4z','M8 3v4','M16 3v4','M4 10h16'],
   tag:['M20 13l-7 7-9-9V4h7z','M8.5 8.5h.01'],
-  user:['M20 21a8 8 0 0 0-16 0','M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z']
+  user:['M20 21a8 8 0 0 0-16 0','M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z'],
+  info:['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z','M12 10v6','M12 7h.01']
 };
 function Icon({name,size=18,className=''}:{name:string,size?:number,className?:string}){
   return <svg className={`icon ${className}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{(iconPaths[name]||iconPaths.service).map((d,i)=><path key={i} d={d}/>)}</svg>;
