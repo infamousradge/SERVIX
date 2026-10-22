@@ -34,7 +34,7 @@ type IntakeItem = {
 };
 type IntakeReviewDraft = { id:number; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string; serialNumber:string; complaint:string };
 type ClientRecord = { id:number; code:string; name:string; contact:string; mobile:string; email:string; address?:string; city:string; state:string; active:boolean; serviceCount:number; equipmentCount:number };
-type EquipmentRecord = { id:number; servixEquipmentId:string; clientId?:number|null; client:string; make:string; model:string; serialNumber:string; type:string; location:string; coverage:string; serviceCount:number; lastService:string; warrantyUntil?:string; amcUntil?:string; active?:boolean };
+type EquipmentRecord = { id:number; servixEquipmentId:string; clientId?:number|null; client:string; make:string; model:string; serialNumber:string; type:string; location:string; coverage:string; serviceCount:number; lastService:string; warrantyUntil?:string; amcUntil?:string; cmcUntil?:string; active?:boolean };
 type PartUsage = { id:number; date:string; serviceId:string; client:string; equipment:string; itemName:string; make:string; model:string; partNumber:string; quantity:number; remarks:string };
 type GoogleSyncConfig = { sheetId:string; sheetName:string; serviceAccountConfigured:boolean; serviceAccountEmail:string; timestampHeader:string; clientHeader:string; contactHeader:string; mobileHeader:string; emailHeader:string; equipmentHeader:string; makeHeader:string; modelHeader:string; serialHeader:string; reasonHeader:string; complaintHeader:string };
 type GoogleSyncConfigDraft = Omit<GoogleSyncConfig,'serviceAccountConfigured'|'serviceAccountEmail'> & { serviceAccountJson:string; clearCredentials:boolean };
