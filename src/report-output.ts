@@ -102,9 +102,20 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
     ['5. Recommendations / Remarks',[d.recommendations,d.statusReason].filter(Boolean).join(' — ')]
    ];
  for(const [label,value] of entries){const block=document.createElement('div');block.className='sr-narrative';block.append(el('h3',label),el('p',value||'Not recorded'));services.appendChild(block)}
- if(mode==='internal'&&d.parts.length){const parts=document.createElement('div');parts.className='sr-extra';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' ('+p.quantity+')').join(', ')));services.appendChild(parts)}
+ if(mode==='internal'&&d.parts.length){const parts=document.createElement('div');parts.className='sr-extra';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' ('+p.quantity+')'+(p.partNumber?' • '+p.partNumber:'')).join(', ')));services.appendChild(parts)}
  if(calibration){const cal=document.createElement('div');cal.className='sr-extra';cal.textContent='Calibration: '+calibrationStatus(calibration)+(calibration.certificate?' | Ref: '+calibration.certificate:'')+(calibration.nextDue?' | Next Due: '+calibration.nextDue:'');services.appendChild(cal)}
  sheet.appendChild(services);
+ if(mode==='internal'){
+  const office=document.createElement('section');office.className='sr-services internal-office-record';office.appendChild(el('h2','Office / Workflow Record'));
+  const officeGrid=document.createElement('div');officeGrid.className='sr-status-tiles';
+  for(const [label,value] of [['Engineer',d.engineer||'Unassigned'],['Priority',d.priority],['Service Location',d.serviceLocation],['Due Date',d.dueDate||'Not recorded'],['Follow-up Date',d.followUpDate||'Not recorded'],['Last Updated',d.updatedAt],['Received Condition',d.receivedCondition||'Not recorded'],['Attachments',d.attachmentCount]])officeGrid.appendChild(field(label,value));
+  office.appendChild(officeGrid);
+  if(d.receivedAccessories||d.receivedRemarks){const recv=document.createElement('div');recv.className='sr-extra';recv.appendChild(el('strong','Received Item Details: '));recv.appendChild(document.createTextNode([d.receivedAccessories,d.receivedRemarks].filter(Boolean).join(' — ')));office.appendChild(recv)}
+  sheet.appendChild(office);
+  const history=document.createElement('section');history.className='sr-services internal-history-record';history.appendChild(el('h2','Service Activity / Audit History'));
+  if(d.events.length){const table=document.createElement('table');table.className='internal-history-table';const thead=document.createElement('thead');const hr=document.createElement('tr');['Date & Time','Activity','Recorded By','Details'].forEach(v=>{const th=document.createElement('th');th.textContent=v;hr.appendChild(th)});thead.appendChild(hr);table.appendChild(thead);const tbody=document.createElement('tbody');d.events.forEach(ev=>{const tr=document.createElement('tr');const detail=[ev.note,(ev.oldValue||ev.newValue)?(ev.oldValue||'—')+' → '+(ev.newValue||'—'):''].filter(Boolean).join(' • ');[ev.createdAt,ev.eventType,ev.actor,detail||'Record activity'].forEach(v=>{const td=document.createElement('td');td.textContent=v||'—';tr.appendChild(td)});tbody.appendChild(tr)});table.appendChild(tbody);history.appendChild(table)}else history.appendChild(el('p','No activity history recorded.','quiet-empty'));
+  sheet.appendChild(history);
+ }
 
  const footer=document.createElement('footer');footer.className='sr-prepared';
  if(mode==='internal')footer.append(el('strong','Prepared By'),el('p',preparedBy||'Not recorded'),el('small','Report generated: '+new Date().toLocaleString()));
