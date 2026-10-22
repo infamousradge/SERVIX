@@ -5,3 +5,18 @@
 
 .user-list{margin-top:0.625rem}.user-row{display:grid;grid-template-columns:2.125rem minmax(0,1fr) auto auto;align-items:center;gap:0.625rem;padding:0.625rem 0;border-bottom:0.0625rem solid var(--line,#e7edf4)}.user-row:last-child{border-bottom:0}.user-row>span:nth-child(2){display:flex;flex-direction:column;gap:0.125rem}.user-row small{color:var(--muted,#718096)}
 .sync-warning-copy{display:flex;gap:0.75rem;align-items:flex-start;padding:0.5rem 0.125rem}.sync-warning-copy .icon{color:#d97706;margin-top:0.125rem}.sync-warning-copy p{margin:0;color:var(--muted);line-height:1.55}
+
+/* Premium sidebar icon polish */
+.sidebar nav button .icon{width:1.15rem;height:1.15rem;stroke-width:1.7;opacity:.92;filter:drop-shadow(0 .08rem .12rem rgba(0,0,0,.08));flex:0 0 auto}
+.sidebar nav button:hover .icon{opacity:1;transform:translateY(-.02rem)}
+.sidebar nav button.active .icon{opacity:1;filter:drop-shadow(0 .12rem .22rem rgba(0,0,0,.16))}
+
+/* Service report chooser */
+.report-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.report-choice-card{border:.0625rem solid #dbe4ef;border-radius:1rem;background:#fff;padding:1rem;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.85rem;text-align:left;min-height:6.5rem;color:#243247;transition:.16s ease}.report-choice-card:hover{border-color:#a9c4eb;box-shadow:0 .55rem 1.4rem rgba(30,72,120,.10);transform:translateY(-.05rem)}.report-choice-card.client{background:linear-gradient(180deg,#fbfefe,#f5fbfa)}.report-choice-icon{width:2.75rem;height:2.75rem;border-radius:.85rem;display:grid;place-items:center;background:#eef5ff;color:#2f70cf}.report-choice-card.client .report-choice-icon{background:#eaf8f5;color:#178d79}.report-choice-card strong,.report-choice-card small{display:block}.report-choice-card small{margin-top:.3rem;color:#6f7c8f;line-height:1.4}
+
+/* Analytics donut cards */
+.analytics-donut-layout{display:grid;grid-template-columns:minmax(10rem,13rem) 1fr;gap:1.2rem;align-items:center}.analytics-donut{aspect-ratio:1;border-radius:50%;padding:1.5rem;display:grid;place-items:center;box-shadow:inset 0 0 0 .0625rem rgba(25,55,90,.06)}.analytics-donut>div{width:58%;aspect-ratio:1;border-radius:50%;background:#fff;display:grid;place-items:center;text-align:center;box-shadow:0 .2rem .7rem rgba(20,45,80,.08)}.analytics-donut strong,.analytics-donut small{display:block}.analytics-donut strong{font-size:1.35rem}.analytics-donut small{font-size:.65rem;color:#7b8797}.analytics-donut-legend{display:grid;gap:.45rem}.analytics-donut-legend button{display:grid;grid-template-columns:.7rem 1fr auto;gap:.55rem;align-items:center;border:0;background:transparent;padding:.45rem .35rem;border-radius:.55rem;text-align:left;color:#344155}.analytics-donut-legend button:hover{background:#f5f8fc}.analytics-donut-legend button>i{width:.55rem;height:.55rem;border-radius:50%}.analytics-donut-legend strong{display:flex;gap:.5rem;align-items:baseline}.analytics-donut-legend strong small{font-size:.65rem;color:#8794a8}
+
+/* Client report is intentionally compact */
+.client-service-document .sr-title{margin-bottom:.55rem}.client-service-document .sr-facts{grid-template-columns:repeat(4,1fr)}.client-service-document .sr-narrative{padding:.5rem 0}.client-service-document .sr-services h2{margin-bottom:.35rem}.client-service-document .sr-prepared{margin-top:.7rem}
+@media(max-width:900px){.report-choice-grid,.analytics-donut-layout{grid-template-columns:1fr}.analytics-donut{max-width:13rem;margin:auto}}
