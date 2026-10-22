@@ -108,7 +108,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  if(mode==='internal'){
   const office=document.createElement('section');office.className='sr-services internal-office-record';office.appendChild(el('h2','Office / Workflow Record'));
   const officeGrid=document.createElement('div');officeGrid.className='sr-status-tiles';
-  for(const [label,value] of [['Engineer',d.engineer||'Unassigned'],['Priority',d.priority],['Service Location',d.serviceLocation],['Due Date',d.dueDate||'Not recorded'],['Follow-up Date',d.followUpDate||'Not recorded'],['Last Updated',d.updatedAt],['Received Condition',d.receivedCondition||'Not recorded'],['Attachments',d.attachmentCount]])officeGrid.appendChild(field(label,value));
+  for(const [label,value] of ([['Engineer',d.engineer||'Unassigned'],['Priority',d.priority],['Service Location',d.serviceLocation],['Due Date',d.dueDate||'Not recorded'],['Follow-up Date',d.followUpDate||'Not recorded'],['Last Updated',d.updatedAt],['Received Condition',d.receivedCondition||'Not recorded'],['Attachments',d.attachmentCount]] as [string,any][]))officeGrid.appendChild(field(label,value));
   office.appendChild(officeGrid);
   if(d.receivedAccessories||d.receivedRemarks){const recv=document.createElement('div');recv.className='sr-extra';recv.appendChild(el('strong','Received Item Details: '));recv.appendChild(document.createTextNode([d.receivedAccessories,d.receivedRemarks].filter(Boolean).join(' — ')));office.appendChild(recv)}
   sheet.appendChild(office);
