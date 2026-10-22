@@ -38,9 +38,9 @@ function printReportTable(title:string,table:ReportTable,meta:string[]){
  const body=document.createElement('tbody');table.rows.forEach(row=>{const tr=document.createElement('tr');row.forEach(value=>{const td=document.createElement('td');td.textContent=String(value??'');tr.appendChild(td)});body.appendChild(tr)});grid.appendChild(body);sheet.appendChild(grid);document.body.appendChild(sheet);
  const cleanup=()=>sheet.remove();window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),80);
 }
-async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibration?:CalibrationRecord,preparedBy?:string,equipmentRecord?:EquipmentRecord){
+async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibration?:CalibrationRecord,preparedBy?:string,equipmentRecord?:EquipmentRecord,mode:'internal'|'client'='internal'){
  document.querySelector('.servix-print-sheet')?.remove();
- const sheet=document.createElement('section');sheet.className='servix-print-sheet service-document';
+ const sheet=document.createElement('section');sheet.className='servix-print-sheet service-document '+(mode==='client'?'client-service-document':'internal-service-document');
  const el=(tag:string,text:string,className='')=>{const node=document.createElement(tag);node.textContent=text;if(className)node.className=className;return node};
  const field=(label:string,value:any)=>{const cell=document.createElement('div');cell.className='sr-field';cell.append(el('small',label),el('strong',String(value===undefined||value===null||value===''?'Not recorded':value)));return cell};
  const profile=await ServixApi.getCompanyReportProfile();
@@ -48,37 +48,67 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  if(profile.logo){const img=document.createElement('img');img.src=profile.logo;img.alt='Company logo';img.className='sr-logo';head.appendChild(img)}
  const identity=document.createElement('div');identity.className='sr-company';
  identity.appendChild(el('h2',profile.name||'Company Name','sr-company-name'));
- if(profile.address){const address=el('p',profile.address,'sr-company-address');identity.appendChild(address)}
+ if(profile.address)identity.appendChild(el('p',profile.address,'sr-company-address'));
  const contactDetails=document.createElement('div');contactDetails.className='sr-contact-details';
  for(const [label,value] of [['Mobile',profile.phone],['Email',profile.email],['Website',profile.website]] as [string,string][]){if(!value)continue;const line=document.createElement('p');line.append(el('strong',label+': '),document.createTextNode(value));contactDetails.appendChild(line)}
- identity.appendChild(contactDetails);
- head.appendChild(identity);sheet.appendChild(head);
- const title=document.createElement('div');title.className='sr-title';title.append(el('h1','SERVICE REPORT'),el('p','TECHNICAL SERVICE & MAINTENANCE'));sheet.appendChild(title);
+ identity.appendChild(contactDetails);head.appendChild(identity);sheet.appendChild(head);
+ const title=document.createElement('div');title.className='sr-title';title.append(el('h1',mode==='client'?'CLIENT SERVICE REPORT':'INTERNAL SERVICE REPORT'),el('p',mode==='client'?'SERVICE SUMMARY':'DETAILED TECHNICAL & OFFICE RECORD'));sheet.appendChild(title);
+
  const facts=document.createElement('section');facts.className='sr-facts';
- facts.append(field('Service Request No.',d.serviceId),field('Equipment ID',equipmentRecord?.servixEquipmentId||'Not recorded'),field('Date Received',d.openedDate),field('Date Completed',d.completionDate||'Not completed'),field('Report Generated',new Date().toLocaleString()),field('Status',d.status));sheet.appendChild(facts);
+ if(mode==='client'){
+  facts.append(field('Service Request No.',d.serviceId),field('Service Date',d.completionDate||d.openedDate),field('Status',d.status),field('Equipment ID',equipmentRecord?.servixEquipmentId||'Not recorded'));
+ }else{
+  facts.append(field('Service Request No.',d.serviceId),field('Equipment ID',equipmentRecord?.servixEquipmentId||'Not recorded'),field('Date Received',d.openedDate),field('Date Completed',d.completionDate||'Not completed'),field('Report Generated',new Date().toLocaleString()),field('Status',d.status));
+ }
+ sheet.appendChild(facts);
+
  const details=document.createElement('div');details.className='sr-profiles';
  const group=(title:string,rows:[string,any][])=>{const section=document.createElement('section');section.className='sr-panel';section.appendChild(el('h2',title));for(const [label,value] of rows){const row=document.createElement('div');row.className='sr-line';row.append(el('span',label),el('span',String(value||'Not recorded')));section.appendChild(row)}return section};
  details.append(
- group('Customer Information',[['Customer Name',d.client],['Contact Person',client?.contact],['Phone / Email',[client?.mobile,client?.email].filter(Boolean).join(' | ')],['Address',[client?.address,client?.city,client?.state].filter(Boolean).join(', ')]]),
- group('Equipment Information',[['Device Name',d.equipment],['Make / Model',[d.make,d.model].filter(Boolean).join(' / ')],['Serial Number',d.serialNumber],['Equipment ID',equipmentRecord?.servixEquipmentId],['Location',equipmentRecord?.location],['Service Type',d.reason]])
- );sheet.appendChild(details);
- const coverage=document.createElement('section');coverage.className='sr-coverage';coverage.appendChild(el('h2','Service & Payment Status'));
+  group('Customer Information',mode==='client'?[['Customer Name',d.client],['Contact Person',client?.contact]]:[['Customer Name',d.client],['Contact Person',client?.contact],['Phone / Email',[client?.mobile,client?.email].filter(Boolean).join(' | ')],['Address',[client?.address,client?.city,client?.state].filter(Boolean).join(', ')]]),
+  group('Equipment Information',[['Device Name',d.equipment],['Make / Model',[d.make,d.model].filter(Boolean).join(' / ')],['Serial Number',d.serialNumber],['Equipment ID',equipmentRecord?.servixEquipmentId],...(mode==='internal'?[['Location',equipmentRecord?.location],['Service Type',d.reason]] as [string,any][]):[]])
+ );
+ sheet.appendChild(details);
+
+ const coverage=document.createElement('section');coverage.className='sr-coverage';coverage.appendChild(el('h2',mode==='client'?'Coverage Information':'Service & Commercial Status'));
  const tiles=document.createElement('div');tiles.className='sr-status-tiles';
- const warranty=d.coverage==='Warranty'?'Under Warranty':d.coverage==='Out of Coverage'?'Out of Warranty':'Not recorded';
- for(const [label,value] of [['Warranty',warranty],['AMC',d.coverage==='AMC'?'Active / Covered':'Not recorded'],['CMC',d.coverage==='CMC'?'Active / Covered':'Not recorded'],['Payment',d.paymentStatus||'Not recorded']] as [string,string][])tiles.appendChild(field(label,value));
+ const today=new Date().toISOString().slice(0,10);
+ const warrantyUntil=equipmentRecord?.warrantyUntil||'';
+ const amcUntil=equipmentRecord?.amcUntil||'';
+ const cmcUntil=equipmentRecord?.cmcUntil||'';
+ const warrantyStatus=warrantyUntil?(warrantyUntil>=today?'Active till '+warrantyUntil:'Expired '+warrantyUntil):(d.coverage==='Warranty'?'Active / Covered':'Not recorded');
+ const amcStatus=amcUntil?(amcUntil>=today?'Active till '+amcUntil:'Expired '+amcUntil):(d.coverage==='AMC'?'Active / Covered':'Not recorded');
+ const cmcStatus=cmcUntil?(cmcUntil>=today?'Active till '+cmcUntil:'Expired '+cmcUntil):(d.coverage==='CMC'?'Active / Covered':'Not recorded');
+ const coverageRows:[string,string][]=mode==='client'
+  ?[['Current Coverage',d.coverage||'Not recorded'],['Warranty',warrantyStatus],['AMC',amcStatus],['CMC',cmcStatus]]
+  :[['Current Coverage',d.coverage||'Not recorded'],['Warranty',warrantyStatus],['AMC',amcStatus],['CMC',cmcStatus],['FOC',d.foc?'Yes':'No'],['Quote',d.quoteStatus||'Not recorded'],['Payment',d.paymentStatus||'Not recorded']];
+ for(const [label,value] of coverageRows)tiles.appendChild(field(label,value));
  coverage.appendChild(tiles);sheet.appendChild(coverage);
- const services=document.createElement('section');services.className='sr-services';services.appendChild(el('h2','Service Details'));
- const entries:[string,string][]=[
-  ['1. Issue Reported / Customer Complaint',d.complaint],
-  ['2. Technical Observation / Diagnosis',d.diagnosis],
-  ['3. Work Performed / Resolution',d.workPerformed],
-  ['4. Final Testing & Outcome',[d.testingVerification,d.finalResult].filter(Boolean).join(' — ')],
-  ['5. Recommendations / Remarks',[d.recommendations,d.statusReason].filter(Boolean).join(' — ')]
- ];
+
+ const services=document.createElement('section');services.className='sr-services';services.appendChild(el('h2',mode==='client'?'Service Summary':'Detailed Service Record'));
+ const entries:[string,string][]=mode==='client'
+  ?[
+    ['Issue Reported',d.complaint],
+    ['Inspection / Findings',d.diagnosis],
+    ['Work Carried Out',d.workPerformed],
+    ['Final Outcome',[d.testingVerification,d.finalResult].filter(Boolean).join(' — ')],
+    ...(d.recommendations?[['Recommendation',d.recommendations] as [string,string]]:[])
+   ]
+  :[
+    ['1. Issue Reported / Customer Complaint',d.complaint],
+    ['2. Technical Observation / Diagnosis',d.diagnosis],
+    ['3. Work Performed / Resolution',d.workPerformed],
+    ['4. Final Testing & Outcome',[d.testingVerification,d.finalResult].filter(Boolean).join(' — ')],
+    ['5. Recommendations / Remarks',[d.recommendations,d.statusReason].filter(Boolean).join(' — ')]
+   ];
  for(const [label,value] of entries){const block=document.createElement('div');block.className='sr-narrative';block.append(el('h3',label),el('p',value||'Not recorded'));services.appendChild(block)}
- if(d.parts.length){const parts=document.createElement('div');parts.className='sr-extra';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' ('+p.quantity+')').join(', ')));services.appendChild(parts)}
+ if(mode==='internal'&&d.parts.length){const parts=document.createElement('div');parts.className='sr-extra';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' ('+p.quantity+')').join(', ')));services.appendChild(parts)}
  if(calibration){const cal=document.createElement('div');cal.className='sr-extra';cal.textContent='Calibration: '+calibrationStatus(calibration)+(calibration.certificate?' | Ref: '+calibration.certificate:'')+(calibration.nextDue?' | Next Due: '+calibration.nextDue:'');services.appendChild(cal)}
  sheet.appendChild(services);
- const footer=document.createElement('footer');footer.className='sr-prepared';footer.append(el('strong','Prepared By'),el('p',preparedBy||'Not recorded'),el('small','Report generated: '+new Date().toLocaleString()));sheet.appendChild(footer);
+
+ const footer=document.createElement('footer');footer.className='sr-prepared';
+ if(mode==='internal')footer.append(el('strong','Prepared By'),el('p',preparedBy||'Not recorded'),el('small','Report generated: '+new Date().toLocaleString()));
+ else footer.append(el('strong','Service Closure'),el('p','This report summarizes the service outcome for the equipment listed above.'),el('small','Service Request: '+d.serviceId));
+ sheet.appendChild(footer);
  document.body.appendChild(sheet);window.addEventListener('afterprint',()=>sheet.remove(),{once:true});setTimeout(()=>window.print(),80);
 }
