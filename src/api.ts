@@ -27,7 +27,7 @@ const ServixApi = {
   },
   async systemStatus():Promise<SystemStatus>{
     if(isDesktop) return invokeNative<SystemStatus>('system_status');
-    return {initialized:true,appVersion:'0.1.0-preview',databasePath:'Browser preview'};
+    return {initialized:true,appVersion:'0.2.0-preview',databasePath:'Browser preview'};
   },
   async createFirstAdmin(username:string,password:string,displayName:string):Promise<SessionUser>{
     if(isDesktop) return invokeNative<SessionUser>('create_first_admin',{username,password,displayName});
@@ -38,6 +38,7 @@ const ServixApi = {
     if(!username||!password) throw new Error('Enter username and password.');
     mockUser={id:1,username,displayName:'Administrator',role:'Administrator'}; return mockUser;
   },
+  async changePassword(currentPassword:string,newPassword:string):Promise<void>{if(isDesktop)return invokeNative('change_password',{currentPassword,newPassword});if(newPassword.length<8)throw new Error('Password must be at least 8 characters.');},
   async logout(){ if(isDesktop) await invokeNative('logout'); mockUser=null; },
   async bootstrap():Promise<DashboardData>{const data=isDesktop?await invokeNative<DashboardData>('bootstrap'):JSON.parse(JSON.stringify(mockState));data.operations=await OperationsApi.get();data.services.forEach(s=>s.followUpDate=data.operations.followups.find(f=>f.serviceCallId===s.id)?.followUpDate||'');return data},
   async reviewServiceDuplicates(draft:any):Promise<DuplicateReview>{
