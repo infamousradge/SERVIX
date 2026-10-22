@@ -210,6 +210,7 @@ pub fn initialise(conn: &mut Connection) -> Result<(), String> {
         ("equipment_next_number", "10001"),
         ("equipment_digits", "5"),
         ("google_form_configured", "false"),
+        ("google_form_url", ""),
         ("google_sheet_id", "1dXiMB7ls1vAzFL3PHYTOMQDnI-JUtVltVGVuGhu4IJo"),
         ("google_sheet_name", "Form Responses 1"),
         ("google_service_account_json", ""),
