@@ -124,5 +124,9 @@ const ServixApi = {
   async loadQaMockData():Promise<string>{
     if(isDesktop) return invokeNative<string>('load_multi_month_qa');
     loadPreviewMonths();return 'Loaded five months of QA5 entries and notes in this preview.';
+  },
+  async clearQaMockData():Promise<string>{
+    if(isDesktop) return invokeNative<string>('clear_multi_month_qa');
+    mockState=JSON.parse(JSON.stringify(browserMock));return 'QA preview data cleared.';
   }
 };
