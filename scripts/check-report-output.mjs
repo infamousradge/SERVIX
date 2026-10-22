@@ -37,6 +37,10 @@ assert.equal(context.filterScope(scopeData,'All','2026-10-03','2026-10-04').filt
 console.log('Report checks passed: all tabs, empty results, stable grouping IDs, calibration, scope, CSV quoting and formula escaping.');
 
 vm.runInContext(ts.transpile(readFileSync(new URL('../src/features/reports.tsx',import.meta.url),'utf8'),{target:ts.ScriptTarget.ES2019,jsx:ts.JsxEmit.React}),context);
+assert.ok(context.reportFilterKeys('Warranty / AMC').includes('coverage'),'Warranty/AMC must filter current equipment coverage');assert.ok(!context.reportFilterKeys('Warranty / AMC').includes('foc'),'Warranty/AMC must not be driven by FOC/visit filters');
+const analyticsSource=readFileSync(new URL('../src/features/reports.tsx',import.meta.url),'utf8');
+for(const required of ['Warranty active','Warranty expiring ≤30 days','Warranty expiring ≤90 days','Warranty expired','AMC active','AMC expiring ≤30 days','AMC expiring ≤90 days','AMC expired','No active Warranty / AMC','Warranty status','AMC status','Upcoming Warranty / AMC expiries','Service activity under coverage'])assert.ok(analyticsSource.includes(required),'Missing coverage analytics: '+required);
+assert.ok(analyticsSource.indexOf('Service activity under coverage')>analyticsSource.indexOf('Upcoming Warranty / AMC expiries'),'Service visits must remain secondary to equipment expiry intelligence');
 assert.ok(context.reportFilterKeys('Parts Usage').includes('make'));assert.ok(!context.reportFilterKeys('Parts Usage').includes('payment'));assert.ok(context.reportFilterKeys('Commercial').includes('payment'));assert.ok(!context.reportFilterKeys('Commercial').includes('make'));const switched=context.reportQueryForTab('Parts Usage',{...context.newServiceQuery(),status:'Pending',payment:'Pending',from:'2026-09-01',client:'1'});assert.equal(switched.status,'All');assert.equal(switched.payment,'All');assert.equal(switched.from,'2026-09-01');assert.equal(switched.client,'1');console.log('Report-specific filter sets and drilldown scope cleanup passed.');
 
 const reportFunction=source.slice(source.indexOf('async function printServiceDocument('));
