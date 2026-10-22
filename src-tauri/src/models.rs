@@ -244,6 +244,7 @@ pub struct PartUsage {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoogleSyncConfig {
+    pub form_url: String,
     pub sheet_id: String,
     pub sheet_name: String,
     pub service_account_configured: bool,
@@ -264,12 +265,16 @@ pub struct GoogleSyncConfig {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GoogleSyncConfigDraft {
+    #[serde(default)]
+    pub form_url: String,
     pub sheet_id: String,
     pub sheet_name: String,
     #[serde(default)]
     pub service_account_json: String,
     #[serde(default)]
     pub clear_credentials: bool,
+    #[serde(default)]
+    pub admin_password: String,
     pub timestamp_header: String,
     pub client_header: String,
     pub contact_header: String,
