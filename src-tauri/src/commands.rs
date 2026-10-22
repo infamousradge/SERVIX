@@ -113,6 +113,7 @@ fn google_config(conn: &Connection) -> GoogleSyncConfig {
     let credential_json = setting(conn, "google_service_account_json", "");
     let account = serde_json::from_str::<GoogleServiceAccount>(&credential_json).ok();
     GoogleSyncConfig {
+        form_url: setting(conn, "google_form_url", ""),
         sheet_id: setting(conn, "google_sheet_id", "1dXiMB7ls1vAzFL3PHYTOMQDnI-JUtVltVGVuGhu4IJo"),
         sheet_name: setting(conn, "google_sheet_name", "Form Responses 1"),
         service_account_configured: account.is_some(),
@@ -973,6 +974,16 @@ pub fn save_google_sync_config(
     draft: GoogleSyncConfigDraft,
 ) -> Result<GoogleSyncConfig, String> {
     let actor = require_admin(&state)?;
+    if draft.admin_password.trim().is_empty() {
+        return Err("Enter your current Administrator password to change Google intake settings.".into());
+    }
+    {
+        let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
+        let hash:String = db.query_row("SELECT password_hash FROM users WHERE id=?1 AND active=1",[actor.id],|r|r.get(0)).map_err(db_err)?;
+        if !security::verify_password(draft.admin_password.trim(), &hash) {
+            return Err("Administrator password is incorrect.".into());
+        }
+    }
     if draft.sheet_id.trim().is_empty() || draft.sheet_name.trim().is_empty() {
         return Err("Google Sheet ID and sheet tab name are required.".into());
     }
@@ -997,6 +1008,7 @@ pub fn save_google_sync_config(
     let db = state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     let now=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     for (key,value) in [
+        ("google_form_url",draft.form_url.trim()),
         ("google_sheet_id",draft.sheet_id.trim()),
         ("google_sheet_name",draft.sheet_name.trim()),
         ("google_map_timestamp",draft.timestamp_header.trim()),
