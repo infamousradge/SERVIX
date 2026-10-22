@@ -36,6 +36,7 @@ pub fn run() {
             files::restore_backup,
             operations::get_operations,
             operations::load_multi_month_qa,
+            operations::clear_multi_month_qa,
             operations::save_sequence,
             operations::save_client,
             operations::save_equipment,
