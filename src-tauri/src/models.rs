@@ -170,6 +170,7 @@ pub struct IntakeItem {
     pub status: String,
     pub linked_service_id: Option<String>,
     pub original_snapshot: String,
+    pub rejection_reason: String,
 }
 
 #[derive(Debug, Deserialize)]
