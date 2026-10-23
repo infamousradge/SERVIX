@@ -153,6 +153,19 @@ pub fn initialise(conn: &mut Connection) -> Result<(), String> {
             processed_at TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS servix_transfer_log(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            direction TEXT NOT NULL,
+            source_installation_id TEXT NOT NULL DEFAULT '',
+            source_name TEXT NOT NULL DEFAULT '',
+            package_hash TEXT NOT NULL DEFAULT '',
+            mode TEXT NOT NULL DEFAULT 'full',
+            new_records INTEGER NOT NULL DEFAULT 0,
+            existing_records INTEGER NOT NULL DEFAULT 0,
+            conflicts INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS sync_log(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             started_at TEXT NOT NULL,
@@ -217,6 +230,9 @@ pub fn initialise(conn: &mut Connection) -> Result<(), String> {
         ("equipment_prefix", "EQ-"),
         ("equipment_next_number", "10001"),
         ("equipment_digits", "5"),
+        ("servix_installation_id", ""),
+        ("servix_site_name", ""),
+        ("servix_last_transfer_export", ""),
         ("google_form_configured", "false"),
         ("google_form_url", ""),
         ("google_sheet_id", "1dXiMB7ls1vAzFL3PHYTOMQDnI-JUtVltVGVuGhu4IJo"),
@@ -239,6 +255,12 @@ pub fn initialise(conn: &mut Connection) -> Result<(), String> {
             params![key, value, now],
         )
         .map_err(db_err)?;
+    }
+
+    let installation_id:String=conn.query_row("SELECT value FROM settings WHERE key='servix_installation_id'",[],|r|r.get(0)).unwrap_or_default();
+    if installation_id.trim().is_empty() {
+        let id=format!("SVX-{:032x}",rand::random::<u128>());
+        conn.execute("UPDATE settings SET value=?1,updated_at=?2 WHERE key='servix_installation_id'",params![id,now]).map_err(db_err)?;
     }
 
     #[cfg(debug_assertions)]
