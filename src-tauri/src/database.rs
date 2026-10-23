@@ -190,6 +190,14 @@ pub fn initialise(conn: &mut Connection) -> Result<(), String> {
         conn.execute("ALTER TABLE equipment ADD COLUMN cmc_until TEXT NOT NULL DEFAULT ''", []).map_err(db_err)?;
     }
 
+    // Preserve rejection decisions for incoming requests without affecting converted service history.
+    let has_rejection_reason: bool = conn.prepare("PRAGMA table_info(form_intake)").map_err(db_err)?
+        .query_map([], |r| r.get::<_, String>(1)).map_err(db_err)?
+        .any(|col| col.map(|value| value == "rejection_reason").unwrap_or(false));
+    if !has_rejection_reason {
+        conn.execute("ALTER TABLE form_intake ADD COLUMN rejection_reason TEXT NOT NULL DEFAULT ''", []).map_err(db_err)?;
+    }
+
     // Add optional postal details to existing installations without resetting client records.
     let has_address: bool = conn.prepare("PRAGMA table_info(clients)").map_err(db_err)?
         .query_map([], |r| r.get::<_, String>(1)).map_err(db_err)?
