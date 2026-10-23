@@ -6,6 +6,7 @@ mod files;
 mod database;
 mod models;
 mod security;
+mod transfer;
 mod service_detail;
 mod state;
 
@@ -59,6 +60,13 @@ pub fn run() {
             data_io::export_dataset,
             data_io::data_history,
             data_io::record_csv_export,
+            transfer::transfer_info,
+            transfer::save_transfer_site,
+            transfer::choose_transfer_path,
+            transfer::export_servix_transfer,
+            transfer::preview_servix_transfer,
+            transfer::import_servix_transfer,
+            transfer::transfer_history,
             commands::save_intake_review,
             commands::update_intake_status,
             commands::reject_intake_request,
