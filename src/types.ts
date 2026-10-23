@@ -41,3 +41,9 @@ type GoogleSyncConfigDraft = Omit<GoogleSyncConfig,'serviceAccountConfigured'|'s
 type SyncStatus = { configured:boolean; lastSuccessfulSync:string|null; lastAttemptedSync:string|null; newCount:number; status:'up-to-date'|'warning'|'overdue'|'offline'|'not-configured'; message:string };
 type UserRecord = { id:number; username:string; displayName:string; role:'Administrator'|'Office User'|'Read Only'; active:boolean };
 type DashboardData = { operations?:OperationsData; services:ServiceCall[]; intake:IntakeItem[]; clients:ClientRecord[]; equipment:EquipmentRecord[]; partUsage:PartUsage[]; users:UserRecord[]; sync:SyncStatus };
+
+type ServixTransferInfo = { installationId:string; siteName:string; lastExport:string };
+type ServixTransferPreview = {
+  path:string; checksum:string; sourceInstallationId:string; sourceName:string; createdAt:string; mode:string; since:string;
+  clients:number; equipment:number; services:number; events:number; files:number; newRecords:number; existingRecords:number; conflicts:number;
+};
