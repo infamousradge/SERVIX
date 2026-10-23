@@ -420,7 +420,7 @@ fn list_services(db: &Connection) -> Result<Vec<ServiceCall>, String> {
 
 fn list_intake(db: &Connection) -> Result<Vec<IntakeItem>, String> {
     let mut stmt = db
-        .prepare("SELECT id,received_at,client_name,contact,mobile,email,equipment,make,model,serial_number,complaint,match_summary,match_tone,status,linked_service_id,raw_json FROM form_intake ORDER BY received_at DESC,id DESC")
+        .prepare("SELECT id,received_at,client_name,contact,mobile,email,equipment,make,model,serial_number,complaint,match_summary,match_tone,status,linked_service_id,raw_json,rejection_reason FROM form_intake WHERE status<>'Deleted' ORDER BY received_at DESC,id DESC")
         .map_err(db_err)?;
     let rows = stmt
         .query_map([], |r| {
@@ -441,6 +441,7 @@ fn list_intake(db: &Connection) -> Result<Vec<IntakeItem>, String> {
                 status: r.get(13)?,
                 linked_service_id: r.get(14)?,
                 original_snapshot: r.get(15)?,
+                rejection_reason: r.get(16)?,
             })
         })
         .map_err(db_err)?;
@@ -946,7 +947,7 @@ pub fn save_intake_review(state: State<'_, AppState>,draft: IntakeReviewDraft)->
 #[tauri::command]
 pub fn update_intake_status(state:State<'_,AppState>,id:i64,status:String)->Result<(),String>{
  let user=require_user(&state)?;if user.role=="Read Only"{return Err("Read-only users cannot change intake records.".into())}
- if !["New","Reviewed","Converted","Duplicate"].contains(&status.as_str()){return Err("Invalid intake status.".into())}
+ if !["New","Reviewed","Converted","Duplicate","Rejected"].contains(&status.as_str()){return Err("Invalid intake status.".into())}
  let mut db=state.db.lock().map_err(|_|"Database lock failed".to_string())?;
  let (current,linked):(String,Option<String>)=db.query_row("SELECT status,linked_service_id FROM form_intake WHERE id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?))).optional().map_err(db_err)?.ok_or("Incoming request not found.")?;
  if current=="Converted"||linked.as_deref().is_some_and(|s|!s.is_empty()){return Err("A converted request retains its Service ID. Use administrator correction to edit it.".into())}
@@ -955,6 +956,34 @@ pub fn update_intake_status(state:State<'_,AppState>,id:i64,status:String)->Resu
  tx.execute("UPDATE form_intake SET status=?1,processed_by=?2,processed_at=?3 WHERE id=?4",params![status,user.id,now,id]).map_err(db_err)?;
  tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('Intake','Status',?1,?2,?3,?4)",params![id.to_string(),user.id,format!("{current} -> {status}"),now]).map_err(db_err)?;tx.commit().map_err(db_err)?;Ok(())
 }
+#[tauri::command]
+pub fn reject_intake_request(state:State<'_,AppState>,id:i64,reason:String)->Result<(),String>{
+ let user=require_user(&state)?;if user.role=="Read Only"{return Err("Read-only users cannot reject intake records.".into())}
+ let reason=reason.trim();if reason.is_empty(){return Err("Select a rejection reason.".into())}
+ let allowed=["Duplicate Request","Client Cancelled","Invalid / Incomplete Details","Not a Service Request","Spam / Junk","Test Entry","Other"];
+ if !allowed.contains(&reason){return Err("Invalid rejection reason.".into())}
+ let mut db=state.db.lock().map_err(|_|"Database lock failed".to_string())?;
+ let (current,linked):(String,Option<String>)=db.query_row("SELECT status,linked_service_id FROM form_intake WHERE id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?))).optional().map_err(db_err)?.ok_or("Incoming request not found.")?;
+ if current=="Converted"||linked.as_deref().is_some_and(|s|!s.is_empty()){return Err("A converted request cannot be rejected.".into())}
+ if current!="New"&&current!="Reviewed"&&user.role!="Administrator"{return Err("Only an Administrator can change a previously classified request.".into())}
+ let now=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();let tx=db.transaction().map_err(db_err)?;
+ tx.execute("UPDATE form_intake SET status='Rejected',rejection_reason=?1,processed_by=?2,processed_at=?3 WHERE id=?4",params![reason,user.id,now,id]).map_err(db_err)?;
+ tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('Intake','Reject',?1,?2,?3,?4)",params![id.to_string(),user.id,reason,now]).map_err(db_err)?;
+ tx.commit().map_err(db_err)?;Ok(())
+}
+
+#[tauri::command]
+pub fn delete_intake_request(state:State<'_,AppState>,id:i64)->Result<(),String>{
+ let user=require_admin(&state)?;
+ let mut db=state.db.lock().map_err(|_|"Database lock failed".to_string())?;
+ let (current,linked):(String,Option<String>)=db.query_row("SELECT status,linked_service_id FROM form_intake WHERE id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?))).optional().map_err(db_err)?.ok_or("Incoming request not found.")?;
+ if current=="Converted"||linked.as_deref().is_some_and(|s|!s.is_empty()){return Err("Converted requests cannot be deleted because they are linked to an official Service Call.".into())}
+ let now=Local::now().format("%Y-%m-%d %H:%M:%S").to_string();let tx=db.transaction().map_err(db_err)?;
+ tx.execute("UPDATE form_intake SET client_name='',contact='',mobile='',email='',equipment='',make='',model='',serial_number='',complaint='',raw_json='{}',match_summary='',match_tone='neutral',status='Deleted',rejection_reason='Test/Junk deleted',processed_by=?1,processed_at=?2 WHERE id=?3",params![user.id,now,id]).map_err(db_err)?;
+ tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('Intake','Delete',?1,?2,'Deleted test/junk intake; identifying payload scrubbed and sync tombstone retained',?3)",params![id.to_string(),user.id,now]).map_err(db_err)?;
+ tx.commit().map_err(db_err)?;Ok(())
+}
+
 #[cfg(test)]
 mod intake_permission_tests{
  use super::*;
