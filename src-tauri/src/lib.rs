@@ -61,6 +61,8 @@ pub fn run() {
             data_io::record_csv_export,
             commands::save_intake_review,
             commands::update_intake_status,
+            commands::reject_intake_request,
+            commands::delete_intake_request,
             commands::get_google_sync_config,
             commands::save_google_sync_config,
             commands::sync_google_form,
