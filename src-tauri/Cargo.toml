@@ -1,6 +1,6 @@
 [package]
 name = "servix-desktop"
-version = "0.2.5"
+version = "0.2.6"
 description = "SERVIX offline-first service management desktop application"
 authors = ["Yogesh Gaurav"]
 edition = "2021"
