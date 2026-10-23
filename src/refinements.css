@@ -431,3 +431,12 @@ button,input,select,textarea{font-family:var(--font-ui)}
  .service-document .sr-facts .sr-field:last-child strong{color:#09847b!important}
  .service-document .sr-prepared{border-left:3px solid #0b8993!important;padding-left:8px!important}
 }
+
+/* Service completion visibility: required closure fields remain highlighted until entered. */
+.completion-required-field{position:relative;border-radius:.68rem;padding:.45rem .5rem .5rem;border:1px solid transparent;transition:.15s ease}.completion-required-field.missing{background:#fff7e5;border-color:#e8c977;box-shadow:0 0 0 .08rem rgba(207,153,34,.08)}.completion-required-field.missing .field>span{color:#9a680c!important}.completion-required-field.missing textarea,.completion-required-field.missing input{border-color:#d9aa3d!important;background:#fffdf7!important}.completion-required-field.complete{background:#f1faf5;border-color:#cce6d7}.completion-required-field.complete .field>span{color:#277651!important}.completion-required-hint{display:block;margin-top:.25rem;font-size:.56rem;font-weight:750;color:#a36d0b}.completion-required-field.complete:after{content:'Completed';position:absolute;right:.5rem;top:.35rem;font-size:.5rem;font-weight:800;color:#2d8759;background:#e4f5eb;padding:.16rem .35rem;border-radius:999px}
+/* Chromium/WebView print header/footer suppression: zero page margin, recreate document margins inside the sheet. */
+@media print{
+ @page{size:A4 portrait;margin:0!important}
+ .servix-print-sheet{box-sizing:border-box!important;padding:9mm 10mm!important;min-height:297mm!important}
+ .report-print-sheet{padding:12mm!important}
+}
