@@ -1,7 +1,7 @@
 type ModuleKey = 'dashboard'|'intake'|'service-calls'|'clients'|'equipment'|'engineers'|'coverage'|'calibration'|'parts'|'documents'|'reports'|'data'|'users-settings';
 type ServiceStatus = 'Open'|'In Progress'|'Pending'|'Closed';
 type CoverageType = 'Warranty'|'AMC'|'CMC'|'Out of Coverage';
-type IntakeStatus = 'New'|'Reviewed'|'Converted'|'Duplicate';
+type IntakeStatus = 'New'|'Reviewed'|'Converted'|'Duplicate'|'Rejected'|'Deleted';
 
 type SessionUser = { id:number; username:string; displayName:string; role:'Administrator'|'Office User'|'Read Only' };
 type SystemStatus = { initialized:boolean; appVersion:string; databasePath?:string };
@@ -30,7 +30,7 @@ type DuplicateReview = { level:'clear'|'match'|'warning'; summary:string; client
 type IntakeItem = {
   id:number; receivedAt:string; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string;
   serialNumber:string; complaint:string; matchSummary:string; matchTone:'good'|'neutral'|'warn'; status:IntakeStatus; linkedServiceId?:string;
-  originalSnapshot?:string;
+  originalSnapshot?:string; rejectionReason?:string;
 };
 type IntakeReviewDraft = { id:number; client:string; contact:string; mobile:string; email:string; equipment:string; make:string; model:string; serialNumber:string; complaint:string };
 type ClientRecord = { id:number; code:string; name:string; contact:string; mobile:string; email:string; address?:string; city:string; state:string; active:boolean; serviceCount:number; equipmentCount:number };
