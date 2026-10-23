@@ -58,7 +58,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  if(mode==='client'){
   facts.append(field('Service Request No.',d.serviceId),field('Service Date',d.completionDate||d.openedDate),field('Status',d.status),field('Equipment ID',equipmentRecord?.servixEquipmentId||'Not recorded'));
  }else{
-  facts.append(field('Service Request No.',d.serviceId),field('Equipment ID',equipmentRecord?.servixEquipmentId||'Not recorded'),field('Date Received',d.openedDate),field('Date Completed',d.completionDate||'Not completed'),field('Report Generated',new Date().toLocaleString()),field('Status',d.status));
+  facts.append(field('Service Request No.',d.serviceId),field('Equipment ID',equipmentRecord?.servixEquipmentId||'Not recorded'),field('Date Received',d.openedDate),field('Date Completed',d.completionDate||'Not completed'),field('Status',d.status));
  }
  sheet.appendChild(facts);
 
@@ -79,9 +79,11 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  const warrantyStatus=warrantyUntil?(warrantyUntil>=today?'Active till '+warrantyUntil:'Expired '+warrantyUntil):(d.coverage==='Warranty'?'Active / Covered':'Not recorded');
  const amcStatus=amcUntil?(amcUntil>=today?'Active till '+amcUntil:'Expired '+amcUntil):(d.coverage==='AMC'?'Active / Covered':'Not recorded');
  const cmcStatus=cmcUntil?(cmcUntil>=today?'Active till '+cmcUntil:'Expired '+cmcUntil):(d.coverage==='CMC'?'Active / Covered':'Not recorded');
+ const activeCoverage=d.coverage||'Not recorded';
+ const activeValidity=activeCoverage==='Warranty'?warrantyStatus:activeCoverage==='AMC'?amcStatus:activeCoverage==='CMC'?cmcStatus:activeCoverage==='Out of Coverage'?'Not covered':'Not recorded';
  const coverageRows:[string,string][]=mode==='client'
-  ?[['Current Coverage',d.coverage||'Not recorded'],['Warranty',warrantyStatus],['AMC',amcStatus],['CMC',cmcStatus]]
-  :[['Current Coverage',d.coverage||'Not recorded'],['Warranty',warrantyStatus],['AMC',amcStatus],['CMC',cmcStatus],['FOC',d.foc?'Yes':'No'],['Quote',d.quoteStatus||'Not recorded'],['Payment',d.paymentStatus||'Not recorded']];
+  ?[['Coverage',activeCoverage],...(activeCoverage==='Out of Coverage'||activeCoverage==='Not recorded'?[]:[['Validity',activeValidity] as [string,string]])]
+  :[['Current Coverage',activeCoverage],...(activeCoverage==='Out of Coverage'||activeCoverage==='Not recorded'?[]:[['Current Validity',activeValidity] as [string,string]]),['FOC',d.foc?'Yes':'No'],['Quote',d.quoteStatus||'Not recorded'],['Payment',d.paymentStatus||'Not recorded']];
  for(const [label,value] of coverageRows)tiles.appendChild(field(label,value));
  coverage.appendChild(tiles);sheet.appendChild(coverage);
 
@@ -118,7 +120,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  }
 
  const footer=document.createElement('footer');footer.className='sr-prepared';
- if(mode==='internal')footer.append(el('strong','Prepared By'),el('p',preparedBy||'Not recorded'),el('small','Report generated: '+new Date().toLocaleString()));
+ if(mode==='internal')footer.append(el('strong','Prepared By'),el('p',preparedBy||'Not recorded'));
  else footer.append(el('strong','Service Closure'),el('p','This report summarizes the service outcome for the equipment listed above.'),el('small','Service Request: '+d.serviceId));
  sheet.appendChild(footer);
  document.body.appendChild(sheet);window.addEventListener('afterprint',()=>sheet.remove(),{once:true});setTimeout(()=>window.print(),80);
