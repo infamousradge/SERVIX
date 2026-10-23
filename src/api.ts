@@ -109,6 +109,14 @@ const ServixApi = {
     if(isDesktop) return invokeNative('update_intake_status',{id,status});
     const item=mockState.intake.find(x=>x.id===id); if(item) item.status=status;
   },
+  async rejectIntakeRequest(id:number,reason:string):Promise<void>{
+    if(isDesktop) return invokeNative('reject_intake_request',{id,reason});
+    const item=mockState.intake.find(x=>x.id===id); if(item){item.status='Rejected';item.rejectionReason=reason;}
+  },
+  async deleteIntakeRequest(id:number):Promise<void>{
+    if(isDesktop) return invokeNative('delete_intake_request',{id});
+    mockState.intake=mockState.intake.filter(x=>x.id!==id);
+  },
   async getGoogleSyncConfig():Promise<GoogleSyncConfig>{
     if(isDesktop) return invokeNative<GoogleSyncConfig>('get_google_sync_config');
     return {formUrl:'',sheetId:'1dXiMB7ls1vAzFL3PHYTOMQDnI-JUtVltVGVuGhu4IJo',sheetName:'Form Responses 1',serviceAccountConfigured:false,serviceAccountEmail:'',timestampHeader:'Timestamp',clientHeader:'Organisation / Client Name',contactHeader:'Contact Person Name',mobileHeader:'Mobile Number',emailHeader:'Email',equipmentHeader:'Equipment / Device',makeHeader:'Make',modelHeader:'Model',serialHeader:'Serial Number',reasonHeader:'Reason for Sending',complaintHeader:'Problem / Complaint'};
