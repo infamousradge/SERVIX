@@ -52,7 +52,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  const contactDetails=document.createElement('div');contactDetails.className='sr-contact-details';
  for(const [label,value] of [['Mobile',profile.phone],['Email',profile.email],['Website',profile.website]] as [string,string][]){if(!value)continue;const line=document.createElement('p');line.append(el('strong',label+': '),document.createTextNode(value));contactDetails.appendChild(line)}
  identity.appendChild(contactDetails);head.appendChild(identity);sheet.appendChild(head);
- const title=document.createElement('div');title.className='sr-title';title.append(el('h1',mode==='client'?'CLIENT SERVICE REPORT':'INTERNAL SERVICE REPORT'),el('p',mode==='client'?'SERVICE SUMMARY':'DETAILED TECHNICAL & OFFICE RECORD'));sheet.appendChild(title);
+ const title=document.createElement('div');title.className='sr-title';title.append(el('h1',mode==='client'?'SERVICE REPORT':'INTERNAL SERVICE REPORT'),el('p',mode==='client'?'SERVICE & REPAIR SUMMARY':'DETAILED TECHNICAL & OFFICE RECORD'));sheet.appendChild(title);
 
  const facts=document.createElement('section');facts.className='sr-facts';
  if(mode==='client'){
@@ -66,7 +66,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  const group=(title:string,rows:[string,any][])=>{const section=document.createElement('section');section.className='sr-panel';section.appendChild(el('h2',title));for(const [label,value] of rows){const row=document.createElement('div');row.className='sr-line';row.append(el('span',label),el('span',String(value||'Not recorded')));section.appendChild(row)}return section};
  details.append(
   group('Customer Information',mode==='client'?[['Customer Name',d.client],['Contact Person',client?.contact]]:[['Customer Name',d.client],['Contact Person',client?.contact],['Phone / Email',[client?.mobile,client?.email].filter(Boolean).join(' | ')],['Address',[client?.address,client?.city,client?.state].filter(Boolean).join(', ')]]),
-  group('Equipment Information',[['Device Name',d.equipment],['Make / Model',[d.make,d.model].filter(Boolean).join(' / ')],['Serial Number',d.serialNumber],['Equipment ID',equipmentRecord?.servixEquipmentId],...(mode==='internal'?([['Location',equipmentRecord?.location],['Service Type',d.reason]] as [string,any][]):[])])
+  group('Equipment Information',[['Device Name',d.equipment],['Make / Model',[d.make,d.model].filter(Boolean).join(' / ')],['Serial Number',d.serialNumber],['Equipment ID',equipmentRecord?.servixEquipmentId],...(mode==='client'?([['Service Type',d.reason]] as [string,any][]):([['Location',equipmentRecord?.location],['Service Type',d.reason]] as [string,any][]))])
  );
  sheet.appendChild(details);
 
@@ -91,21 +91,21 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
  const entries:[string,string][]=mode==='client'
   ?[
     ['Issue Reported',d.complaint],
-    ['Inspection / Findings',d.diagnosis],
-    ['Work Carried Out',d.workPerformed],
-    ['Final Outcome',[d.testingVerification,d.finalResult].filter(Boolean).join(' — ')],
-    ...(d.recommendations?[['Recommendation',d.recommendations] as [string,string]]:[])
+    ['Diagnosis / Findings',d.diagnosis],
+    ['Work Performed',d.workPerformed],
+    ['Final Result',d.finalResult]
    ]
   :[
     ['1. Issue Reported / Customer Complaint',d.complaint],
     ['2. Technical Observation / Diagnosis',d.diagnosis],
     ['3. Work Performed / Resolution',d.workPerformed],
-    ['4. Final Testing & Outcome',[d.testingVerification,d.finalResult].filter(Boolean).join(' — ')],
-    ['5. Recommendations / Remarks',[d.recommendations,d.statusReason].filter(Boolean).join(' — ')]
+    ['4. Testing / Verification',d.testingVerification],
+    ['5. Final Result',d.finalResult],
+    ['6. Recommendations / Internal Remarks',[d.recommendations,d.statusReason].filter(Boolean).join(' — ')]
    ];
  for(const [label,value] of entries){const block=document.createElement('div');block.className='sr-narrative';block.append(el('h3',label),el('p',value||'Not recorded'));services.appendChild(block)}
- if(mode==='internal'&&d.parts.length){const parts=document.createElement('div');parts.className='sr-extra';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' ('+p.quantity+')'+(p.partNumber?' • '+p.partNumber:'')).join(', ')));services.appendChild(parts)}
- if(calibration){const cal=document.createElement('div');cal.className='sr-extra';cal.textContent='Calibration: '+calibrationStatus(calibration)+(calibration.certificate?' | Ref: '+calibration.certificate:'')+(calibration.nextDue?' | Next Due: '+calibration.nextDue:'');services.appendChild(cal)}
+ if(d.parts.length){const parts=document.createElement('div');parts.className='sr-extra client-visible-parts';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' × '+p.quantity+(mode==='internal'&&p.partNumber?' • '+p.partNumber:'')).join(', ')));services.appendChild(parts)}
+ if(mode==='internal'&&calibration){const cal=document.createElement('div');cal.className='sr-extra';cal.textContent='Calibration: '+calibrationStatus(calibration)+(calibration.certificate?' | Ref: '+calibration.certificate:'')+(calibration.nextDue?' | Next Due: '+calibration.nextDue:'');services.appendChild(cal)}
  sheet.appendChild(services);
  if(mode==='internal'){
   const office=document.createElement('section');office.className='sr-services internal-office-record';office.appendChild(el('h2','Office / Workflow Record'));
@@ -121,7 +121,7 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
 
  const footer=document.createElement('footer');footer.className='sr-prepared';
  if(mode==='internal')footer.append(el('strong','Prepared By'),el('p',preparedBy||'Not recorded'));
- else footer.append(el('strong','Service Closure'),el('p','This report summarizes the service outcome for the equipment listed above.'),el('small','Service Request: '+d.serviceId));
+ else {footer.className='sr-client-signature';const line=document.createElement('div');line.className='sr-signature-line';footer.append(line,el('strong','Engineer Signature'));}
  sheet.appendChild(footer);
  document.body.appendChild(sheet);window.addEventListener('afterprint',()=>sheet.remove(),{once:true});setTimeout(()=>window.print(),80);
 }
