@@ -72,12 +72,7 @@ fn assess(target:&Connection,source:&Connection)->Result<(i64,i64,i64),String>{
  let mut newn=0;let mut existing=0;let mut conflicts=0;
  for (table,column) in [("clients","code"),("equipment","servix_equipment_id"),("service_calls","service_id")]{
   let mut q=source.prepare(&format!("SELECT {column} FROM {table}")).map_err(err)?;
-  for v in q.query_map([],|r|r.get::<_,String>(0)).map_err(err)?{let v=v.map_err(err)?;let exists:bool=target.query_row(&format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE lower({column})=lower(?1))"),[&v],|r|r.get(0)).map_err(err)?;if exists{existing+=1}else{newn+=1}}
- }
- // Same visible IDs from another installation are reported as conflicts; importer never overwrites them.
- if source.query_row("SELECT COUNT(*) FROM service_calls",[],|r|r.get::<_,i64>(0)).unwrap_or(0)>0{
-  let already:bool=target.query_row("SELECT EXISTS(SELECT 1 FROM servix_transfer_log WHERE direction='Import' AND source_installation_id=?1)",[&source.query_row("SELECT value FROM settings WHERE key='servix_installation_id'",[],|r|r.get::<_,String>(0)).unwrap_or_default()],|r|r.get(0)).unwrap_or(false);
-  if !already{conflicts=existing;}
+  for v in q.query_map([],|r|r.get::<_,String>(0)).map_err(err)?{let v=v.map_err(err)?;let exists:bool=target.query_row(&format!("SELECT EXISTS(SELECT 1 FROM {table} WHERE lower({column})=lower(?1))"),[&v],|r|r.get(0)).map_err(err)?;if exists{existing+=1;if table=="service_calls"{conflicts+=1}}else{newn+=1}}
  }
  Ok((newn,existing,conflicts))
 }
