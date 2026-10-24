@@ -1106,6 +1106,10 @@ pub fn sync_google_form(state: State<'_, AppState>) -> Result<SyncStatus, String
     let mut db=state.db.lock().map_err(|_| "Database lock failed".to_string())?;
     let tx=db.transaction().map_err(db_err)?;
     let mut fetched=0_i64; let mut inserted=0_i64;
+    // Google Forms is append-oriented, but Sheet cells can later be edited or reformatted.
+    // Track the occurrence of each Form timestamp so a submission is imported only once
+    // even if its row content changes after the first successful sync.
+    let mut timestamp_occurrences:HashMap<String,i64>=HashMap::new();
     for row in rows.iter().skip(1) {
         if row.iter().all(|v|cell_text(Some(v)).is_empty()) { continue; }
         fetched+=1;
@@ -1126,10 +1130,37 @@ pub fn sync_google_form(state: State<'_, AppState>) -> Result<SyncStatus, String
             snapshot.insert(header.clone(),serde_json::Value::String(cell_text(row.get(i))));
         }
         let raw_json=serde_json::Value::Object(snapshot).to_string();
+
+        // The response timestamp is the durable Google Form submission anchor.
+        // Compare by timestamp occurrence against every historical intake status
+        // (New, Reviewed, Converted, Rejected, Duplicate and Deleted tombstones).
+        // This also protects existing databases whose older external_id was based
+        // on the complete row content.
+        let occurrence=if received_at.trim().is_empty(){0}else{
+            let entry=timestamp_occurrences.entry(received_at.clone()).or_insert(0);
+            *entry+=1;*entry
+        };
+        if occurrence>0 {
+            let existing_count:i64=tx.query_row(
+                "SELECT COUNT(*) FROM form_intake WHERE received_at=?1",
+                [&received_at],
+                |r|r.get(0),
+            ).map_err(db_err)?;
+            if occurrence<=existing_count { continue; }
+        }
+
         let mut hasher=Sha256::new();
         hasher.update(config.sheet_id.as_bytes());hasher.update([0]);
         hasher.update(config.sheet_name.as_bytes());hasher.update([0]);
-        hasher.update(raw_json.as_bytes());
+        if occurrence>0 {
+            hasher.update(b"FORM-TIMESTAMP");hasher.update([0]);
+            hasher.update(received_at.as_bytes());hasher.update([0]);
+            hasher.update(occurrence.to_string().as_bytes());
+        } else {
+            // Defensive fallback for an abnormal row with no timestamp.
+            hasher.update(b"ROW-CONTENT");hasher.update([0]);
+            hasher.update(raw_json.as_bytes());
+        }
         let external_id=format!("GS-{}",hex::encode(hasher.finalize()));
         let (match_summary,match_tone)=classify_intake_match(&tx,&mobile,&email,&serial,&client_name,&equipment)?;
         let changed=tx.execute(
@@ -1143,7 +1174,11 @@ pub fn sync_google_form(state: State<'_, AppState>) -> Result<SyncStatus, String
     tx.execute("INSERT INTO audit_log(entity,action,record_id,actor_id,summary,created_at) VALUES('GoogleSync','Sync',?1,?2,?3,?4)",params![config.sheet_id,actor.id,format!("Fetched {} row(s); imported {} new intake request(s)",fetched,inserted),completed]).map_err(db_err)?;
     tx.commit().map_err(db_err)?;
     let mut status=sync_status(&db)?;
-    status.message=format!("Google Form sync completed: {} row(s) checked, {} new request(s) imported.",fetched,inserted);
+    status.message=if inserted>0 {
+        format!("Google Form sync completed: {} row(s) checked, {} new request(s) imported. Previously synced submissions were skipped.",fetched,inserted)
+    } else {
+        format!("Google Form sync completed: {} row(s) checked. No new submissions; previously synced responses were skipped.",fetched)
+    };
     Ok(status)
 }
 
