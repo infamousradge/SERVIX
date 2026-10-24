@@ -644,3 +644,13 @@ html[data-display-scale="125"] .service-trend-card .trend-legend{font-size:.46re
  .about-workspace-brand{justify-content:center!important}
  .about-workspace-brand img{width:9.5rem!important;height:5.3rem!important}
 }
+
+/* Google Form sync feedback: explicit in-progress and completion states. */
+.sync-progress-dialog,.sync-result-dialog{display:flex;align-items:center;gap:1rem;padding:.9rem .15rem}
+.sync-progress-dialog .boot-spinner{width:2.2rem;height:2.2rem;flex:0 0 auto}
+.sync-progress-dialog strong,.sync-result-dialog strong{display:block;color:#29445e;font-size:1rem;margin-bottom:.25rem}
+.sync-progress-dialog p,.sync-result-dialog p{margin:.15rem 0;color:#61778b;line-height:1.45}
+.sync-progress-dialog small{color:#8191a1}
+.sync-result-dialog{border-radius:.9rem;padding:1rem}
+.sync-result-dialog.success{background:#f1faf7;border:1px solid #cfe9df}
+.sync-result-dialog.error{background:#fff6f6;border:1px solid #f0d4d6}
