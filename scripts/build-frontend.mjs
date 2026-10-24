@@ -43,6 +43,7 @@ if (!existsSync(sidebarLogo) || !existsSync(loginMark)) {
   process.exit(1);
 }
 await copyFile(sidebarLogo, path.join(web, 'assets', 'servix-sidebar-logo.png'));
+await copyFile(path.join(root, 'assets', 'app-icon-generated.png'), path.join(web, 'assets', 'servix-sidebar-emblem.png'));
 await copyFile(loginMark, path.join(web, 'assets', 'servix-login-mark.png'));
 
 const manropeSource = path.join(root, 'assets', 'Manrope-wght.ttf');
