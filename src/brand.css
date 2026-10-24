@@ -17,14 +17,14 @@
 
 /* Collapsed navigation uses the dedicated vector emblem instead of cropping the full wordmark. */
 .sidebar-collapsed .sidebar-brand{height:4.75rem;flex-basis:4.75rem;padding:0.45rem;justify-content:center}
-.sidebar-collapsed .sidebar-brand .brand-logo{width:3.35rem;height:3.35rem;overflow:visible;display:grid;place-items:center}
-.sidebar-collapsed .sidebar-brand .brand-logo img{width:2.8rem;height:2.8rem;max-width:100%;max-height:100%;object-fit:contain;object-position:center;transform:none;image-rendering:auto}
+.sidebar-collapsed .sidebar-brand .brand-logo{width:3.15rem;height:3.15rem;overflow:visible;display:grid;place-items:center;padding:.42rem;box-sizing:border-box}
+.sidebar-collapsed .sidebar-brand .brand-logo img{width:2.05rem;height:2.05rem;max-width:2.05rem;max-height:2.05rem;object-fit:contain;object-position:center;transform:none;image-rendering:auto}
 .sidebar-collapsed .sidebar nav{padding-top:0.5rem}
 
 @media(max-width:61.25rem){
  .sidebar-brand{height:4.75rem;flex-basis:4.75rem;padding:0.45rem;justify-content:center}
- .sidebar-brand .brand-logo{width:3.35rem;height:3.35rem;overflow:visible}
- .sidebar-brand .brand-logo img{width:2.8rem;height:2.8rem;max-width:100%;max-height:100%;object-fit:contain;object-position:center;transform:none;image-rendering:auto}
+ .sidebar-brand .brand-logo{width:3.15rem;height:3.15rem;overflow:visible;padding:.42rem;box-sizing:border-box}
+ .sidebar-brand .brand-logo img{width:2.05rem;height:2.05rem;max-width:2.05rem;max-height:2.05rem;object-fit:contain;object-position:center;transform:none;image-rendering:auto}
  .sidebar nav{padding-top:0.5rem}
 }
 
