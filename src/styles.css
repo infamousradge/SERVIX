@@ -126,3 +126,56 @@
   .transfer-identity-actions{align-items:flex-start}
   .transfer-identity-actions .primary-button{width:auto;min-width:10rem}
 }
+
+/* v0.3.3 responsive transfer identity redesign */
+.transfer-identity-grid{
+  display:grid!important;
+  grid-template-columns:repeat(auto-fit,minmax(min(16rem,100%),1fr))!important;
+  gap:.7rem!important;
+  align-items:start!important;
+}
+.transfer-identity-grid>.field,
+.transfer-identity-grid>.labeled-field,
+.transfer-id-block{
+  min-width:0!important;
+}
+.transfer-identity-actions{
+  grid-column:1 / -1!important;
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  gap:.6rem!important;
+  padding-top:.05rem!important;
+}
+.transfer-identity-actions .primary-button{
+  width:auto!important;
+  min-width:9.5rem!important;
+  min-height:2.25rem!important;
+  height:auto!important;
+  padding:.48rem .8rem!important;
+  white-space:nowrap!important;
+}
+.transfer-identity-actions small{
+  max-width:16rem;
+  text-align:right;
+}
+html[data-display-scale="110"] .transfer-identity-grid,
+html[data-display-scale="115"] .transfer-identity-grid,
+html[data-display-scale="120"] .transfer-identity-grid,
+html[data-display-scale="125"] .transfer-identity-grid{
+  grid-template-columns:1fr!important;
+}
+html[data-display-scale="110"] .transfer-identity-actions,
+html[data-display-scale="115"] .transfer-identity-actions,
+html[data-display-scale="120"] .transfer-identity-actions,
+html[data-display-scale="125"] .transfer-identity-actions{
+  justify-content:flex-start!important;
+  flex-wrap:wrap!important;
+}
+html[data-display-scale="110"] .transfer-identity-actions small,
+html[data-display-scale="115"] .transfer-identity-actions small,
+html[data-display-scale="120"] .transfer-identity-actions small,
+html[data-display-scale="125"] .transfer-identity-actions small{
+  text-align:left!important;
+}
