@@ -83,10 +83,9 @@ mod tests{
 #[tauri::command]
 pub fn choose_backup_path(state:State<'_,AppState>,folder:bool)->Result<Option<String>,String>{
  user(&state,true,false)?;
- #[cfg(target_os="windows")]
- {let script=if folder{"Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Choose SERVIX backup folder'; if($d.ShowDialog() -eq 'OK'){[Console]::Write($d.SelectedPath)}"}else{"Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Filter='SERVIX Backup (*.servixbackup)|*.servixbackup'; if($d.ShowDialog() -eq 'OK'){[Console]::Write($d.FileName)}"};let output=std::process::Command::new("powershell.exe").args(["-NoProfile","-STA","-Command",script]).output().map_err(err)?;if !output.status.success(){return Err("Could not open the Windows file picker. Enter the path manually.".into())}let path=String::from_utf8(output.stdout).map_err(err)?.trim().to_string();Ok(if path.is_empty(){None}else{Some(path)})}
- #[cfg(not(target_os="windows"))]
- {let _=folder;Err("File picker is available on Windows.".into())}
+ let dialog=rfd::FileDialog::new().set_title(if folder{"Choose SERVIX backup folder"}else{"Choose SERVIX backup file"});
+ let picked=if folder{dialog.pick_folder()}else{dialog.add_filter("SERVIX Backup",&["servixbackup"]).pick_file()};
+ Ok(picked.map(|p|p.to_string_lossy().to_string()))
 }
 
 pub fn safety_backup(db:&Connection,path:&Path,reason:&str)->Result<String,String>{let parent=path.parent().ok_or("Data folder unavailable")?;save_package(db,&parent.join("attachments"),&parent.join("backups").join(reason))}
