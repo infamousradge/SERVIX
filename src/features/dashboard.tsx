@@ -1,4 +1,6 @@
 function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(m:ModuleKey,q?:Partial<ServiceQuery>)=>void,onSync:()=>void}){
+ const [preview,setPreview]=React.useState(null as null|{title:string;query:Partial<ServiceQuery>;rows:ServiceCall[]});
+ const showPreview=(title:string,query:Partial<ServiceQuery>,rows:ServiceCall[])=>setPreview({title,query,rows});
  const counts={open:data.services.filter(s=>s.status==='Open').length,inProgress:data.services.filter(s=>s.status==='In Progress').length,pending:data.services.filter(s=>s.status==='Pending').length,closed:data.services.filter(s=>s.status==='Closed').length};
  const overdue=data.services.filter(s=>s.status!=='Closed'&&s.dueDate&&s.dueDate<new Date().toISOString().slice(0,10)).length;
  const monthKeys=Array.from({length:12},(_,i)=>{const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-(11-i));return d.toISOString().slice(0,7)});const trend=monthKeys.map(k=>data.services.filter(s=>s.openedDate.startsWith(k)).length);const followups=data.services.filter(s=>s.status!=='Closed'&&s.followUpDate&&s.followUpDate<=new Date().toISOString().slice(0,10)).length;
@@ -8,11 +10,11 @@ function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(
  return <div className="module-content dashboard-view">
   <PageHeader title="Dashboard" subtitle="Live overview of service operations and incoming work" actions={<button className="primary-button" onClick={()=>onNavigate('service-calls')}><Icon name="plus"/> Manual Service Call</button>}/>
   <div className="kpi-grid">
-   <KpiCard label="Open" value={counts.open} icon="service" tone="blue" onClick={()=>onNavigate('service-calls',{status:'Open'})}/>
-   <KpiCard label="In Progress" value={counts.inProgress} icon="service" tone="orange" onClick={()=>onNavigate('service-calls',{status:'In Progress'})}/>
-   <KpiCard label="Pending" value={counts.pending} icon="bell" tone="amber" onClick={()=>onNavigate('service-calls',{status:'Pending'})}/>
-   <KpiCard label="Closed" value={counts.closed} icon="shield" tone="green" onClick={()=>onNavigate('service-calls',{status:'Closed'})}/>
-   <KpiCard label="Overdue" value={overdue} icon="bell" tone="red" onClick={()=>onNavigate('service-calls',{due:'Overdue'})}/>
+   <KpiCard label="Open" value={counts.open} icon="service" tone="blue" onClick={()=>showPreview('Open Service Calls',{status:'Open'},data.services.filter(s=>s.status==='Open'))}/>
+   <KpiCard label="In Progress" value={counts.inProgress} icon="service" tone="orange" onClick={()=>showPreview('In Progress Service Calls',{status:'In Progress'},data.services.filter(s=>s.status==='In Progress'))}/>
+   <KpiCard label="Pending" value={counts.pending} icon="bell" tone="amber" onClick={()=>showPreview('Pending Service Calls',{status:'Pending'},data.services.filter(s=>s.status==='Pending'))}/>
+   <KpiCard label="Closed" value={counts.closed} icon="shield" tone="green" onClick={()=>showPreview('Closed Service Calls',{status:'Closed'},data.services.filter(s=>s.status==='Closed'))}/>
+   <KpiCard label="Overdue" value={overdue} icon="bell" tone="red" onClick={()=>showPreview('Overdue Service Calls',{due:'Overdue'},data.services.filter(s=>s.status!=='Closed'&&!!s.dueDate&&s.dueDate<new Date().toISOString().slice(0,10)))}/>
   </div>
   <div className="dashboard-grid two">
    <ServiceTrendCard data={data} onNavigate={onNavigate}/>
@@ -29,6 +31,7 @@ function DashboardView({data,onNavigate,onSync}:{data:DashboardData,onNavigate:(
    <DashboardRanking title="Parts Usage" subtitle="Most used items across service visits" unit="units" items={oldTopParts.map(x=>({...x,detail:'Recorded quantity used',onClick:()=>onNavigate('parts')}))} total={data.partUsage.reduce((n,p)=>n+p.quantity,0)} onAll={()=>onNavigate('parts')}/>
 
   </div>
+  {preview&&<Modal title={preview.title} subtitle={preview.rows.length+' matching record(s)'} onClose={()=>setPreview(null)} footer={<><button className="secondary-button" onClick={()=>setPreview(null)}>Close</button><button className="primary-button" onClick={()=>{const q=preview.query;setPreview(null);onNavigate('service-calls',q)}}>View Full List</button></>}><div className="dashboard-preview-list">{preview.rows.slice(0,10).map(s=><button key={s.id} type="button" onClick={()=>{const q=preview.query;setPreview(null);onNavigate('service-calls',q)}}><span><strong>{s.serviceId}</strong><small>{s.client} • {s.equipment}</small></span><span><small>{s.openedDate}</small><StatusBadge value={s.status}/></span></button>)}{!preview.rows.length&&<EmptyState title="No matching records" detail="There are no records in this dashboard category right now."/>}</div></Modal>}
  </div>;
 }
 
