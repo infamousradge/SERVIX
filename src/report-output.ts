@@ -24,9 +24,21 @@ function reportCsv(table:ReportTable,meta:string[]):string{
 }
 
 async function exportReportCsv(title:string,table:ReportTable,meta:string[]){
+ const fileName=title.replace(/[^a-z0-9-_]+/gi,'-')+'-'+new Date().toISOString().slice(0,10)+'.csv';
+ const csv=reportCsv(table,meta);
  if(isDesktop){try{await invokeNative('record_csv_export',{title,scope:meta,rows:table.rows.length})}catch(e:any){window.alert('Could not record export history: '+(e?.message||String(e)));return}}
- const url=URL.createObjectURL(new Blob([reportCsv(table,meta)],{type:'text/csv;charset=utf-8'}));
- const link=document.createElement('a');link.href=url;link.download=title.replace(/[^a-z0-9-_]+/gi,'-')+'-'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ try{
+  const picker=(window as any).showSaveFilePicker;
+  if(picker){
+   const handle=await picker({suggestedName:fileName,types:[{description:'CSV file',accept:{'text/csv':['.csv']}}]});
+   const writable=await handle.createWritable();await writable.write(csv);await writable.close();
+   window.dispatchEvent(new CustomEvent('servix-toast',{detail:'CSV saved successfully: '+handle.name}));
+   return;
+  }
+ }catch(e:any){if(e?.name==='AbortError'){window.dispatchEvent(new CustomEvent('servix-toast',{detail:'CSV export cancelled.'}));return}}
+ const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+ const link=document.createElement('a');link.href=url;link.download=fileName;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ window.dispatchEvent(new CustomEvent('servix-toast',{detail:'CSV saved to your browser/WebView download location: '+fileName}));
 }
 
 function printReportTable(title:string,table:ReportTable,meta:string[]){
