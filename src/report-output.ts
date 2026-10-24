@@ -103,7 +103,13 @@ async function printServiceDocument(d:ServiceDetail,client?:ClientRecord,calibra
     ['5. Final Result',d.finalResult],
     ['6. Recommendations / Internal Remarks',[d.recommendations,d.statusReason].filter(Boolean).join(' — ')]
    ];
- for(const [label,value] of entries){const block=document.createElement('div');block.className='sr-narrative';block.append(el('h3',label),el('p',value||'Not recorded'));services.appendChild(block)}
+ if(mode==='client'){
+  const summaryTable=document.createElement('table');summaryTable.className='sr-summary-table';const tbody=document.createElement('tbody');
+  for(const [label,value] of entries){const tr=document.createElement('tr');const th=document.createElement('th');th.textContent=label;const td=document.createElement('td');td.textContent=value||'Not recorded';tr.append(th,td);tbody.appendChild(tr)}
+  summaryTable.appendChild(tbody);services.appendChild(summaryTable);
+ }else{
+  for(const [label,value] of entries){const block=document.createElement('div');block.className='sr-narrative';block.append(el('h3',label),el('p',value||'Not recorded'));services.appendChild(block)}
+ }
  if(d.parts.length){const parts=document.createElement('div');parts.className='sr-extra client-visible-parts';parts.appendChild(el('strong','Parts Used: '));parts.appendChild(document.createTextNode(d.parts.map(p=>p.itemName+' × '+p.quantity+(mode==='internal'&&p.partNumber?' • '+p.partNumber:'')).join(', ')));services.appendChild(parts)}
  if(mode==='internal'&&calibration){const cal=document.createElement('div');cal.className='sr-extra';cal.textContent='Calibration: '+calibrationStatus(calibration)+(calibration.certificate?' | Ref: '+calibration.certificate:'')+(calibration.nextDue?' | Next Due: '+calibration.nextDue:'');services.appendChild(cal)}
  sheet.appendChild(services);
