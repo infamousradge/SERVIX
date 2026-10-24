@@ -86,9 +86,9 @@ pub fn save_transfer_site(state:State<'_,AppState>,site_name:String)->Result<Tra
 #[tauri::command]
 pub fn choose_transfer_path(state:State<'_,AppState>,folder:bool)->Result<Option<String>,String>{
  admin(&state)?;
- #[cfg(target_os="windows")]
- {let script=if folder{"Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Choose SERVIX transfer folder'; if($d.ShowDialog() -eq 'OK'){[Console]::Write($d.SelectedPath)}"}else{"Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Filter='SERVIX Data Transfer (*.servixdata)|*.servixdata'; if($d.ShowDialog() -eq 'OK'){[Console]::Write($d.FileName)}"};let o=std::process::Command::new("powershell.exe").args(["-NoProfile","-STA","-Command",script]).output().map_err(err)?;if !o.status.success(){return Err("Could not open the Windows file picker.".into())}let s=String::from_utf8(o.stdout).map_err(err)?.trim().to_string();Ok(if s.is_empty(){None}else{Some(s)})}
- #[cfg(not(target_os="windows"))]{let _=folder;Err("File picker is available on Windows.".into())}
+ let dialog=rfd::FileDialog::new().set_title(if folder{"Choose SERVIX transfer folder"}else{"Choose SERVIX transfer file"});
+ let picked=if folder{dialog.pick_folder()}else{dialog.add_filter("SERVIX Data Transfer",&["servixdata"]).pick_file()};
+ Ok(picked.map(|p|p.to_string_lossy().to_string()))
 }
 
 #[tauri::command]
