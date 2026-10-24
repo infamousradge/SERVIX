@@ -561,3 +561,86 @@ button,input,select,textarea{font-family:var(--font-ui)}
 /* Uniform filter visibility control */
 .global-filter-toggle{white-space:nowrap}.global-filter-toggle.active{background:#edf5ff;border-color:#bad2f2;color:#1f67c7}.filters-hidden .service-filter-panel,.filters-hidden .filter-panel,.filters-hidden .directory-filter-panel,.filters-hidden .coverage-filter-panel,.filters-hidden .calibration-filter-panel,.filters-hidden .client-filter-panel,.filters-hidden .equipment-filter-panel,.filters-hidden .engineer-filter-panel{display:none!important}
 .display-options{grid-template-columns:repeat(5,minmax(0,1fr))!important}@media(max-width:1100px){.display-options{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+
+/* Responsive Service Calls Trend: keep axis/count/month labels inside the card at every SERVIX display scale. */
+.service-trend-card{overflow:hidden!important;display:flex;flex-direction:column;min-width:0}
+.service-trend-card .card-head{flex:0 0 auto}
+.service-trend-card .trend-metrics{flex:0 0 auto;margin:.55rem 0 .6rem!important}
+.service-trend-card .trend-chart{flex:1 1 auto!important;height:auto!important;min-height:5.75rem!important;padding:.45rem 0 1.65rem!important;overflow:visible!important;box-sizing:border-box}
+.service-trend-card .trend-axis{padding:.05rem 0 .05rem;width:1.35rem;flex:0 0 1.35rem}
+.service-trend-card .trend-plot{height:100%;min-height:0;overflow:visible}
+.service-trend-card .trend-columns{gap:clamp(.16rem,.55vw,.48rem);padding:0 .15rem}
+.service-trend-card .trend-column{height:100%;overflow:visible}
+.service-trend-card .trend-count{font-size:clamp(.48rem,.55vw,.64rem);line-height:1;top:-.1rem}
+.service-trend-card .trend-month{top:calc(100% + .18rem);font-size:clamp(.43rem,.5vw,.57rem);line-height:1.05;white-space:nowrap}
+.service-trend-card .trend-month small{font-size:clamp(.38rem,.43vw,.47rem);margin-top:.08rem}
+.service-trend-card .trend-stack{width:clamp(.65rem,62%,2rem)}
+.service-trend-card .trend-legend{flex:0 0 auto;margin-top:.35rem!important;padding-top:.1rem}
+html[data-display-scale="120"] .service-trend-card .trend-metrics,
+html[data-display-scale="125"] .service-trend-card .trend-metrics{margin:.35rem 0 .38rem!important;gap:.35rem}
+html[data-display-scale="120"] .service-trend-card .trend-metrics>div,
+html[data-display-scale="125"] .service-trend-card .trend-metrics>div{padding:.38rem .48rem}
+html[data-display-scale="120"] .service-trend-card .trend-metrics strong,
+html[data-display-scale="125"] .service-trend-card .trend-metrics strong{font-size:1.02rem}
+html[data-display-scale="120"] .service-trend-card .trend-metrics small,
+html[data-display-scale="125"] .service-trend-card .trend-metrics small{font-size:.5rem}
+html[data-display-scale="120"] .service-trend-card .trend-metrics em,
+html[data-display-scale="125"] .service-trend-card .trend-metrics em{font-size:.43rem}
+html[data-display-scale="120"] .service-trend-card .trend-chart,
+html[data-display-scale="125"] .service-trend-card .trend-chart{min-height:5.15rem!important;padding-top:.25rem!important;padding-bottom:1.42rem!important}
+html[data-display-scale="120"] .service-trend-card .trend-legend,
+html[data-display-scale="125"] .service-trend-card .trend-legend{font-size:.46rem;gap:.5rem;margin-top:.18rem!important}
+
+/* About SERVIX: NEXORA-style blended in-workspace presentation with a dark brand stage. */
+.about-workspace{
+ min-height:calc(100vh - 3.5rem);
+ background:
+  radial-gradient(circle at 24% 15%,rgba(45,124,243,.14),transparent 34%),
+  radial-gradient(circle at 78% 82%,rgba(38,166,161,.13),transparent 34%),
+  linear-gradient(145deg,#edf3f8,#e7eef5 55%,#eef5f6);
+}
+.about-workspace-card{
+ width:min(46rem,92%);
+ padding:0!important;
+ overflow:hidden;
+ border:1px solid rgba(37,65,91,.14)!important;
+ background:rgba(255,255,255,.90)!important;
+ box-shadow:0 1.25rem 3.75rem rgba(18,39,61,.15)!important;
+ backdrop-filter:blur(.55rem);
+}
+.about-workspace-brand{
+ min-height:9.25rem;
+ padding:1.25rem 1.5rem!important;
+ justify-content:flex-start!important;
+ background:
+  radial-gradient(circle at 84% 20%,rgba(54,184,177,.32),transparent 32%),
+  linear-gradient(135deg,#081a35 0%,#0b3150 52%,#0e5d69 100%);
+ border-bottom:0!important;
+ color:#fff;
+}
+.about-workspace-brand img{
+ width:11.5rem!important;
+ height:6.25rem!important;
+ flex:0 0 auto;
+ object-fit:contain!important;
+ filter:drop-shadow(0 .35rem .75rem rgba(0,0,0,.15));
+}
+.about-workspace-brand .eyebrow{color:#8edbd6!important;letter-spacing:.16em;font-weight:800}
+.about-workspace-brand h1{color:#fff!important;font-size:1.75rem!important;letter-spacing:.02em}
+.about-workspace-brand p{color:#b9cedd!important;opacity:1!important}
+.about-workspace-details{
+ margin:.95rem 1.1rem 0!important;
+ background:rgba(248,251,253,.92);
+ border-color:#d8e3ec!important;
+}
+.about-workspace-details>div{background:transparent}
+.about-workspace-details span{color:#71859a!important}
+.about-workspace-details strong{color:#29445e!important}
+.about-workspace-note{
+ margin:.9rem 1.35rem 1.15rem!important;
+ color:#63798d!important;
+}
+@media(max-width:700px){
+ .about-workspace-brand{justify-content:center!important}
+ .about-workspace-brand img{width:9.5rem!important;height:5.3rem!important}
+}
